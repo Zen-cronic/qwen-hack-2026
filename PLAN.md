@@ -7,7 +7,7 @@ Demo video is a first-class deliverable, not an afterthought.
 
 ## Jul 5 (tonight) — verify-or-abort + bank eligibility deliverables
 - [x] `python scripts/verify_quota.py` — Qwen API smoke test on free tier (1M tokens, no card needed) *(passed Jul 6: qwen-plus via dashscope-intl, usage reporting works)*
-- [x] Confirm Wan / HappyHorse video-gen access + quota. **ABORT RULE: if quota can't cover ~a dozen generation cycles → pivot to DataCrew (Track 3) or skip.** Don't wait on the $40 voucher queue (multi-day delays reported). *(PASS Jul 6: 600s video quota across models — turbo alone covers 40 clips vs ~12 needed. Endpoint + task lifecycle verified live — evidence in docs/verification.md, constants in server/pipeline.py)*
+- [x] Confirm Wan / HappyHorse video-gen access + quota. **ABORT RULE: if quota can't cover ~a dozen generation cycles → pivot to DataCrew (Track 3) or skip.** Don't wait on the $40 voucher queue (multi-day delays reported). *(PASS Jul 6: 600s video quota across models — turbo alone covers 40 clips vs ~12 needed. Endpoint + task lifecycle verified live — evidence in docs/verification.md, constants in server/wan.py)*
 - [ ] Capture **Alibaba Cloud Workbench screenshot** showing running SAS resources ("No proof = not eligible")
 - [ ] Create public GitHub repo, push scaffold, confirm MIT license badge is visible at top of repo page
 

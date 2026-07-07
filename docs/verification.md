@@ -48,7 +48,7 @@ auth + routing + queueing for free.
    file, not the URL.
 4. Cancel (`POST /api/v1/tasks/{task_id}/cancel`) only works while `PENDING`.
 
-Machine-facing constants and request/response shapes live in `server/pipeline.py`.
+Machine-facing constants, request/response shapes, and the client live in `server/wan.py`.
 
 ## 3b. Hour-zero model probes (Jul 7) — Tier-B GO, Tier-0 confirmed
 

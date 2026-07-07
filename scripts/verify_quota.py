@@ -52,7 +52,7 @@ def main() -> int:
     print("  1. In the Qwen Cloud console, confirm a Wan/video model is listed and callable on your account.")
     print("  2. Find the per-track token allowance for Track 2 (unpublished; ask Discord if absent).")
     print("  3. Estimate: ~a dozen generation cycles needed. If free-tier quota can't cover that: ABORT to DataCrew.")
-    print("  4. Record the Wan endpoint + request shape in server/pipeline.py before writing generate_shot().")
+    print("  4. Record the Wan endpoint + request shape in server/wan.py before writing generate_shot().")
     print("     (done Jul 6 — see docs/verification.md for the evidence log)")
     return 0
 
