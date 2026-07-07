@@ -125,5 +125,8 @@ Recorded off cached artifacts; the planted kill-shot is pre-validated from hero 
 | **Pre-demo total** | **17** | **6** | **25** | **~140k** |
 | Judge reserve (Jul 10–31; judge mode 2 fresh/session, replays free) | 23 | 4 | ~475 | ~860k |
 
+## Productization surface (MCP)
+`server/mcp_server.py` ships the **`run_shot_tests`** tool now (deterministic Tier-A, zero-token, any mp4 — install with `pip install -e ".[mcp]"`), proving the packs-as-data path. `compile_shot` / `get_conformance_report` remain roadmap.
+
 ## Post-deadline (fork only — repo freezes at submission boundary)
-MCP server (compile_shot / run_shot_tests / get_conformance_report), CosyVoice TTS, Wanform-style plan/apply layer, day-job brand packs — all in a clean fork per FAQ rule.
+`compile_shot` / `get_conformance_report` MCP tools, CosyVoice TTS, Wanform-style plan/apply layer, day-job brand packs — all in a clean fork per FAQ rule.
