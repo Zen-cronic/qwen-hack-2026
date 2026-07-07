@@ -123,3 +123,39 @@ def test_unknown_project_404(client):
 
 def test_unknown_pack_400(client):
     assert client.post("/api/projects", json={"premise": "x", "pack": "ghost"}).status_code == 400
+
+
+def test_production_factory_demo_mode(tmp_path, monkeypatch):
+    """Boot the EXACT factory the container runs (server.app:create_production_app)
+    in the EXACT mode the public URL runs (DAILIES_DEMO=1), and drive the real demo
+    pipeline — real Tier-A CV + real ffmpeg on synthetic clips — to a certified
+    episode. This is the deploy-proving test: no fakes, zero video quota.
+    """
+    from server import app as app_mod
+    from server import demo as demo_mod
+    from server.config import settings
+
+    monkeypatch.setattr(settings, "DAILIES_DEMO", True)
+    real_build = demo_mod.build_demo_runtime  # redirect writes into tmp so the test is hermetic
+    monkeypatch.setattr(demo_mod, "build_demo_runtime", lambda: real_build(data_dir=str(tmp_path / "demo")))
+
+    client = TestClient(app_mod.create_production_app())
+
+    # Readiness probe the compose healthcheck depends on.
+    h = client.get("/api/health").json()
+    assert h["status"] == "ok" and h["mode"] == "demo"
+
+    pid = client.post("/api/projects",
+                      json={"premise": "a lonely lighthouse", "pack": "short_drama", "max_shots": 3}).json()["id"]
+    _poll(client, pid, "awaiting_review", timeout=30)   # parks at the one human gate, pre-video-spend
+    client.post(f"/api/projects/{pid}/review")
+    done = _poll(client, pid, "done", timeout=90)        # real cv2 clip writes + ffmpeg assembly
+
+    assert done["episode_path"]
+    # Planted kill-shot: shot index 1 asserts a rightward pan; the first synthetic
+    # draft is static -> Tier-A camera_motion FAILs -> repair -> retake pans right.
+    killshot = done["shots"][1]
+    assert len(killshot["takes"]) >= 2, "expected a retake after the planted Tier-A failure"
+    first_cam = next(r for r in killshot["takes"][0]["results"] if r["type"] == "camera_motion")
+    last_cam = next(r for r in killshot["takes"][-1]["results"] if r["type"] == "camera_motion")
+    assert first_cam["status"] == "fail" and last_cam["status"] == "pass"

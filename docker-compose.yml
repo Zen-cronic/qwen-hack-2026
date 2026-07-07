@@ -2,13 +2,18 @@
 #   web (nginx, :80) serves the SPA and proxies /api -> app (uvicorn, :8099).
 # Both build from the one Dockerfile via distinct targets. Compose auto-reads .env
 # for ${VARS}, so QWEN_API_KEY stays out of this file.
+# Pin the project name so image/container names are `dailies-app`/`dailies-web`
+# regardless of the clone directory (keeps the Path-B `docker save` names stable).
+name: dailies
 services:
   app:
     build:
       context: .
       target: app
     environment:
-      - DATA_DIR=/data
+      # Relative on purpose: media paths are stored as data/... and served by DATA_ROOT;
+      # keeping this relative + mounting at /app/data makes the container match local dev.
+      - DATA_DIR=data
       - QWEN_API_KEY=${QWEN_API_KEY}
       - QWEN_BASE_URL=${QWEN_BASE_URL:-https://dashscope-intl.aliyuncs.com/compatible-mode/v1}
       - QWEN_CHAT_MODEL=${QWEN_CHAT_MODEL:-qwen-plus}
@@ -18,9 +23,17 @@ services:
       # Set DAILIES_DEMO=1 for a fully zero-quota public demo (synthetic clips).
       - DAILIES_DEMO=${DAILIES_DEMO:-}
     volumes:
-      - ./data:/data           # persist cache (rsync'd) + run state; survives restarts
+      - ./data:/app/data       # persist cache (rsync'd) + run state; survives restarts
     mem_limit: 3g
     restart: unless-stopped
+    # Readiness gate: slim image has no curl, so probe with stdlib urllib. Marks
+    # the container healthy only once uvicorn + the runtime (opencv/numpy) are up.
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0) if urllib.request.urlopen('http://localhost:8099/api/health').status==200 else sys.exit(1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   web:
     build:
@@ -29,5 +42,6 @@ services:
     ports:
       - "80:80"
     depends_on:
-      - app
+      app:
+        condition: service_healthy   # nginx starts only after the app is ready, not merely started
     restart: unless-stopped

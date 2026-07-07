@@ -18,7 +18,9 @@ COPY pyproject.toml LICENSE ./
 COPY server/ ./server/
 COPY packs/ ./packs/
 RUN pip install --no-cache-dir .
-ENV DATA_DIR=/data
+# Paths are stored relative to the working dir (data/...); keep DATA_DIR relative
+# and mount the volume at /app/data so container behavior matches local dev exactly.
+ENV DATA_DIR=data
 EXPOSE 8099
 CMD ["uvicorn", "server.app:create_production_app", "--factory", "--host", "0.0.0.0", "--port", "8099"]
 

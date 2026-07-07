@@ -23,16 +23,23 @@ docker compose up -d --build    # builds web+app, starts nginx :80 -> app :8099
 
 ```bash
 docker compose build
-docker save clip-crew-web clip-crew-app | ssh user@box 'docker load'
+# Project name is pinned to `dailies` in compose, so images are dailies-{app,web}
+# regardless of the clone directory.
+docker save dailies-app dailies-web | ssh user@box 'docker load'
 scp docker-compose.yml .env user@box:~/dailies/
 ssh user@box 'cd ~/dailies && docker compose up -d'
 ```
 
 ## Verify
 
+`web` is gated on the app's `/api/health` readiness probe (compose `service_healthy`),
+so once `docker compose up` returns healthy the public URL is never up-but-broken.
+
 ```bash
+curl http://<box-ip>/api/health       # -> {"status":"ok","mode":"real"|"demo"}
 curl http://<box-ip>/api/packs        # -> {"packs":[{"name":"short_drama",...}]}
 open http://<box-ip>/                 # the SPA
+docker compose ps                     # app should show (healthy)
 ```
 
 ## Modes

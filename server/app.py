@@ -61,6 +61,13 @@ def create_app(runtime: Runtime) -> FastAPI:
             raise HTTPException(404, "no such project")
         return p
 
+    @app.get("/api/health")
+    def health():
+        # Readiness probe for the compose healthcheck: returns 200 only once the
+        # runtime (opencv/numpy imports, store, deps) is fully wired. Lets `web`
+        # gate on `app` being ready instead of merely started.
+        return {"status": "ok", "mode": "demo" if settings.DAILIES_DEMO else "real"}
+
     @app.post("/api/projects")
     def create_project(req: CreateReq):
         try:

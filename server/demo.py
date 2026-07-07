@@ -143,10 +143,13 @@ def _demo_repair(spec: ShotSpec, failures):
     return (f"{spec.prompt} [retake] enforce a clear, steady camera that pans {want}", _usage(90, 30))
 
 
-def build_demo_runtime(data_dir: str = "data/demo") -> "object":
+def build_demo_runtime(data_dir: str | None = None) -> "object":
     from server.app import Runtime  # imported here to avoid a cycle at module load
+    from server.config import settings
 
-    root = Path(data_dir)
+    # Follow DATA_DIR so demo output lands where the media route serves from and on
+    # the mounted volume — not a CWD-relative dir the container never exposes.
+    root = Path(data_dir) if data_dir is not None else Path(settings.DATA_DIR) / "demo"
     gen = _DemoGen(root / "cache")
     cfg = Config(data_dir=str(root / "projects"))
     deps = Deps(
