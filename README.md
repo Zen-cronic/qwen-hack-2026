@@ -19,6 +19,19 @@ Dailies is the first shipped **per-shot conformance harness**: shot specs compil
 closed vocabulary of machine-checkable assertions, run as a cost-tiered cascade with
 budget-bounded auto-repair.
 
+## Who it's for (and why it matters)
+
+Every team adopting AI video quietly appoints a **human test suite** — one person who eyeballs
+each clip for brand palette, length, flicker, character continuity, and whether the brief was
+followed. That person is the bottleneck for everyone upstream who *owns* "correct" but can't
+check it themselves. Dailies decouples the two roles: the stakeholder (brand / marketing / legal)
+authors a machine-checkable spec once, and every generated shot is tested against it
+automatically — spec-driven development, for video. The buyer is **marketing ops**, who already
+pays for those review hours; the value is the human-review time an automated gate removes as teams
+move to unattended batch generation. Because checks read frames, not generator internals, the
+assertion layer is **model-agnostic** and outlives any one model. Full strategic case —
+competitor analysis, moat, and productization path — in [docs/impact.md](docs/impact.md).
+
 ## How it works
 
 ```
@@ -33,7 +46,7 @@ premise → script + specs (qwen-plus) → compiled assertion checklist
         → ffmpeg assembly → certified episode
 ```
 
-- **Closed vocabulary, 9 assertion types** across 3 tiers (`server/specs.py`). The compiler
+- **Closed vocabulary, 10 assertion types** across 3 tiers (`server/specs.py`). The compiler
   rejects any invented or malformed assertion *before* spending a token — that rejection is
   the "CI" in "CI for generated video".
 - **Tier-A** (`server/tier_a.py`) is deterministic OpenCV — duration, brightness, flicker,
@@ -76,6 +89,7 @@ System dependency: `ffmpeg` (assembly).
 
 ## Docs
 
+- [docs/impact.md](docs/impact.md) — Problem Value & Impact: pain, buyer, competitor analysis, moat, productization path
 - [docs/architecture.md](docs/architecture.md) — architecture + deployment diagram (submission deliverable)
 - [docs/verification.md](docs/verification.md) — Day-1 quota/API/Tier-B verification log
 - [docs/deploy.md](docs/deploy.md) — Alibaba Cloud SAS deploy runbook
