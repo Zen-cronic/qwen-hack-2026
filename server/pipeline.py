@@ -59,6 +59,7 @@ class Deps:
 @dataclass
 class Config:
     chat_model: str = "qwen-plus"
+    vl_model: str = "qwen-vl-plus"
     t2i_model: str = "wan2.1-t2i-plus"
     draft_model: str = "wan2.1-t2v-turbo"
     final_model: str = "wan2.2-t2v-plus"
@@ -66,6 +67,18 @@ class Config:
     final_cap: int = 4
     packs_dir: str | None = None
     data_dir: str = "data/projects"
+
+
+def _pop_usage(stage_fn) -> tuple[int, int]:
+    """A stage may expose token usage from its last call via pop_last_usage();
+    plain-function stages (e.g. Tier-A) simply report nothing."""
+    pop = getattr(stage_fn, "pop_last_usage", None)
+    if callable(pop):
+        try:
+            return pop()
+        except Exception:  # noqa: BLE001
+            return (0, 0)
+    return (0, 0)
 
 
 class Pipeline:
@@ -192,6 +205,10 @@ class Pipeline:
             self._status(ProjectStatus.VERIFYING)
             results = list(self.deps.tier_a_fn(res.local_path, spec, self._evidence_dir(idx, take_no)))
             results += list(self.deps.tier_b_fn(res.local_path, spec))
+            tb_in, tb_out = _pop_usage(self.deps.tier_b_fn)
+            if tb_in or tb_out:
+                self._spend(kind=ResourceKind.VLM, model=self.cfg.vl_model, stage="verifying",
+                            shot_index=idx, tokens_in=tb_in, tokens_out=tb_out)
             take.results = results
             take.passed = not [r for r in results if not r.advisory and r.status is Status.FAIL]
             self._append_take(idx, take)
