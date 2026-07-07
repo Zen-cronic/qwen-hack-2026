@@ -50,6 +50,28 @@ auth + routing + queueing for free.
 
 Machine-facing constants and request/response shapes live in `server/pipeline.py`.
 
+## 3b. Hour-zero model probes (Jul 7) — Tier-B GO, Tier-0 confirmed
+
+Run via `scripts/smoke_vl.py` and `scripts/probe_models.py`.
+
+**Tier-B (qwen-vl semantic verdicts) — GO.** `smoke_vl.py` generates a bright and a
+dark solid-gray PNG in memory and asks the VLM to classify each (a model that can't
+see pixels can't beat a coin flip across the pair). `qwen-vl-plus` via the
+OpenAI-compatible `image_url` shape classified both correctly on the first attempt
+(bright→bright, dark→dark). **Decision: build real VLM verdicts in `tier_b.py`; no
+human-stub fallback needed.** Pins (also the code defaults): `VL_MODEL=qwen-vl-plus`,
+`VL_SHAPE=openai`. Cost: ~2–4k tokens, zero video quota.
+
+**Tier-0 (t2i stills) — endpoint + generation confirmed.** `probe_models.py`:
+- Zero-cost reachability: `POST /api/v1/services/aigc/text2image/image-synthesis`
+  with an empty input returns **HTTP 400 `InvalidParameter: input.prompt should not
+  be null`** — a field-level rejection that confirms endpoint + auth + model routing
+  for `wan2.1-t2i-plus`. NB: the image endpoint validates **synchronously** (400),
+  unlike the video endpoint which validates **asynchronously** (200 → poll → FAILED).
+- `--real` generated one still (1 image credit, budgeted): task **SUCCEEDED**, image
+  at `output.results[0].url`. That URL is a signed OSS link with an `Expires` param
+  (~24h) — **download immediately, persist the file not the URL** (same as video).
+
 ## 4. Remaining eligibility items (manual)
 
 - [ ] Alibaba Cloud Workbench screenshot showing running SAS resources ("no proof = not eligible")
