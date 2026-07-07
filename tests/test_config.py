@@ -25,3 +25,12 @@ def test_env_overrides_and_bool_coercion(monkeypatch):
 def test_unrelated_env_vars_are_ignored(monkeypatch):
     monkeypatch.setenv("SOME_UNRELATED_VAR", "x")  # extra=ignore -> no crash
     Settings(_env_file=None)
+
+
+def test_blank_bool_env_var_is_off_not_a_crash(monkeypatch):
+    # `${DAILIES_DEMO:-}` in compose sets the var to "" — must boot (off), not raise.
+    monkeypatch.setenv("DAILIES_DEMO", "")
+    monkeypatch.setenv("JUDGE_MODE", "")
+    s = Settings(_env_file=None)
+    assert s.DAILIES_DEMO is False
+    assert s.JUDGE_MODE is False

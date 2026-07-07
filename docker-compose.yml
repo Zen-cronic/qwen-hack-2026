@@ -21,7 +21,7 @@ services:
       # Judge protection: cap fresh clips/session; cached replays stay free.
       - JUDGE_MODE=${JUDGE_MODE:-1}
       # Set DAILIES_DEMO=1 for a fully zero-quota public demo (synthetic clips).
-      - DAILIES_DEMO=${DAILIES_DEMO:-}
+      - DAILIES_DEMO=${DAILIES_DEMO:-0}
     volumes:
       - ./data:/app/data       # persist cache (rsync'd) + run state; survives restarts
     mem_limit: 3g

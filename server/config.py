@@ -8,12 +8,21 @@ crashes when a full .env is absent (demo mode, tests, fresh checkouts); real-mod
 code that needs a secret (QWEN_API_KEY) fails clearly at call time instead.
 """
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
     # env vars first, then repo-root .env, then the defaults below; ignore unrelated env vars.
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    @field_validator("JUDGE_MODE", "DAILIES_DEMO", mode="before")
+    @classmethod
+    def _blank_bool_is_off(cls, v: object) -> object:
+        # An unset compose var (`${VAR:-}`) or a blank .env line arrives as "".
+        # Treat that as off, not a hard error — pydantic-settings >=2.13 refuses to
+        # parse an empty string into a bool, which would crash boot on the deploy path.
+        return False if isinstance(v, str) and v.strip() == "" else v
 
     # Qwen Cloud access
     QWEN_API_KEY: str = ""
