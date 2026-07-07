@@ -84,10 +84,13 @@ class Wallet(BaseModel):
             w.tokens_out += e.tokens_out
             w.images += e.images
             w.video_seconds += e.video_seconds
-            if e.kind is ResourceKind.VIDEO_DRAFT:
-                w.draft_clips += 1
-            elif e.kind is ResourceKind.VIDEO_FINAL:
-                w.final_clips += 1
+            # A clip counts against quota only if it was actually billed (seconds > 0);
+            # cache-hit replays are logged with video_seconds=0 and stay free.
+            if e.video_seconds > 0:
+                if e.kind is ResourceKind.VIDEO_DRAFT:
+                    w.draft_clips += 1
+                elif e.kind is ResourceKind.VIDEO_FINAL:
+                    w.final_clips += 1
             w.est_usd += e.est_usd
         w.est_usd = round(w.est_usd, 6)
         return w

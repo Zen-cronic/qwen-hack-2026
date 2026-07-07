@@ -81,6 +81,7 @@ class ShotState(BaseModel):
     spec: ShotSpec
     status: ShotStatus = ShotStatus.PENDING
     still_path: str | None = None  # tier0 pre-render still
+    tier0_results: list[AssertionResult] = Field(default_factory=list)
     takes: list[Take] = Field(default_factory=list)
     certified: bool = False
     final_path: str | None = None  # promoted wan2.2-plus clip
