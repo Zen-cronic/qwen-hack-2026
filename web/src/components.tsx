@@ -1,23 +1,44 @@
 import { useState } from "react";
+import Box from "@mui/material/Box";
+import Button from "@mui/material/Button";
+import ButtonBase from "@mui/material/ButtonBase";
+import Chip from "@mui/material/Chip";
+import MenuItem from "@mui/material/MenuItem";
+import Paper from "@mui/material/Paper";
+import Stack from "@mui/material/Stack";
+import TextField from "@mui/material/TextField";
+import Typography from "@mui/material/Typography";
+import { alpha, styled } from "@mui/material/styles";
 import { mediaUrl } from "./api";
-import type { AssertionResult, Pack, Project, ShotState, Take, Wallet } from "./types";
+import { mono, statusColor, tokens } from "./theme";
+import type { AssertionResult, Pack, ShotState, Take, Wallet, Project } from "./types";
 
 const STAGES = ["queued", "scripting", "tier0", "awaiting_review", "drafting",
   "verifying", "repairing", "promoting", "assembling", "done"];
 
-export function WalletMeter({ w, judge }: { w: Wallet; judge?: { judge_mode: boolean } }) {
-  const cell = (v: string | number, k: string) => (
-    <div className="cell"><div className="v">{v}</div><div className="k">{k}</div></div>
-  );
+// Flat bordered surface — the repeated "panel" from the old CSS, now one component.
+const Panel = styled(Paper)({ padding: "18px 20px", marginBottom: 20 });
+
+// A measurement reads like a test-report line: mono value over an overline label.
+function Cell({ v, k }: { v: string | number; k: string }) {
   return (
-    <div className="wallet" data-testid="wallet">
-      {cell(w.draft_clips, "drafts")}
-      {cell(w.final_clips, "finals")}
-      {cell(w.images, "stills")}
-      {cell((w.tokens_in + w.tokens_out).toLocaleString(), "tokens")}
-      {cell(`$${w.est_usd.toFixed(2)}`, "est. cost")}
-      {judge?.judge_mode && <span className="judge-pill">judge mode</span>}
-    </div>
+    <Box sx={{ textAlign: "right" }}>
+      <Typography sx={{ fontFamily: mono, fontWeight: 650, fontVariantNumeric: "tabular-nums", lineHeight: 1.15 }}>{v}</Typography>
+      <Typography variant="overline" component="div" color="text.secondary" sx={{ textTransform: "uppercase" }}>{k}</Typography>
+    </Box>
+  );
+}
+
+export function WalletMeter({ w, judge }: { w: Wallet; judge?: { judge_mode: boolean } }) {
+  return (
+    <Stack direction="row" spacing={1.75} data-testid="wallet" sx={{ alignItems: "center", flexWrap: "wrap" }}>
+      <Cell v={w.draft_clips} k="drafts" />
+      <Cell v={w.final_clips} k="finals" />
+      <Cell v={w.images} k="stills" />
+      <Cell v={(w.tokens_in + w.tokens_out).toLocaleString()} k="tokens" />
+      <Cell v={`$${w.est_usd.toFixed(2)}`} k="est. cost" />
+      {judge?.judge_mode && <Chip size="small" variant="outlined" label="judge mode" />}
+    </Stack>
   );
 }
 
@@ -28,79 +49,108 @@ export function NewProject({ packs, busy, onCreate }: {
   const [pack, setPack] = useState("short_drama");
   const [maxShots, setMaxShots] = useState(3);
   return (
-    <div className="panel">
-      <h2>New run</h2>
-      <div className="form-row">
-        <div style={{ flex: 1 }}>
-          <label>Premise</label>
-          <input type="text" value={premise} onChange={(e) => setPremise(e.target.value)} data-testid="premise" />
-        </div>
-        <div>
-          <label>Assertion pack</label>
-          <select value={pack} onChange={(e) => setPack(e.target.value)} data-testid="pack">
-            {packs.map((p) => <option key={p.name} value={p.name}>{p.name} ({p.defaults})</option>)}
-          </select>
-        </div>
-        <div>
-          <label>Shots</label>
-          <input type="number" min={1} max={12} value={maxShots}
-            onChange={(e) => setMaxShots(Number(e.target.value))} style={{ width: 70 }} />
-        </div>
-        <button className="btn" disabled={busy || !premise.trim()} data-testid="create"
+    <Panel>
+      <Typography variant="h2" gutterBottom>New run</Typography>
+      <Stack direction="row" spacing={1.5} useFlexGap sx={{ flexWrap: "wrap", alignItems: "flex-end" }}>
+        <TextField
+          label="Premise" size="small" value={premise} onChange={(e) => setPremise(e.target.value)}
+          sx={{ flex: 1, minWidth: 320 }}
+          slotProps={{ htmlInput: { "data-testid": "premise" } }}
+        />
+        <TextField
+          select label="Assertion pack" size="small" value={pack} onChange={(e) => setPack(e.target.value)}
+          sx={{ minWidth: 190 }}
+          slotProps={{ htmlInput: { "data-testid": "pack" } }}
+        >
+          {packs.map((p) => <MenuItem key={p.name} value={p.name}>{p.name} ({p.defaults})</MenuItem>)}
+        </TextField>
+        <TextField
+          type="number" label="Shots" size="small" value={maxShots}
+          onChange={(e) => setMaxShots(Number(e.target.value))} sx={{ width: 92 }}
+          slotProps={{ htmlInput: { min: 1, max: 12 } }}
+        />
+        <Button disabled={busy || !premise.trim()} data-testid="create"
           onClick={() => onCreate(premise, pack, maxShots)}>
           {busy ? "Running…" : "Compile & generate"}
-        </button>
-      </div>
-    </div>
+        </Button>
+      </Stack>
+    </Panel>
   );
+}
+
+function Stage({ label, state }: { label: string; state: "idle" | "active" | "done" | "failed" }) {
+  const base = {
+    fontSize: 11, px: 1.25, py: "5px", borderRadius: "6px", border: 1,
+    borderColor: "divider", color: "text.secondary", whiteSpace: "nowrap",
+  } as const;
+  const variants = {
+    idle: {},
+    active: { bgcolor: "primary.main", color: "primary.contrastText", borderColor: "primary.main", fontWeight: 650 },
+    done: { color: "success.main", borderColor: alpha(tokens.pass, 0.4) },
+    failed: { bgcolor: "error.main", color: "error.contrastText", borderColor: "error.main", fontWeight: 650 },
+  };
+  return <Box component="span" sx={{ ...base, ...variants[state] }}>{label}</Box>;
 }
 
 export function Pipeline({ status }: { status: string }) {
   const cur = STAGES.indexOf(status);
   return (
-    <div className="pipeline" data-testid="pipeline">
+    <Stack direction="row" spacing={0.75} useFlexGap data-testid="pipeline" sx={{ flexWrap: "wrap", mb: 2.5 }}>
       {STAGES.map((s, i) => {
-        const cls = status === "failed" ? "" : i < cur ? "done" : i === cur ? "active" : "";
-        return <span key={s} className={`stage ${cls}`}>{s}</span>;
+        const state = status === "failed" ? "idle" : i < cur ? "done" : i === cur ? "active" : "idle";
+        return <Stage key={s} label={s} state={state} />;
       })}
-      {status === "failed" && <span className="stage active" style={{ background: "var(--fail)" }}>failed</span>}
-    </div>
+      {status === "failed" && <Stage label="failed" state="failed" />}
+    </Stack>
   );
 }
 
 export function ReviewBar({ onApprove }: { onApprove: () => void }) {
   return (
-    <div className="reviewbar" data-testid="reviewbar">
-      <div className="msg">
-        <strong>Review the shot list before spending video budget</strong>
-        <span className="muted">Tier-0 stills are ready. This is the one human gate — approve to start drafting.</span>
-      </div>
-      <button className="btn" data-testid="approve" onClick={onApprove}>Approve &amp; generate</button>
-    </div>
+    <Paper data-testid="reviewbar" sx={{
+      display: "flex", alignItems: "center", justifyContent: "space-between", gap: 2,
+      p: "14px 18px", mb: 2.5, border: 1, borderColor: "warning.main",
+      background: `linear-gradient(90deg, ${alpha(tokens.inconclusive, 0.14)}, transparent)`,
+    }}>
+      <Box>
+        <Typography sx={{ fontWeight: 650 }}>Review the shot list before spending video budget</Typography>
+        <Typography variant="body2" color="text.secondary">
+          Tier-0 stills are ready. This is the one human gate — approve to start drafting.
+        </Typography>
+      </Box>
+      <Button data-testid="approve" onClick={onApprove} sx={{ flexShrink: 0 }}>Approve &amp; generate</Button>
+    </Paper>
   );
 }
 
 function Check({ r, onVerdict }: { r: AssertionResult; onVerdict?: (v: string) => void }) {
   const canOverride = r.advisory && onVerdict && (r.status === "inconclusive" || r.status === "fail");
   return (
-    <div className="check">
-      <span className={`dot ${r.status}`} />
-      <div>
-        <div>
-          <span className="name">{r.type}</span>
-          {r.advisory && <span className="tierb">advisory</span>}
-        </div>
-        {r.detail && <div className="detail">{r.detail}</div>}
+    <Stack direction="row" spacing={1.25} sx={{ alignItems: "flex-start" }}>
+      <Box sx={{ width: 9, height: 9, borderRadius: "50%", mt: "4px", flex: "none", bgcolor: statusColor(r.status) }} />
+      <Box sx={{ minWidth: 0 }}>
+        <Box>
+          <Typography component="span" sx={{ fontSize: 12, fontWeight: 600 }}>{r.type}</Typography>
+          {r.advisory && (
+            <Box component="span" sx={{ fontSize: 9, color: "text.secondary", border: 1, borderColor: "divider", borderRadius: "4px", px: 0.5, ml: 0.5 }}>advisory</Box>
+          )}
+        </Box>
+        {r.detail && <Typography sx={{ fontFamily: mono, fontSize: 11.5, color: "text.secondary" }}>{r.detail}</Typography>}
         {canOverride && (
-          <div className="verdict-btns">
-            <button onClick={() => onVerdict!("pass")}>mark pass</button>
-            <button onClick={() => onVerdict!("fail")}>mark fail</button>
-          </div>
+          <Stack direction="row" spacing={0.75} sx={{ mt: 0.5 }}>
+            <Button size="small" variant="outlined" color="inherit" sx={{ fontSize: 10, py: 0.25, px: 1 }} onClick={() => onVerdict!("pass")}>mark pass</Button>
+            <Button size="small" variant="outlined" color="inherit" sx={{ fontSize: 10, py: 0.25, px: 1 }} onClick={() => onVerdict!("fail")}>mark fail</Button>
+          </Stack>
         )}
-      </div>
-    </div>
+      </Box>
+    </Stack>
   );
 }
+
+const badgeSx = (badge: string) => {
+  const c = statusColor(badge);
+  return { bgcolor: alpha(c, 0.16), color: c, border: 1, borderColor: alpha(c, 0.4), fontSize: 11 };
+};
 
 export function ShotCard({ shot, onVerdict }: {
   shot: ShotState;
@@ -108,46 +158,55 @@ export function ShotCard({ shot, onVerdict }: {
 }) {
   const takes = shot.takes;
   const [sel, setSel] = useState<number>(-1);
-  const take: Take | undefined = takes.length ? takes[sel < 0 ? takes.length - 1 : sel] : undefined;
+  const activeIdx = sel < 0 ? takes.length - 1 : sel;
+  const take: Take | undefined = takes.length ? takes[activeIdx] : undefined;
   const results = take ? take.results : shot.tier0_results;
   const thumb = take?.results.find((r) => r.evidence.length)?.evidence[0] ?? shot.still_path;
   const badge = shot.certified ? "certified" : shot.status === "failed" ? "failed" : "working";
 
   return (
-    <div className="shot" data-testid="shot">
-      {thumb ? <img className="thumb" src={mediaUrl(thumb)} alt={`shot ${shot.spec.index}`} />
-        : <div className="thumb" />}
-      <div className="body">
-        <div className="head">
-          <div>
-            <div className="idx">Shot {shot.spec.index}{shot.spec.subject ? ` · ${shot.spec.subject}` : ""}</div>
-            <div className="prompt">{shot.spec.prompt}</div>
-          </div>
-          <span className={`badge ${badge}`} data-testid="shot-badge">{badge}</span>
-        </div>
+    <Paper data-testid="shot" sx={{ overflow: "hidden", display: "flex", flexDirection: "column" }}>
+      <Box
+        component={thumb ? "img" : "div"} alt={`shot ${shot.spec.index}`}
+        src={thumb ? mediaUrl(thumb) : undefined}
+        sx={{ aspectRatio: "16 / 9", width: "100%", objectFit: "cover", bgcolor: "#000", display: "block" }}
+      />
+      <Box sx={{ p: 1.75, display: "flex", flexDirection: "column", gap: 1.25 }}>
+        <Stack direction="row" spacing={1} sx={{ justifyContent: "space-between", alignItems: "flex-start" }}>
+          <Box>
+            <Typography sx={{ fontSize: 12, color: "text.secondary" }}>
+              Shot {shot.spec.index}{shot.spec.subject ? ` · ${shot.spec.subject}` : ""}
+            </Typography>
+            <Typography sx={{ fontSize: 13, lineHeight: 1.4 }}>{shot.spec.prompt}</Typography>
+          </Box>
+          <Chip size="small" label={badge} data-testid="shot-badge" sx={{ ...badgeSx(badge), flexShrink: 0 }} />
+        </Stack>
 
         {takes.length > 1 && (
-          <div className="tabs">
-            {takes.map((t, i) => {
-              const active = (sel < 0 ? takes.length - 1 : sel) === i;
-              return (
-                <button key={i} className={`tab ${active ? "sel" : ""}`} onClick={() => setSel(i)}>
-                  <div className="t">{t.tier}</div>take {t.take_no}{t.passed === false ? " ✕" : t.passed ? " ✓" : ""}
-                </button>
-              );
-            })}
-          </div>
+          <Stack direction="row" spacing={0.75} useFlexGap sx={{ flexWrap: "wrap" }}>
+            {takes.map((t, i) => (
+              <ButtonBase key={i} onClick={() => setSel(i)} sx={{
+                display: "flex", flexDirection: "column", alignItems: "flex-start",
+                fontSize: 11, fontFamily: mono, px: 1.1, py: 0.5, borderRadius: "6px",
+                bgcolor: "background.default", border: 1,
+                borderColor: activeIdx === i ? "primary.main" : "divider",
+                color: activeIdx === i ? "text.primary" : "text.secondary",
+              }}>
+                <Box component="span" sx={{ fontSize: 9, textTransform: "uppercase" }}>{t.tier}</Box>
+                take {t.take_no}{t.passed === false ? " ✕" : t.passed ? " ✓" : ""}
+              </ButtonBase>
+            ))}
+          </Stack>
         )}
 
-        <div className="checks">
-          {results.length === 0 && <span className="muted">No checks yet.</span>}
+        <Stack spacing={0.9}>
+          {results.length === 0 && <Typography variant="body2" color="text.secondary">No checks yet.</Typography>}
           {results.map((r, i) => (
-            <Check key={i} r={r}
-              onVerdict={(v) => onVerdict(shot.spec.index, r.type, v)} />
+            <Check key={i} r={r} onVerdict={(v) => onVerdict(shot.spec.index, r.type, v)} />
           ))}
-        </div>
-      </div>
-    </div>
+        </Stack>
+      </Box>
+    </Paper>
   );
 }
 
@@ -156,26 +215,27 @@ export function ConformanceBoard({ project, onVerdict }: {
   onVerdict: (shotIndex: number, type: string, verdict: string) => void;
 }) {
   return (
-    <div className="panel">
-      <h2>Conformance board</h2>
-      <div className="board" data-testid="board">
-        {project.shots.length === 0 && <p className="muted">Waiting for the script agent…</p>}
+    <Panel>
+      <Typography variant="h2" gutterBottom>Conformance board</Typography>
+      <Box data-testid="board" sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 2 }}>
+        {project.shots.length === 0 && <Typography color="text.secondary">Waiting for the script agent…</Typography>}
         {project.shots.map((s) => <ShotCard key={s.spec.index} shot={s} onVerdict={onVerdict} />)}
-      </div>
-    </div>
+      </Box>
+    </Panel>
   );
 }
 
 export function FinalCut({ project }: { project: Project }) {
   if (!project.episode_path) return null;
   return (
-    <div className="panel finalcut" data-testid="finalcut">
-      <h2>Certified episode</h2>
-      <video controls src={mediaUrl(project.episode_path)} />
-      <p className="muted">
+    <Panel data-testid="finalcut">
+      <Typography variant="h2" gutterBottom>Certified episode</Typography>
+      <Box component="video" controls src={mediaUrl(project.episode_path)}
+        sx={{ width: "100%", borderRadius: "10px", bgcolor: "#000", display: "block" }} />
+      <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
         {project.metrics.summary.certified}/{project.metrics.summary.shots_total} shots certified ·
         re-verifies from cache at zero video cost.
-      </p>
-    </div>
+      </Typography>
+    </Panel>
   );
 }

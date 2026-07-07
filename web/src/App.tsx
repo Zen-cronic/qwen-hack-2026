@@ -1,7 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import AppBar from "@mui/material/AppBar";
+import Box from "@mui/material/Box";
+import Button from "@mui/material/Button";
+import Container from "@mui/material/Container";
+import Paper from "@mui/material/Paper";
+import Stack from "@mui/material/Stack";
+import Toolbar from "@mui/material/Toolbar";
+import Typography from "@mui/material/Typography";
+import { alpha } from "@mui/material/styles";
 import { createProject, getPacks, getProject, review, sendVerdict } from "./api";
 import { ChartsPanel } from "./charts";
 import { ConformanceBoard, FinalCut, NewProject, Pipeline, ReviewBar, WalletMeter } from "./components";
+import { tokens } from "./theme";
 import type { Pack, Project } from "./types";
 
 export default function App() {
@@ -51,32 +61,40 @@ export default function App() {
   };
 
   return (
-    <div className="app">
-      <div className="topbar">
-        <div className="brand">
-          <span className="logo" onClick={onReset} style={{ cursor: "pointer" }}>◉ Dailies</span>
-          <span className="tag">CI for generated video</span>
-        </div>
-        {project && <WalletMeter w={project.wallet} />}
-      </div>
+    <>
+      <AppBar position="sticky" elevation={0} sx={{
+        bgcolor: alpha(tokens.bg, 0.92), backdropFilter: "blur(8px)", color: "text.primary",
+        border: 0, borderBottom: 1, borderColor: "divider",
+      }}>
+        <Toolbar sx={{ maxWidth: 1200, width: "100%", mx: "auto", px: { xs: 2, sm: 2.5 } }}>
+          <Stack direction="row" spacing={1.25} sx={{ alignItems: "baseline", flexGrow: 1 }}>
+            <Typography component="span" onClick={onReset}
+              sx={{ fontSize: 20, fontWeight: 750, letterSpacing: "-0.02em", cursor: "pointer" }}>◉ Dailies</Typography>
+            <Typography component="span" color="text.secondary" sx={{ fontSize: 13 }}>CI for generated video</Typography>
+          </Stack>
+          {project && <WalletMeter w={project.wallet} />}
+        </Toolbar>
+      </AppBar>
 
-      {err && <div className="panel" style={{ borderColor: "var(--fail)" }} data-testid="error">{err}</div>}
+      <Container maxWidth="lg" sx={{ pt: 3, pb: 8 }}>
+        {err && <Paper data-testid="error" sx={{ p: 2, mb: 2.5, borderColor: "error.main" }}>{err}</Paper>}
 
-      {!project && <NewProject packs={packs} busy={busy} onCreate={onCreate} />}
+        {!project && <NewProject packs={packs} busy={busy} onCreate={onCreate} />}
 
-      {project && (
-        <>
-          <Pipeline status={project.status} />
-          {project.status === "awaiting_review" && <ReviewBar onApprove={onApprove} />}
-          {project.error && <div className="panel" style={{ borderColor: "var(--fail)" }}>{project.error}</div>}
-          <ChartsPanel m={project.metrics} />
-          <ConformanceBoard project={project} onVerdict={onVerdict} />
-          <FinalCut project={project} />
-          <div style={{ marginTop: 20 }}>
-            <button className="btn secondary" data-testid="newrun" onClick={onReset}>New run</button>
-          </div>
-        </>
-      )}
-    </div>
+        {project && (
+          <>
+            <Pipeline status={project.status} />
+            {project.status === "awaiting_review" && <ReviewBar onApprove={onApprove} />}
+            {project.error && <Paper sx={{ p: 2, mb: 2.5, borderColor: "error.main" }}>{project.error}</Paper>}
+            <ChartsPanel m={project.metrics} />
+            <ConformanceBoard project={project} onVerdict={onVerdict} />
+            <FinalCut project={project} />
+            <Box sx={{ mt: 2.5 }}>
+              <Button variant="outlined" color="inherit" data-testid="newrun" onClick={onReset}>New run</Button>
+            </Box>
+          </>
+        )}
+      </Container>
+    </>
   );
 }
