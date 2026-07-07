@@ -22,4 +22,6 @@ web/dist/
 .DS_Store
 *.swp
 
-.playwright-mcp
+# Claude Code — local machine state, not shared (the skill under .claude/skills IS committed)
+.claude/settings.local.json
+.playwright-mcp/
