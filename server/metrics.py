@@ -1,16 +1,147 @@
 """Metrics ledger — the novelty lives here (see README novelty statement).
 
-Every Qwen/Wan call appends a LedgerEntry: stage, model, tokens_in/out,
-latency_ms, cost estimate, and (for shots) a quality rating. The dashboard
-reads this to chart the cost-quality frontier and answer: "what does a
-minute of finished video cost, and where is the next token best spent?"
+Every Qwen/Wan call appends a LedgerEntry: stage, model, token/quota consumption,
+and latency. The dashboard reads this to chart the cost-quality frontier and answer
+"what does a minute of finished video cost, and where is the next token best spent?"
+
+Two consumers:
+  * per-project entries feed the conformance report (frontier scatter, cost/second)
+  * a process-wide append-only JSONL (data/ledger.jsonl) is the audit trail — the
+    "no call escapes unlogged" guarantee — and backs the persistent wallet meter.
+
+Prices below are NOMINAL public list prices used only to tell the at-scale Impact
+story ("this batch would cost $X in production"). The hackathon runs on free-tier
+quota, where the real cash cost is $0; quota *units* (clips, images, tokens) are
+what the wallet actually rations.
 """
 
-# TODO(Jul 6): LedgerEntry dataclass + append-only JSONL writer (data/ledger.jsonl).
-#   Wire into the OpenAI client via a thin wrapper — no call escapes unlogged.
+from __future__ import annotations
 
-# TODO(Jul 7): frontier() -> list[FrontierPoint]
-#   Aggregate per-shot spend vs quality rating; expose slope for retry policy.
+import json
+import os
+import threading
+import time
+from enum import Enum
+from pathlib import Path
 
-# TODO(Jul 7): dashboard chart (single static HTML or rich-terminal render is
-#   enough for the demo — do not gold-plate; Presentation is 15% of score).
+from pydantic import BaseModel, Field
+
+
+class ResourceKind(str, Enum):
+    CHAT = "chat"            # qwen-plus scripting / repair
+    VLM = "vlm"              # qwen-vl tier_b verdicts
+    IMAGE = "image"          # tier0 t2i still
+    VIDEO_DRAFT = "video_draft"   # wan2.1-t2v-turbo
+    VIDEO_FINAL = "video_final"   # wan2.2-t2v-plus
+
+
+# Nominal $/unit (list-price estimates, NOT free-tier cost). Tune freely.
+_PRICE_PER_1K_IN = {ResourceKind.CHAT: 0.0004, ResourceKind.VLM: 0.0008}
+_PRICE_PER_1K_OUT = {ResourceKind.CHAT: 0.0012, ResourceKind.VLM: 0.0020}
+_PRICE_PER_IMAGE = 0.02
+_PRICE_PER_VIDEO_SECOND = {ResourceKind.VIDEO_DRAFT: 0.10, ResourceKind.VIDEO_FINAL: 0.30}
+
+
+class LedgerEntry(BaseModel):
+    ts: float
+    stage: str                       # scripting | tier0 | drafting | verifying | repairing | promoting | ...
+    kind: ResourceKind
+    model: str
+    tokens_in: int = 0
+    tokens_out: int = 0
+    images: int = 0
+    video_seconds: int = 0
+    latency_ms: int = 0
+    shot_index: int | None = None
+    note: str = ""
+
+    @property
+    def est_usd(self) -> float:
+        c = 0.0
+        c += _PRICE_PER_1K_IN.get(self.kind, 0.0) * self.tokens_in / 1000
+        c += _PRICE_PER_1K_OUT.get(self.kind, 0.0) * self.tokens_out / 1000
+        c += _PRICE_PER_IMAGE * self.images
+        c += _PRICE_PER_VIDEO_SECOND.get(self.kind, 0.0) * self.video_seconds
+        return round(c, 6)
+
+
+class Wallet(BaseModel):
+    """Aggregate quota consumption — the persistent meter + frontier denominator."""
+
+    draft_clips: int = 0
+    final_clips: int = 0
+    images: int = 0
+    tokens_in: int = 0
+    tokens_out: int = 0
+    video_seconds: int = 0
+    est_usd: float = 0.0
+
+    @classmethod
+    def from_entries(cls, entries: list[LedgerEntry]) -> "Wallet":
+        w = cls()
+        for e in entries:
+            w.tokens_in += e.tokens_in
+            w.tokens_out += e.tokens_out
+            w.images += e.images
+            w.video_seconds += e.video_seconds
+            if e.kind is ResourceKind.VIDEO_DRAFT:
+                w.draft_clips += 1
+            elif e.kind is ResourceKind.VIDEO_FINAL:
+                w.final_clips += 1
+            w.est_usd += e.est_usd
+        w.est_usd = round(w.est_usd, 6)
+        return w
+
+
+class LedgerWriter:
+    """Thread-safe recorder. The pipeline runs in a background thread, so record()
+    is called off the main loop; the lock guards both the in-memory list and the
+    JSONL append."""
+
+    def __init__(self, jsonl_path: str | os.PathLike[str] | None = None):
+        self._lock = threading.Lock()
+        self._entries: list[LedgerEntry] = []
+        self._path = Path(jsonl_path) if jsonl_path else None
+        if self._path:
+            self._path.parent.mkdir(parents=True, exist_ok=True)
+
+    def record(
+        self,
+        *,
+        stage: str,
+        kind: ResourceKind,
+        model: str,
+        tokens_in: int = 0,
+        tokens_out: int = 0,
+        images: int = 0,
+        video_seconds: int = 0,
+        latency_ms: int = 0,
+        shot_index: int | None = None,
+        note: str = "",
+    ) -> LedgerEntry:
+        entry = LedgerEntry(
+            ts=time.time(),
+            stage=stage,
+            kind=kind,
+            model=model,
+            tokens_in=tokens_in,
+            tokens_out=tokens_out,
+            images=images,
+            video_seconds=video_seconds,
+            latency_ms=latency_ms,
+            shot_index=shot_index,
+            note=note,
+        )
+        with self._lock:
+            self._entries.append(entry)
+            if self._path:
+                with self._path.open("a", encoding="utf-8") as fh:
+                    fh.write(entry.model_dump_json() + "\n")
+        return entry
+
+    def entries(self) -> list[LedgerEntry]:
+        with self._lock:
+            return list(self._entries)
+
+    def wallet(self) -> Wallet:
+        return Wallet.from_entries(self.entries())

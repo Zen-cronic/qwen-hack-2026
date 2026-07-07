@@ -1,0 +1,65 @@
+"""Closed-vocabulary enforcement — the core 'CI for video' guarantee."""
+
+import pytest
+from pydantic import ValidationError
+
+from server.specs import (
+    ASSERTION_META,
+    Assertion,
+    AssertionType,
+    ShotSpec,
+    Tier,
+    parse_assertions,
+)
+
+
+def test_vocabulary_is_exactly_nine():
+    assert len(ASSERTION_META) == 9
+    assert set(ASSERTION_META) == set(AssertionType)
+
+
+def test_valid_tier_a_assertion_reports_tier_and_not_advisory():
+    a = Assertion(type=AssertionType.CAMERA_MOTION, params={"direction": "left"})
+    assert a.tier is Tier.TIER_A
+    assert a.advisory is False
+
+
+def test_tier_b_assertions_are_advisory():
+    a = Assertion(type=AssertionType.ACTION_COMPLETED, params={"action": "the door opens"})
+    assert a.tier is Tier.TIER_B
+    assert a.advisory is True
+
+
+def test_unknown_assertion_type_rejected():
+    with pytest.raises(ValidationError):
+        Assertion(type="teleport_effect", params={})
+
+
+def test_missing_required_param_rejected():
+    with pytest.raises(ValidationError):
+        Assertion(type=AssertionType.DURATION_BETWEEN, params={"min_s": 4.0})  # missing max_s
+
+
+def test_unknown_param_rejected():
+    with pytest.raises(ValidationError):
+        Assertion(type=AssertionType.SCENE_CUTS, params={"max": 1, "bogus": 2})
+
+
+def test_bad_camera_direction_rejected():
+    with pytest.raises(ValidationError):
+        Assertion(type=AssertionType.CAMERA_MOTION, params={"direction": "sideways"})
+
+
+def test_parse_assertions_reports_offending_index():
+    raw = [
+        {"type": "scene_cuts", "params": {"max": 1}},
+        {"type": "not_a_real_check", "params": {}},
+    ]
+    with pytest.raises(ValueError) as ei:
+        parse_assertions(raw)
+    assert "assertion[1]" in str(ei.value)
+
+
+def test_shotspec_rejects_empty_prompt():
+    with pytest.raises(ValidationError):
+        ShotSpec(index=0, prompt="   ")

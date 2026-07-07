@@ -1,0 +1,22 @@
+name: short_drama
+description: >
+  Continuity and exposure defaults for narrative short-drama shots. Every generated
+  shot inherits these Tier-A (zero-token, deterministic CV) checks; the script agent
+  adds shot-specific assertions (camera motion, subject presence, action beats) on
+  top via the compiler. Every entry here must be a valid closed-vocabulary assertion
+  (server/specs.py) or the compiler rejects the pack at load time.
+
+# Applied to every shot in the episode.
+defaults:
+  # A short-drama beat is a single ~5s continuous take.
+  - type: duration_between
+    params: { min_s: 4.0, max_s: 6.0 }
+  # Not crushed to black, not blown out — a usable exposure window.
+  - type: brightness_range
+    params: { min: 25, max: 235 }
+  # Temporal stability: reject strobing / heavy frame-to-frame luma jitter.
+  - type: flicker_below
+    params: { max_std: 22.0 }
+  # One continuous shot — at most a single detectable cut.
+  - type: scene_cuts
+    params: { max: 1 }
