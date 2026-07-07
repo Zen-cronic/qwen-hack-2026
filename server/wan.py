@@ -91,6 +91,14 @@ class WanClient:
         self.poll_timeout = poll_timeout
         self._http = http or httpx.Client(timeout=60)
 
+    def is_cached(self, kind: str, model: str, prompt: str, seed: int | None,
+                  size: str, negative_prompt: str | None) -> bool:
+        """Whether this exact request already has a cached file — lets the judge-mode
+        governor tell a free replay from a fresh (billable) generation before spending."""
+        ext = "mp4" if kind == "video" else "png"
+        key = cache_key(model, prompt, seed, size, negative_prompt)
+        return (self.cache_dir / f"{key}.{ext}").exists()
+
     def _headers(self, *, async_create: bool = False) -> dict[str, str]:
         h = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
         if async_create:
