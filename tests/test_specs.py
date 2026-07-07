@@ -13,9 +13,17 @@ from server.specs import (
 )
 
 
-def test_vocabulary_is_exactly_nine():
-    assert len(ASSERTION_META) == 9
+def test_vocabulary_is_exactly_ten():
+    assert len(ASSERTION_META) == 10
     assert set(ASSERTION_META) == set(AssertionType)
+
+
+def test_title_card_present_is_paramless_advisory():
+    a = Assertion(type=AssertionType.TITLE_CARD_PRESENT, params={})
+    assert a.tier is Tier.TIER_B
+    assert a.advisory is True
+    with pytest.raises(ValidationError):  # closed vocab: no params accepted
+        Assertion(type=AssertionType.TITLE_CARD_PRESENT, params={"text": "hi"})
 
 
 def test_valid_tier_a_assertion_reports_tier_and_not_advisory():

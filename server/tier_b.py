@@ -39,6 +39,10 @@ def _question(a: Assertion) -> str:
     if a.type is AssertionType.SUBJECT_PRESENT:
         return (f'These are ordered frames from one short video clip. Is "{a.params["subject"]}" '
                 f'clearly present and recognizable in the clip?')
+    if a.type is AssertionType.TITLE_CARD_PRESENT:
+        return ('These are ordered frames from one short video clip. Is a conspicuous on-screen '
+                'title or text card (a title, caption, or lower-third graphic) clearly visible '
+                'anywhere in the clip?')
     return "Describe this clip."
 
 

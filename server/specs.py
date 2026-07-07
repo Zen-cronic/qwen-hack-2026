@@ -2,7 +2,7 @@
 
 This is the "CI for generated video" thesis in one module. A shot spec is a prompt
 plus a list of *assertions*: machine-checkable claims about the rendered clip. The
-vocabulary is CLOSED — exactly 9 assertion types across three cost tiers. The
+vocabulary is CLOSED — exactly 10 assertion types across three cost tiers. The
 compiler (and the LLM output parser) run everything through `parse_assertions`,
 which rejects any invented type or malformed params. That closure is what lets
 downstream tiers assume every assertion is executable.
@@ -40,6 +40,7 @@ class AssertionType(str, Enum):
     # tier_b — semantic, advisory (never blocks promotion)
     IDENTITY_CONSISTENT = "identity_consistent"
     ACTION_COMPLETED = "action_completed"
+    TITLE_CARD_PRESENT = "title_card_present"
 
 
 class Status(str, Enum):
@@ -71,12 +72,13 @@ ASSERTION_META: dict[AssertionType, _Meta] = {
     AssertionType.SUBJECT_PRESENT: _Meta(Tier.TIER0, False, ("subject",)),
     AssertionType.IDENTITY_CONSISTENT: _Meta(Tier.TIER_B, True, ("subject",)),
     AssertionType.ACTION_COMPLETED: _Meta(Tier.TIER_B, True, ("action",)),
+    AssertionType.TITLE_CARD_PRESENT: _Meta(Tier.TIER_B, True, ()),  # no params — whole-clip VLM
 }
 
 CAMERA_DIRECTIONS = {"left", "right", "up", "down", "static", "any"}
 
-# Assertion counts should stay in sync with PLAN.md's "exactly 9 assertion types".
-assert len(ASSERTION_META) == 9, "closed vocabulary must be exactly 9 types"
+# Assertion counts should stay in sync with PLAN.md's "exactly 10 assertion types".
+assert len(ASSERTION_META) == 10, "closed vocabulary must be exactly 10 types"
 
 
 class Assertion(BaseModel):
