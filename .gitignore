@@ -1,0 +1,23 @@
+# Secrets — the live QWEN_API_KEY lives here; never commit it
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# Generated media + run state — large, regenerable, shipped to the box via rsync (not git)
+data/
+
+# Frontend build artifacts
+node_modules/
+web/dist/
+
+# OS / editor
+.DS_Store
+*.swp

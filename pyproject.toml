@@ -1,0 +1,33 @@
+[project]
+name = "dailies"
+version = "0.1.0"
+description = "CI for AI-generated video — per-shot conformance testing (Tier-0 stills → Tier-A CV → Tier-B VLM) with budget-bounded auto-repair, on Qwen Cloud (Wan)."
+requires-python = ">=3.12"
+license = { file = "LICENSE" }
+dependencies = [
+    "openai>=1.50",
+    "python-dotenv>=1.0",
+    "rich>=13.0",
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "httpx>=0.27",
+    "pydantic>=2.7",
+    "pyyaml>=6.0",
+    "numpy>=1.26",
+    "opencv-python-headless>=4.10",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["server*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
