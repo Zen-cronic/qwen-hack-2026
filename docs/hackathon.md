@@ -5,6 +5,12 @@
 **Track:** 2 — AI Showrunner (video generation: Wan)
 **Sponsor:** Alibaba Cloud (Qwen Cloud) · **Administrator:** Devpost
 
+## Official links & sources
+
+- **Build Session FAQ** (Notion) — https://devpost.notion.site/Qwen-Cloud-Global-AI-Hackathon-Build-Session-FAQ-38fbf3c6a91d8038bd64d00459edbb19
+- **Proof of deployment** (Google Doc) — https://docs.google.com/document/d/1XsiewMDMOGKxWGp7PRlaEnB7hN5n2JNIUho7cDIV8Vo/
+- **Resources** (Devpost) — https://qwencloud-hackathon.devpost.com/resources
+
 ## Deadlines
 
 - Submission: **2026-07-09, 2:00pm PDT** (Devpost is authoritative; submit by ~10am PDT)
@@ -22,7 +28,7 @@ Native async video/image task API shares the `dashscope-intl.aliyuncs.com` host 
 
 - Public open-source repo, MIT license chip visible at the top of the repo page
 - Code file with the Qwen Cloud base URL clearly visible
-- **Screenshot of running resources from the Alibaba Cloud Workbench** ("No proof = not eligible")
+- **Screenshot of running resources from the Alibaba Cloud Workbench** ("No proof = not eligible") — requirements in the [Proof of deployment](https://docs.google.com/document/d/1XsiewMDMOGKxWGp7PRlaEnB7hN5n2JNIUho7cDIV8Vo/) doc
 - Architecture diagram (`docs/architecture.md`)
 - Demo video < 3 min, public (YouTube/Vimeo/Youku), "real working app"
 - English text description; track identified; testing-access link (credentials if private)
