@@ -1,0 +1,26 @@
+name: brand_rules
+description: >
+  Brand-safety defaults for a one-person social team shipping unattended AI video.
+  Same harness as short_drama, different contract — this is the audience flip: swap
+  the pack and the QC gate now enforces a brand look instead of narrative continuity.
+  Every entry must be a valid closed-vocabulary assertion or the compiler rejects it.
+
+# Applied to every shot in a brand batch.
+defaults:
+  # Social clips are single, clean ~5s takes.
+  - type: duration_between
+    params: { min_s: 4.0, max_s: 6.0 }
+  # Bright, on-brand exposure — no moody/underlit footage on the channel.
+  - type: brightness_range
+    params: { min: 60, max: 220 }
+  # Polished: tighter temporal stability than narrative work tolerates.
+  - type: flicker_below
+    params: { max_std: 15.0 }
+  # Absolutely no mid-clip cuts in a brand asset.
+  - type: scene_cuts
+    params: { max: 0 }
+  # Stay near the brand palette (edit these hexes to your brand).
+  - type: palette_deltae
+    params:
+      palette: ["#0b5fff", "#f5f7fa", "#0e1116"]
+      max_delta: 45.0
