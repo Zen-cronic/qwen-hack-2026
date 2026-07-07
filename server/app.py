@@ -8,7 +8,6 @@ Qwen/Wan stages from the environment. Run in prod with:
 
 from __future__ import annotations
 
-import os
 import threading
 import uuid
 from dataclasses import dataclass
@@ -19,13 +18,14 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from server.compiler import available_packs, load_pack
+from server.config import settings
 from server.metrics import LedgerWriter
 from server.pipeline import Config, Deps, Pipeline
 from server.report import build_report_metrics
 from server.specs import AssertionType, Status
 from server.store import ProjectState, Store
 
-DATA_ROOT = Path(os.environ.get("DATA_DIR", "data")).resolve()
+DATA_ROOT = Path(settings.DATA_DIR).resolve()
 
 
 @dataclass
@@ -145,13 +145,10 @@ def create_app(runtime: Runtime) -> FastAPI:
 
 
 def build_runtime() -> Runtime:
-    """Wire the real Qwen/Wan stages from the environment."""
-    from dotenv import load_dotenv
+    """Wire the real Qwen/Wan stages from settings."""
     from openai import OpenAI
 
     from server.assemble import assemble
-
-    load_dotenv()
     from server.budget import BudgetGovernor, governed_gen_video
     from server.repair import RepairAgent
     from server.script import script_and_specs
@@ -159,12 +156,11 @@ def build_runtime() -> Runtime:
     from server.tier_b import TierBVerifier
     from server.wan import WanClient
 
-    api_key = os.environ.get("QWEN_API_KEY", "")
-    base_url = os.environ.get("QWEN_BASE_URL", "https://dashscope-intl.aliyuncs.com/compatible-mode/v1")
-    chat_model = os.environ.get("QWEN_CHAT_MODEL", "qwen-plus")
-    vl_model = os.environ.get("VL_MODEL", "qwen-vl-plus")
+    api_key = settings.QWEN_API_KEY
+    chat_model = settings.QWEN_CHAT_MODEL
+    vl_model = settings.VL_MODEL
 
-    llm = OpenAI(api_key=api_key, base_url=base_url)
+    llm = OpenAI(api_key=api_key, base_url=settings.QWEN_BASE_URL)
     wan = WanClient(api_key, cache_dir=str(DATA_ROOT / "cache"))
     governor = BudgetGovernor()
     ledger = LedgerWriter(DATA_ROOT / "ledger.jsonl")
@@ -189,14 +185,14 @@ def build_runtime() -> Runtime:
 
 def _mount_spa(app: FastAPI) -> None:
     """Serve the built SPA at / if present (single-origin local run; prod uses nginx)."""
-    dist = Path(os.environ.get("SPA_DIST", "web/dist"))
+    dist = Path(settings.SPA_DIST)
     if dist.is_dir():
         from fastapi.staticfiles import StaticFiles
         app.mount("/", StaticFiles(directory=str(dist), html=True), name="spa")
 
 
 def create_production_app() -> FastAPI:
-    if os.environ.get("DAILIES_DEMO"):
+    if settings.DAILIES_DEMO:
         from server.demo import build_demo_runtime
         app = create_app(build_demo_runtime())
     else:

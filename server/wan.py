@@ -32,15 +32,17 @@ from pathlib import Path
 
 import httpx
 
-DASHSCOPE_BASE_URL = os.environ.get("DASHSCOPE_BASE_URL", "https://dashscope-intl.aliyuncs.com")
+from server.config import settings
+
+DASHSCOPE_BASE_URL = settings.DASHSCOPE_BASE_URL
 VIDEO_SYNTHESIS_URL = f"{DASHSCOPE_BASE_URL}/api/v1/services/aigc/video-generation/video-synthesis"
 T2I_SYNTHESIS_URL = f"{DASHSCOPE_BASE_URL}/api/v1/services/aigc/text2image/image-synthesis"
 TASK_URL_TEMPLATE = f"{DASHSCOPE_BASE_URL}/api/v1/tasks/{{task_id}}"
 TASK_CANCEL_URL_TEMPLATE = f"{DASHSCOPE_BASE_URL}/api/v1/tasks/{{task_id}}/cancel"
 
-DRAFT_MODEL = os.environ.get("WAN_DRAFT_MODEL", "wan2.1-t2v-turbo")
-FINAL_MODEL = os.environ.get("WAN_FINAL_MODEL", "wan2.2-t2v-plus")
-T2I_MODEL = os.environ.get("WAN_T2I_MODEL", "wan2.1-t2i-plus")
+DRAFT_MODEL = settings.WAN_DRAFT_MODEL
+FINAL_MODEL = settings.WAN_FINAL_MODEL
+T2I_MODEL = settings.WAN_T2I_MODEL
 
 CLIP_SECONDS = 5  # fixed for wan2.1/wan2.2 — every video call costs exactly this
 POLL_INTERVAL_SECONDS = 15
@@ -227,5 +229,5 @@ class WanClient:
 
 
 def default_client(**kwargs) -> WanClient:
-    """Build a WanClient from QWEN_API_KEY in the environment."""
-    return WanClient(os.environ.get("QWEN_API_KEY", ""), **kwargs)
+    """Build a WanClient from the configured QWEN_API_KEY."""
+    return WanClient(settings.QWEN_API_KEY, **kwargs)

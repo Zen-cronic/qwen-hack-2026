@@ -9,17 +9,16 @@ pass-through. The wallet meter still shows every call, free or not.
 
 from __future__ import annotations
 
-import os
 import threading
 
+from server.config import settings
 from server.wan import WanClient, WanResult
 
 
 class BudgetGovernor:
     def __init__(self, *, judge_mode: bool | None = None,
                  fresh_draft_cap: int = 2, fresh_final_cap: int = 0):
-        self.judge_mode = (bool(int(os.environ.get("JUDGE_MODE", "0")))
-                           if judge_mode is None else judge_mode)
+        self.judge_mode = settings.JUDGE_MODE if judge_mode is None else judge_mode
         self.fresh_draft_cap = fresh_draft_cap
         self.fresh_final_cap = fresh_final_cap
         self._fresh = {"draft": 0, "final": 0}

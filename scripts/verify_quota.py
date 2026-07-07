@@ -10,21 +10,19 @@ ABORT RULE (state.md): if video-gen quota can't cover ~a dozen generation
 cycles on the free tier, pivot to DataCrew (Track 3) or skip.
 """
 
-import os
 import sys
 
-from dotenv import load_dotenv
 from openai import OpenAI
 from rich import print
 
-load_dotenv()
+from server.config import settings
 
-BASE_URL = os.environ.get("QWEN_BASE_URL", "https://dashscope-intl.aliyuncs.com/compatible-mode/v1")
-MODEL = os.environ.get("QWEN_CHAT_MODEL", "qwen-plus")
+BASE_URL = settings.QWEN_BASE_URL
+MODEL = settings.QWEN_CHAT_MODEL
 
 
 def main() -> int:
-    api_key = os.environ.get("QWEN_API_KEY")
+    api_key = settings.QWEN_API_KEY
     if not api_key:
         print("[red]FAIL[/red] QWEN_API_KEY missing — copy .env.example to .env and fill it in.")
         return 1

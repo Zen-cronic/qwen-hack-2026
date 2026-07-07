@@ -20,6 +20,7 @@ from pathlib import Path
 
 import yaml
 
+from server.config import settings
 from server.specs import Assertion, ShotSpec, parse_assertions
 
 
@@ -31,7 +32,7 @@ class Pack:
 
 
 def _packs_dir(packs_dir: str | os.PathLike[str] | None) -> Path:
-    return Path(packs_dir or os.environ.get("PACKS_DIR", "packs"))
+    return Path(packs_dir or settings.PACKS_DIR)
 
 
 def available_packs(packs_dir: str | os.PathLike[str] | None = None) -> list[str]:

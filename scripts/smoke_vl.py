@@ -24,20 +24,18 @@ Cost: a handful of tiny vision calls, ~2-4k tokens total. Zero video quota.
 """
 
 import base64
-import os
 import sys
 
 import cv2
 import httpx
 import numpy as np
-from dotenv import load_dotenv
 from openai import OpenAI
 from rich import print
 
-load_dotenv()
+from server.config import settings
 
-OPENAI_BASE_URL = os.environ.get("QWEN_BASE_URL", "https://dashscope-intl.aliyuncs.com/compatible-mode/v1")
-DASHSCOPE_BASE_URL = os.environ.get("DASHSCOPE_BASE_URL", "https://dashscope-intl.aliyuncs.com")
+OPENAI_BASE_URL = settings.QWEN_BASE_URL
+DASHSCOPE_BASE_URL = settings.DASHSCOPE_BASE_URL
 MULTIMODAL_URL = f"{DASHSCOPE_BASE_URL}/api/v1/services/aigc/multimodal-generation/generation"
 
 MODELS = ["qwen-vl-plus", "qwen-vl-max"]
@@ -120,7 +118,7 @@ def try_combo(name: str, classify) -> bool:
 
 
 def main() -> int:
-    api_key = os.environ.get("QWEN_API_KEY")
+    api_key = settings.QWEN_API_KEY
     if not api_key:
         print("[red]FAIL[/red] QWEN_API_KEY missing.")
         return 1

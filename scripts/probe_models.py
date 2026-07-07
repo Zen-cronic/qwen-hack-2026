@@ -11,20 +11,18 @@ budgeted in PLAN.md's hour-zero row) and bank the URL.
     python scripts/probe_models.py --real    # + generate 1 real still
 """
 
-import os
 import sys
 import time
 
 import httpx
-from dotenv import load_dotenv
 from rich import print
 
-load_dotenv()
+from server.config import settings
 
-DASHSCOPE_BASE_URL = os.environ.get("DASHSCOPE_BASE_URL", "https://dashscope-intl.aliyuncs.com")
+DASHSCOPE_BASE_URL = settings.DASHSCOPE_BASE_URL
 T2I_URL = f"{DASHSCOPE_BASE_URL}/api/v1/services/aigc/text2image/image-synthesis"
 TASK_URL = f"{DASHSCOPE_BASE_URL}/api/v1/tasks/{{task_id}}"
-T2I_MODEL = os.environ.get("WAN_T2I_MODEL", "wan2.1-t2i-plus")
+T2I_MODEL = settings.WAN_T2I_MODEL
 
 
 def _auth(api_key: str, extra: dict | None = None) -> dict:
@@ -115,7 +113,7 @@ def real_still(api_key: str) -> None:
 
 
 def main() -> int:
-    api_key = os.environ.get("QWEN_API_KEY")
+    api_key = settings.QWEN_API_KEY
     if not api_key:
         print("[red]FAIL[/red] QWEN_API_KEY missing.")
         return 1
