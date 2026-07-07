@@ -187,5 +187,19 @@ def build_runtime() -> Runtime:
     return Runtime(store=Store(str(DATA_ROOT / "projects")), deps=deps, cfg=cfg, governor=governor)
 
 
+def _mount_spa(app: FastAPI) -> None:
+    """Serve the built SPA at / if present (single-origin local run; prod uses nginx)."""
+    dist = Path(os.environ.get("SPA_DIST", "web/dist"))
+    if dist.is_dir():
+        from fastapi.staticfiles import StaticFiles
+        app.mount("/", StaticFiles(directory=str(dist), html=True), name="spa")
+
+
 def create_production_app() -> FastAPI:
-    return create_app(build_runtime())
+    if os.environ.get("DAILIES_DEMO"):
+        from server.demo import build_demo_runtime
+        app = create_app(build_demo_runtime())
+    else:
+        app = create_app(build_runtime())
+    _mount_spa(app)  # mounted AFTER /api routes so it doesn't shadow them
+    return app
