@@ -1,0 +1,17 @@
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+data/
+web/node_modules/
+web/dist/
+**/__pycache__/
+*.egg-info/
+.venv/
+.pytest_cache/
+.ruff_cache/
+.playwright-mcp/
+tests/
+docs/
+*.md
