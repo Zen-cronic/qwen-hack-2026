@@ -21,7 +21,7 @@ from typing import Callable
 
 from server.compiler import compile_shots, load_pack
 from server.metrics import LedgerWriter, ResourceKind
-from server.specs import AssertionResult, ShotSpec, Status
+from server.specs import Assertion, AssertionResult, ShotSpec, Status, parse_assertions
 from server.store import (
     ProjectState,
     ProjectStatus,
@@ -34,6 +34,7 @@ from server.store import (
 
 # Stage callables (structural — any callable with the right shape works).
 ScriptFn = Callable[[str, object, int], tuple[list[dict], object]]        # (premise, pack, max_shots) -> (raw_shots, usage)
+CustomRuleFn = Callable[[list[str]], tuple[list[dict], object]]           # (rules) -> (raw_assertions, usage)
 GenImageFn = Callable[[str], object]                                      # (prompt) -> WanResult-like
 GenVideoFn = Callable[[str, str], object]                                 # (prompt, model) -> WanResult-like
 Tier0Fn = Callable[[ShotSpec, str], list[AssertionResult]]               # (spec, still_path) -> results
@@ -54,6 +55,7 @@ class Deps:
     repair_fn: RepairFn
     assemble_fn: AssembleFn
     ledger: LedgerWriter
+    custom_rule_fn: CustomRuleFn | None = None  # optional: compile user-authored checks
 
 
 @dataclass
@@ -136,6 +138,9 @@ class Pipeline:
         self._status(ProjectStatus.SCRIPTING)
         p = self.store.get(self.pid)
         pack = load_pack(p.pack, self.cfg.packs_dir)
+        # User-authored checks compile ONCE (before the script loop) and apply to every
+        # shot. A malformed rule raises here — rejected before any video spend.
+        extra_defaults = self._compile_custom_checks(p)
 
         last_err: Exception | None = None
         tin = tout = 0
@@ -145,7 +150,7 @@ class Pipeline:
             tin += getattr(usage, "prompt_tokens", 0)
             tout += getattr(usage, "completion_tokens", 0)
             try:
-                specs = compile_shots(raw, pack)
+                specs = compile_shots(raw, pack, extra_defaults=extra_defaults)
                 break
             except ValueError as exc:
                 last_err = exc
@@ -154,6 +159,27 @@ class Pipeline:
         if specs is None:
             raise ValueError(f"script agent output failed to compile after retry: {last_err}")
         self._set(lambda p: setattr(p, "shots", [ShotState(spec=s) for s in specs]))
+
+    def _compile_custom_checks(self, p: ProjectState) -> list[Assertion]:
+        """Compile the project's plain-language custom checks into validated assertions.
+
+        No-op when there are none or no compiler is wired. The token cost is billed to
+        the scripting stage; a rule the compiler emits but the closed vocabulary rejects
+        fails HERE — extending the reject-before-spend guarantee to user input.
+        """
+        rules = [r.strip() for r in (p.custom_checks or []) if r.strip()]
+        if not rules or self.deps.custom_rule_fn is None:
+            return []
+        raw, usage = self.deps.custom_rule_fn(rules)
+        tin = getattr(usage, "prompt_tokens", 0) or 0
+        tout = getattr(usage, "completion_tokens", 0) or 0
+        if tin or tout:
+            self._spend(kind=ResourceKind.CHAT, model=self.cfg.chat_model, stage="scripting",
+                        tokens_in=tin, tokens_out=tout, note="custom checks")
+        try:
+            return parse_assertions(raw)
+        except ValueError as exc:
+            raise ValueError(f"custom check failed to compile: {exc}") from exc
 
     def _tier0(self) -> None:
         self._status(ProjectStatus.TIER0)

@@ -40,6 +40,7 @@ class CreateReq(BaseModel):
     premise: str = Field(min_length=1)
     pack: str = "short_drama"
     max_shots: int = Field(default=6, ge=1, le=12)
+    custom_checks: list[str] = Field(default_factory=list)
 
 
 class VerdictReq(BaseModel):
@@ -75,7 +76,8 @@ def create_app(runtime: Runtime) -> FastAPI:
         except Exception:
             raise HTTPException(400, f"unknown pack: {req.pack}")
         pid = uuid.uuid4().hex[:12]
-        rt().store.create(ProjectState(id=pid, premise=req.premise, pack=req.pack, max_shots=req.max_shots))
+        rt().store.create(ProjectState(id=pid, premise=req.premise, pack=req.pack,
+                                       max_shots=req.max_shots, custom_checks=req.custom_checks))
         threading.Thread(target=Pipeline(rt().store, pid, rt().deps, rt().cfg).run, daemon=True).start()
         return {"id": pid}
 
@@ -158,7 +160,7 @@ def build_runtime() -> Runtime:
     from server.assemble import assemble
     from server.budget import BudgetGovernor, governed_gen_video
     from server.repair import RepairAgent
-    from server.script import script_and_specs
+    from server.script import compile_custom_rules, script_and_specs
     from server.tier_a import run_tier_a
     from server.tier_b import TierBVerifier
     from server.wan import WanClient
@@ -186,6 +188,7 @@ def build_runtime() -> Runtime:
         repair_fn=repair,
         assemble_fn=assemble,
         ledger=ledger,
+        custom_rule_fn=lambda rules: compile_custom_rules(rules, client=llm, model=chat_model),
     )
     return Runtime(store=Store(str(DATA_ROOT / "projects")), deps=deps, cfg=cfg, governor=governor)
 

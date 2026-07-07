@@ -7,8 +7,8 @@ async function j<T>(r: Response): Promise<T> {
 
 const JSON_POST = { method: "POST", headers: { "Content-Type": "application/json" } };
 
-export const createProject = (premise: string, pack: string, max_shots: number) =>
-  fetch("/api/projects", { ...JSON_POST, body: JSON.stringify({ premise, pack, max_shots }) })
+export const createProject = (premise: string, pack: string, max_shots: number, custom_checks: string[] = []) =>
+  fetch("/api/projects", { ...JSON_POST, body: JSON.stringify({ premise, pack, max_shots, custom_checks }) })
     .then(j<{ id: string }>);
 
 export const getProject = (id: string) => fetch(`/api/projects/${id}`).then(j<Project>);

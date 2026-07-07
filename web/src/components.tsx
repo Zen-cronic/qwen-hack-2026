@@ -43,11 +43,15 @@ export function WalletMeter({ w, judge }: { w: Wallet; judge?: { judge_mode: boo
 }
 
 export function NewProject({ packs, busy, onCreate }: {
-  packs: Pack[]; busy: boolean; onCreate: (premise: string, pack: string, maxShots: number) => void;
+  packs: Pack[]; busy: boolean;
+  onCreate: (premise: string, pack: string, maxShots: number, customChecks: string[]) => void;
 }) {
   const [premise, setPremise] = useState("a lonely lighthouse keeper who discovers a message in a bottle");
   const [pack, setPack] = useState("short_drama");
   const [maxShots, setMaxShots] = useState(3);
+  const [customChecks, setCustomChecks] = useState("");
+  const submit = () =>
+    onCreate(premise, pack, maxShots, customChecks.split("\n").map((s) => s.trim()).filter(Boolean));
   return (
     <Panel>
       <Typography variant="h2" gutterBottom>New run</Typography>
@@ -69,11 +73,18 @@ export function NewProject({ packs, busy, onCreate }: {
           onChange={(e) => setMaxShots(Number(e.target.value))} sx={{ width: 92 }}
           slotProps={{ htmlInput: { min: 1, max: 12 } }}
         />
-        <Button disabled={busy || !premise.trim()} data-testid="create"
-          onClick={() => onCreate(premise, pack, maxShots)}>
+        <Button disabled={busy || !premise.trim()} data-testid="create" onClick={submit}>
           {busy ? "Running…" : "Compile & generate"}
         </Button>
       </Stack>
+      <TextField
+        label="Custom checks (one per line — optional)" multiline minRows={2}
+        value={customChecks} onChange={(e) => setCustomChecks(e.target.value)}
+        placeholder={"a title card must be visible\nthe camera should pan right"}
+        helperText="Plain-language rules compile to the closed vocabulary; anything unsupported (audio, on-screen text, time windows) is omitted."
+        sx={{ mt: 1.5, width: "100%" }}
+        slotProps={{ htmlInput: { "data-testid": "custom-checks" } }}
+      />
     </Panel>
   );
 }

@@ -98,6 +98,7 @@ class ProjectState(BaseModel):
     premise: str
     pack: str
     max_shots: int
+    custom_checks: list[str] = Field(default_factory=list)  # user-authored plain-language rules
     status: ProjectStatus = ProjectStatus.QUEUED
     created_ts: float = Field(default_factory=time.time)
     updated_ts: float = Field(default_factory=time.time)

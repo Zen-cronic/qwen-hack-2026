@@ -3,8 +3,11 @@
 import json
 from types import SimpleNamespace
 
+import pytest
+
 from server.compiler import compile_shots, load_pack
-from server.script import _vocabulary_doc, script_and_specs
+from server.script import _vocabulary_doc, compile_custom_rules, script_and_specs
+from server.specs import parse_assertions
 
 
 class _FakeCompletions:
@@ -59,3 +62,25 @@ def test_script_tolerates_code_fenced_json():
     raw, _ = script_and_specs("p", pack=load_pack("short_drama"), max_shots=5,
                               client=client, model="qwen-plus")
     assert len(raw) == 1 and raw[0]["prompt"] == "x"
+
+
+def test_compile_custom_rules_maps_plain_language_to_closed_vocab():
+    content = json.dumps({"assertions": [
+        {"type": "title_card_present", "params": {}},
+        {"type": "camera_motion", "params": {"direction": "right"}},
+    ]})
+    client = _FakeClient(content, _usage())
+    raw, usage = compile_custom_rules(
+        ["a title card must be visible", "the camera should pan right"],
+        client=client, model="qwen-plus")
+    assertions = parse_assertions(raw)  # raw dicts validate against the closed vocabulary
+    assert {a.type.value for a in assertions} == {"title_card_present", "camera_motion"}
+    assert usage.prompt_tokens == 120
+
+
+def test_compile_custom_rules_output_still_gated_by_closed_vocab():
+    content = json.dumps({"assertions": [{"type": "make_it_epic", "params": {}}]})
+    client = _FakeClient(content, _usage())
+    raw, _ = compile_custom_rules(["make it epic"], client=client, model="qwen-plus")
+    with pytest.raises(ValueError):  # an invented type is rejected before any video spend
+        parse_assertions(raw)

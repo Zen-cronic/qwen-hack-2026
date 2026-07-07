@@ -73,3 +73,23 @@ def test_compile_rejects_invented_assertion_with_shot_index():
 def test_compile_missing_prompt_raises():
     with pytest.raises(ValueError):
         compile_shots([{"assertions": []}], load_pack("short_drama"))
+
+
+def test_extra_defaults_apply_to_every_shot():
+    pack = load_pack("short_drama")
+    extra = [Assertion(type=AssertionType.TITLE_CARD_PRESENT, params={})]
+    raw = [
+        {"prompt": "a"},
+        {"prompt": "b", "assertions": [{"type": "camera_motion", "params": {"direction": "left"}}]},
+    ]
+    specs = compile_shots(raw, pack, extra_defaults=extra)
+    assert all(any(a.type is AssertionType.TITLE_CARD_PRESENT for a in s.assertions) for s in specs)
+
+
+def test_shot_assertion_overrides_extra_default_of_same_type():
+    pack = load_pack("short_drama")
+    extra = [Assertion(type=AssertionType.CAMERA_MOTION, params={"direction": "right"})]
+    raw = [{"prompt": "a", "assertions": [{"type": "camera_motion", "params": {"direction": "left"}}]}]
+    specs = compile_shots(raw, pack, extra_defaults=extra)
+    cams = [a for a in specs[0].assertions if a.type is AssertionType.CAMERA_MOTION]
+    assert len(cams) == 1 and cams[0].params["direction"] == "left"  # shot-specific wins

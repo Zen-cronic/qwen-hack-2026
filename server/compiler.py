@@ -55,12 +55,17 @@ def merge_assertions(defaults: list[Assertion], dynamic: list[Assertion]) -> lis
     return kept_defaults + dynamic
 
 
-def compile_shots(raw_shots: list[dict], pack: Pack) -> list[ShotSpec]:
+def compile_shots(
+    raw_shots: list[dict], pack: Pack, extra_defaults: list[Assertion] | None = None
+) -> list[ShotSpec]:
     """Validate + merge raw shot dicts (from the script agent) into ShotSpecs.
 
-    Raises ValueError on the first shot with a missing prompt or an invalid
-    assertion — the pipeline catches this to re-prompt the script agent once.
+    `extra_defaults` are project-scoped, user-authored assertions applied to EVERY
+    shot (like the pack's defaults), so precedence is shot-specific > user-custom >
+    pack-default. Raises ValueError on the first shot with a missing prompt or an
+    invalid assertion — the pipeline catches this to re-prompt the script agent once.
     """
+    base_defaults = merge_assertions(pack.defaults, extra_defaults or [])
     specs: list[ShotSpec] = []
     for i, rs in enumerate(raw_shots):
         if "prompt" not in rs:
@@ -75,7 +80,7 @@ def compile_shots(raw_shots: list[dict], pack: Pack) -> list[ShotSpec]:
                 prompt=rs["prompt"],
                 negative_prompt=rs.get("negative_prompt"),
                 subject=rs.get("subject"),
-                assertions=merge_assertions(pack.defaults, dynamic),
+                assertions=merge_assertions(base_defaults, dynamic),
             )
         )
     return specs

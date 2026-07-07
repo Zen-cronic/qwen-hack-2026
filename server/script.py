@@ -60,6 +60,52 @@ def _extract_json(content: str) -> dict[str, Any]:
     return json.loads(s)
 
 
+_CUSTOM_SYSTEM = """You compile plain-language QC rules — written by a non-technical \
+stakeholder — into machine-checkable assertions for an AI-generated video shot. Choose ONLY \
+from the closed vocabulary below; never invent a type. A single rule may map to zero, one, or \
+several assertions.
+
+Closed assertion vocabulary — use these types and params EXACTLY:
+{vocab}
+
+If a rule CANNOT be expressed with this vocabulary — e.g. it needs audio/transcript, on-screen \
+text/OCR, counting occurrences, or a specific time window like "first 3 seconds" / "the outro" \
+— OMIT it entirely rather than approximating with a type that means something else. Output \
+STRICT JSON only: {{"assertions": [{{"type": "...", "params": {{...}}}}]}}"""
+
+
+def compile_custom_rules(
+    rules: list[str],
+    *,
+    client,
+    model: str,
+    temperature: float = 0.0,
+    max_tokens: int = 800,
+) -> tuple[list[dict[str, Any]], Any]:
+    """Compile user-authored plain-language QC rules into raw assertion dicts.
+
+    Mirrors script_and_specs: constrained to the closed vocabulary via the SAME
+    _vocabulary_doc(), returns raw dicts (validation is the compiler's job, via
+    parse_assertions). Rules needing an unsupported modality are omitted, not faked.
+    """
+    numbered = "\n".join(f"{i+1}. {r}" for i, r in enumerate(rules))
+    resp = client.chat.completions.create(
+        model=model,
+        messages=[
+            {"role": "system", "content": _CUSTOM_SYSTEM.format(vocab=_vocabulary_doc())},
+            {"role": "user", "content": f"Rules:\n{numbered}"},
+        ],
+        response_format={"type": "json_object"},
+        temperature=temperature,
+        max_tokens=max_tokens,
+    )
+    data = _extract_json(resp.choices[0].message.content or "{}")
+    out = data.get("assertions", [])
+    if not isinstance(out, list):
+        raise ValueError("custom-rule compiler returned non-list 'assertions'")
+    return out, resp.usage
+
+
 def script_and_specs(
     premise: str,
     *,

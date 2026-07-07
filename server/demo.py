@@ -119,6 +119,24 @@ def _demo_script(premise, pack, max_shots):
     return [dict(s) for s in _DEMO_SHOTS[:max_shots]], _usage()
 
 
+def _demo_custom_rules(rules):
+    """Offline keyword compiler for the demo: maps a few plain phrases to assertions
+    (title card, camera pans <dir>). Unrecognized phrases are omitted — mirroring the
+    real compiler's 'omit rather than invent' rule — so the flow stays zero-quota."""
+    out: list[dict] = []
+    for r in rules:
+        s = r.lower()
+        if "title" in s or "text card" in s or "caption" in s:
+            out.append({"type": "title_card_present", "params": {}})
+            continue
+        if "pan" in s or "camera" in s:
+            for d in ("right", "left", "up", "down"):
+                if d in s:
+                    out.append({"type": "camera_motion", "params": {"direction": d}})
+                    break
+    return out, _usage(40, 20)
+
+
 def _demo_tier_b(video_path, spec: ShotSpec):
     """Deterministic advisory verdicts: identity passes; action is inconclusive (shows verdict UI)."""
     out = []
@@ -162,5 +180,6 @@ def build_demo_runtime(data_dir: str | None = None) -> "object":
         repair_fn=_demo_repair,
         assemble_fn=assemble,          # REAL ffmpeg
         ledger=LedgerWriter(root / "ledger.jsonl"),
+        custom_rule_fn=_demo_custom_rules,
     )
     return Runtime(store=Store(str(root / "projects")), deps=deps, cfg=cfg, governor=None)

@@ -42,10 +42,10 @@ export default function App() {
     timer.current = window.setInterval(() => poll(id), 2500);  // state.md: SPA polls every 2.5s
   }, [poll]);
 
-  const onCreate = async (premise: string, pack: string, maxShots: number) => {
+  const onCreate = async (premise: string, pack: string, maxShots: number, customChecks: string[]) => {
     setBusy(true); setErr(null); setProject(null);
     try {
-      const { id } = await createProject(premise, pack, maxShots);
+      const { id } = await createProject(premise, pack, maxShots, customChecks);
       setProjectId(id);
       startPolling(id);
     } catch (e) { setErr(String(e)); setBusy(false); }

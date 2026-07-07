@@ -63,6 +63,7 @@ export interface Project {
   premise: string;
   pack: string;
   max_shots: number;
+  custom_checks: string[];
   status: string;
   shots: ShotState[];
   wallet: Wallet;
