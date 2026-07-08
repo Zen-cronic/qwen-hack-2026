@@ -31,6 +31,12 @@ agent = [
     "python-dateutil>=2.8",  # same — pulled in by qwen-agent's code-interpreter tool
 ]
 
+[project.scripts]
+# Runnable as a package: `uvx --from . dailies-mcp` (or `pipx run --spec . dailies-mcp`)
+# starts the MCP server over stdio. Not published to PyPI — this is the productization
+# surface made installable, not a claim of distribution.
+dailies-mcp = "server.mcp_server:main"
+
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"

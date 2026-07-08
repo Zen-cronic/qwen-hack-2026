@@ -4,9 +4,18 @@
 
 ## The pain (authentic, and already attested in this repo)
 
-Every team that adopts AI video has quietly appointed a **human test suite**: one person who
-eyeballs each generated clip for brand palette, length, flicker, character continuity, and
-whether the brief was actually followed. That person is the bottleneck for everyone upstream
+Picture the clip that shipped wrong. The camera drifts left when the brief said pan right. A
+take flickers. The brand blue comes back a little off. The hero's face changes between the first
+shot and the third. The title card never appears. The five-second beat runs to seven — and
+nobody catches it until it's live, because the one person who reviews every clip was asleep, on
+vacation, or three hundred clips behind. AI video fails *in motion*, after you've already paid
+for it, and today the only safety net is a human eyeball. Every failure in that list is
+something the engine actually checks: camera motion, flicker, brand-palette ΔE, character
+continuity, a visible title card, duration bounds.
+
+Behind that felt failure is an organizational one. Every team that adopts AI video has quietly
+appointed a **human test suite**: one person who eyeballs each generated clip for brand palette,
+length, flicker, character continuity, and whether the brief was actually followed. That person is the bottleneck for everyone upstream
 who *owns* "correct" but can't check it themselves — brand, legal, and the founder Slack "is
 the vibe right?" and wait.
 
@@ -65,6 +74,16 @@ So the defensible seat is scope, not a slogan: **Dailies is the neutral conforma
 majority of teams generating *outside* any single vendor's walled garden.** Honest concession:
 *inside Adobe's stack, on Adobe's models, Adobe wins.* Our wedge is the multi-model shop.
 
+And the distribution is **adoption-led, not platform-locked** — which is the deeper reason a
+well-resourced incumbent can't just absorb this. The wedge is a *protocol*, not a product
+surface: Dailies ships as an **MCP server** (`server/mcp_server.py`), the same primitive coding
+agents already speak, so a team adopts the gate by pointing an agent it already runs at
+`run_shot_tests` — no migration, no platform. And because the checks read frames, not generator
+internals, the gate is **model-agnostic by construction**: one gate covers Wan today and whatever
+model a shop adds next. An incumbent's advantage is its walled stack; ours is that we require
+none. Adoption flows through the protocol — model by model, shop by shop — exactly where a
+platform-locked add-on can't reach.
+
 ## The one real moat (with a mechanism)
 
 The VLM eval primitive itself is commodity — open harnesses (VBench, VLM-as-judge) already grade
@@ -77,21 +96,41 @@ model call, it is collectable **only from the buyer-side review seat**, and it i
 unavailable to a self-grading generator or a static-rule loop. Neutrality is the *reason* that
 seat exists; the calibration corpus is the *asset* that makes it widen over time.
 
-## Productization path (commercial scaling / OSS adoption)
+## Productization path — the OSS sequence (project → product → value)
 
-The criterion rewards a productization path over revenue, and Dailies' architecture makes one
-concrete — **assertion packs are data, not code** (`packs/*.yaml`):
+The criterion rewards a credible path over present revenue, and the honest way to state one is
+the open-source progression a16z describes: **project-community fit → product-market fit →
+value-market fit**, in that order, with monetization as a *later* stage gated on traction — not
+a number we claim today. Dailies' architecture makes each stage concrete because **assertion
+packs are data, not code** (`packs/*.yaml`) and the engine has no generator coupling.
 
-- **A consumable library / package (`@dailies/vidtest`).** The assertion engine (`server/specs.py`,
-  `server/tier_a.py`, `server/compiler.py`) has no Wan coupling — deterministic checks run on any
-  mp4 — so it lifts out as a standalone package a dev drops into CI as **regression tests for
-  generated video**.
-- **An MCP server** exposing `run_shot_tests` (and, next, `compile_shot` / `get_conformance_report`)
-  so any pipeline or agent can **gate video the way it already gates code**. Shipped in
-  `server/mcp_server.py` — a live, runnable surface, not a slide.
-- **Model-agnostic by construction.** Checks take frames, not generator internals — swap the model,
-  the conformance layer is unchanged. This is the real "works with any video model" claim and the
-  root of the OSS-adoption path: packs run as regression tests that outlive any one generator.
+- **Stage 1 — project-community fit (now).** The asset is a runnable, model-agnostic conformance
+  engine a developer adopts in minutes; it lifts out of `server/specs.py`, `server/tier_a.py`,
+  and `server/compiler.py` as a standalone package (deterministic checks run on any mp4). Traction
+  here is **stars, forks, and PRs** against the vocabulary and packs — community signal, not revenue.
+- **Stage 2 — product-market fit (next).** As packs-as-data and the MCP tool get dropped into real
+  CI as **regression tests for generated video**, the signal becomes **usage** — installs,
+  `run_shot_tests` calls, packs authored. Still adoption depth, still not revenue.
+- **Stage 3 — value-market fit (later, gated).** Only once usage is real does monetization make
+  sense — a hosted gate, the human-override calibration corpus as a tuned managed service, team
+  seats. We name this as a *later* stage on purpose: claiming revenue now would be dishonest, and
+  the rubric does not ask for it.
+
+### The hackathon-stage traction substitute
+
+Stars and downloads don't exist yet, so the credible stand-in is a **productization surface you
+can run right now**. `run_shot_tests` is exposed as a console-script entry point
+(`[project.scripts]` in `pyproject.toml` → `dailies-mcp = "server.mcp_server:main"`), so the MCP
+server is **runnable as a package** without cloning internals:
+
+```bash
+uvx --from . dailies-mcp        # or: pipx run --spec . dailies-mcp
+```
+
+(Runnable as a package — **not** published to PyPI yet.) That an outside agent can install the gate
+and check video against an authored spec in one command is the honest substitute for community
+traction at this stage: the distribution mechanism exists and works, ahead of the audience that
+will use it.
 
 ## Honest scope — what's built vs. what's roadmap
 
