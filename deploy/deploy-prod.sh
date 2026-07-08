@@ -1,27 +1,25 @@
 #!/usr/bin/env bash
 # Production deploy for Dailies on the Alibaba Cloud SAS box.
 #
-# Invoked over SSH by .github/workflows/deploy-prod.yml on every push to main,
-# and safe to run by hand on the box. Secrets are read from ~/dailies/.env
-# (managed once on the box, gitignored) — this script never writes them.
+# Builds and (re)starts whatever is CURRENTLY checked out in ~/dailies; syncing
+# the checkout to the target commit is the caller's job. The CI workflow
+# (.github/workflows/deploy-prod.yml) does `git fetch && reset --hard origin/main`
+# before invoking this — the one safe place to update the tree, since a script
+# can't reliably git-reset the file it is itself executing. For a manual deploy
+# run `git pull` first; for a rollback `git reset --hard <good-sha>` first — this
+# script builds the current checkout and won't fight either.
 #
-# The SPA is built inside the Docker `spa` stage, so there is no host-side node
-# build step; a deploy is just: sync the tree -> compose up --build -> health-gate.
+# Secrets are read from ~/dailies/.env (managed once on the box, gitignored) —
+# this script never writes them. The SPA is built inside the Docker `spa` stage,
+# so there is no host-side node build step.
 
 set -euo pipefail
 
 REPO_DIR="${DAILIES_DIR:-$HOME/dailies}"
-DEPLOY_BRANCH="${DEPLOY_BRANCH:-main}"
 ENV_NAME="${ENV_NAME:-prod}"
 
-echo "==> Deploying Dailies (env=$ENV_NAME) from $REPO_DIR @ origin/$DEPLOY_BRANCH"
 cd "$REPO_DIR"
-
-# Sync to the exact remote tip. .env and data/ are gitignored, so a hard reset
-# never touches secrets or the persisted cache/run-state volume. No `git clean`
-# on purpose — it would delete those untracked, box-managed files.
-git fetch --all --prune
-git reset --hard "origin/$DEPLOY_BRANCH"
+echo "==> Deploying Dailies (env=$ENV_NAME) @ $(git rev-parse --short HEAD 2>/dev/null || echo unknown) in $REPO_DIR"
 
 # Fail loudly if the box was never seeded with secrets.
 if [[ ! -f .env ]]; then

@@ -53,8 +53,8 @@ docker compose ps                     # app should show (healthy)
 ## Continuous deployment (push to `main` → SAS)
 
 A merge to `main` is a release. GitHub Actions (`.github/workflows/deploy-prod.yml`)
-SSHes into the SAS box and runs `deploy/deploy-prod.sh`, which syncs the tree, rebuilds
-the stack, and gates on the app healthcheck.
+SSHes into the SAS box, syncs the checkout to `origin/main`, then runs
+`deploy/deploy-prod.sh`, which rebuilds the stack and gates on the app healthcheck.
 
 ```
 push/merge → main
@@ -119,6 +119,11 @@ Each run hard-resets the box checkout to `origin/main` (safe: `.env` and `data/`
 secrets and the persisted cache/run-state volume are untouched), rebuilds, prunes dangling images, and
 waits up to ~120 s for the app container to report `healthy` — exiting non-zero (with `docker compose
 logs`) if it doesn't, so a broken build fails the Action instead of silently serving.
+
+The `git fetch`/`reset` lives in the **workflow**, not `deploy/deploy-prod.sh`: a script can't reliably
+`git reset` the file it is itself running, and doing the sync once keeps it out of the script.
+`deploy/deploy-prod.sh` therefore builds **whatever is checked out** — which is exactly why the rollback
+below works (the script won't re-sync you back to the bad tip).
 
 To **roll back**, either revert the offending commit on `main` and push, or on the box:
 ```bash
