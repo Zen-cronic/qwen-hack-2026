@@ -65,7 +65,7 @@ premise → script + specs (qwen-plus) → compiled assertion checklist
 cp .env.example .env         # add your QWEN_API_KEY
 pip install -e ".[dev]"
 python scripts/verify_quota.py     # day-1 gate: API access + video-gen quota
-pytest -q                          # 57 tests
+pytest -q                          # 77 tests
 uvicorn server.app:create_production_app --factory --port 8099
 ```
 
@@ -74,6 +74,16 @@ uvicorn server.app:create_production_app --factory --port 8099
 ```bash
 DAILIES_DEMO=1 SPA_DIST=web/dist uvicorn server.app:create_production_app --factory --port 8099
 ```
+
+**Qwen tool & MCP integration** (needs `pip install -e ".[agent]"` + a live key; chat tokens only):
+
+```bash
+python scripts/qwen_tool_demo.py    # qwen-plus calls run_shot_tests as a custom tool (function calling + Qwen-Agent)
+python scripts/mcp_agent_demo.py    # a Qwen agent calls it through MCP (client + server both ours)
+python -m server.mcp_server         # the raw MCP server (stdio) — the productization surface
+```
+
+See [docs/demo.md](docs/demo.md) for the full < 3-min demo run-of-show.
 
 **Frontend** (Vite + React + TS):
 
@@ -89,6 +99,7 @@ System dependency: `ffmpeg` (assembly).
 
 ## Docs
 
+- [docs/demo.md](docs/demo.md) — demo run-of-show (< 3 min) showcasing the workbench, Qwen custom tool, and MCP loop
 - [docs/judging.md](docs/judging.md) — judging rubric (4 weighted categories) + how Dailies maps to each
 - [docs/impact.md](docs/impact.md) — Problem Value & Impact: pain, buyer, competitor analysis, moat, productization path
 - [docs/architecture.md](docs/architecture.md) — architecture + deployment diagram (submission deliverable)
