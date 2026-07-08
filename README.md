@@ -89,6 +89,7 @@ System dependency: `ffmpeg` (assembly).
 
 ## Docs
 
+- [docs/judging.md](docs/judging.md) — judging rubric (4 weighted categories) + how Dailies maps to each
 - [docs/impact.md](docs/impact.md) — Problem Value & Impact: pain, buyer, competitor analysis, moat, productization path
 - [docs/architecture.md](docs/architecture.md) — architecture + deployment diagram (submission deliverable)
 - [docs/verification.md](docs/verification.md) — Day-1 quota/API/Tier-B verification log

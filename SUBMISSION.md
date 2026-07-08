@@ -1,5 +1,7 @@
 # Submission deliverables — verbatim-sourced from Devpost /rules + update 45055
 
+Judging rubric (4 weighted categories) and how this project maps to each: [docs/judging.md](docs/judging.md).
+
 - [ ] **Public open-source repo** — license file "detectable and visible at the top of the repository page"; contains "all necessary source code, assets, and instructions required for the project to be functional"
 - [ ] **Code file with the Qwen Cloud Base URL clearly visible** — sanctioned base URLs:
   - `https://dashscope-intl.aliyuncs.com/compatible-mode/v1`

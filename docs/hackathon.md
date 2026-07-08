@@ -10,6 +10,7 @@
 - **Build Session FAQ** (Notion) — https://devpost.notion.site/Qwen-Cloud-Global-AI-Hackathon-Build-Session-FAQ-38fbf3c6a91d8038bd64d00459edbb19
 - **Proof of deployment** (Google Doc) — https://docs.google.com/document/d/1XsiewMDMOGKxWGp7PRlaEnB7hN5n2JNIUho7cDIV8Vo/
 - **Resources** (Devpost) — https://qwencloud-hackathon.devpost.com/resources
+- **Judging rubric** — 4 weighted categories from the Build Session FAQ, mapped to this project in [judging.md](judging.md)
 
 ## Deadlines
 
