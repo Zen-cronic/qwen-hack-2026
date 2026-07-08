@@ -147,7 +147,8 @@ System dependency: `ffmpeg` (assembly).
 - [docs/demo.md](docs/demo.md) — demo run-of-show (< 3 min) showcasing the workbench, Qwen custom tool, and MCP loop
 - [docs/judging.md](docs/judging.md) — judging rubric (4 weighted categories) + how Dailies maps to each
 - [docs/impact.md](docs/impact.md) — Problem Value & Impact: pain, buyer, competitor analysis, moat, productization path
-- [docs/architecture.md](docs/architecture.md) — architecture + deployment diagram (submission deliverable)
+- [docs/architecture.md](docs/architecture.md) — C4 system-context + container diagrams (submission deliverable)
+- [docs/profiling.md](docs/profiling.md) — per-tier cost/latency profiling (measured demo run + modeled cost design)
 - [docs/verification.md](docs/verification.md) — Day-1 quota/API/Tier-B verification log
 - [docs/deploy.md](docs/deploy.md) — Alibaba Cloud SAS deploy runbook
 - [docs/hackathon.md](docs/hackathon.md) — hackathon source links
