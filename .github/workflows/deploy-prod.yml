@@ -1,0 +1,40 @@
+name: Deploy to production (Alibaba Cloud SAS)
+
+# CI for the code; CD for the box. A merge to main is a release: it SSHes into
+# the SAS instance and re-deploys. Secrets live in ~/dailies/.env on the box
+# (not Doppler, not GitHub) — CI only needs SSH reach.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}   # manual redeploy button (useful during the judging window)
+
+# Never let two deploys race the same box; queue instead of cancelling a
+# half-finished rollout.
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    # Enables an optional "required reviewers" approval gate in repo settings
+    # (Settings -> Environments -> production) if you want a manual release check.
+    environment: production
+    steps:
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.2.2
+        env:
+          ENV_NAME: ${{ vars.ENV_NAME }}
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          envs: ENV_NAME
+          script: |
+            set -e
+            cd ~/dailies
+            # Pull the tip first so the *latest* deploy script runs, then hand off.
+            git fetch --all --prune
+            git reset --hard origin/main
+            chmod +x deploy/deploy-prod.sh
+            ENV_NAME="${ENV_NAME:-prod}" ./deploy/deploy-prod.sh

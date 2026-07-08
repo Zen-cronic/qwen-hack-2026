@@ -93,7 +93,8 @@ npm --prefix web run dev                                  # dev server, proxies 
 ```
 
 **Docker (deploy topology):** `docker compose up -d --build` → nginx (`:80`) serves the SPA
-and proxies `/api` to the uvicorn app. See [docs/deploy.md](docs/deploy.md).
+and proxies `/api` to the uvicorn app. A push to `main` auto-deploys to the Alibaba Cloud SAS
+box (GitHub Actions → SSH → rebuild + health-gate); see [docs/deploy.md](docs/deploy.md).
 
 System dependency: `ffmpeg` (assembly).
 

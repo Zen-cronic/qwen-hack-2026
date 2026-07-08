@@ -50,6 +50,81 @@ docker compose ps                     # app should show (healthy)
   CV + real assembly, **zero video quota**. Safest for a public URL that must survive the
   Jul 10–31 judging window. Set it in `.env` or the compose environment.
 
+## Continuous deployment (push to `main` → SAS)
+
+A merge to `main` is a release. GitHub Actions (`.github/workflows/deploy-prod.yml`)
+SSHes into the SAS box and runs `deploy/deploy-prod.sh`, which syncs the tree, rebuilds
+the stack, and gates on the app healthcheck.
+
+```
+push/merge → main
+  → GitHub Actions (appleboy/ssh-action)
+    → ssh SAS box: git fetch && reset --hard origin/main
+      → deploy/deploy-prod.sh: docker compose up -d --build → wait for healthy
+```
+
+No Doppler and no host-side node build: secrets live in `~/dailies/.env` on the box, and the
+SPA is built inside the Docker `spa` stage. CI's only job is SSH reach — the single long-lived
+secret in GitHub is the deploy SSH key; `QWEN_API_KEY` never leaves the box.
+
+### One-time setup
+
+1. **SAS instance + Docker.** Provision an Alibaba Cloud [Simple Application
+   Server](https://www.alibabacloud.com/help/en/simple-application-server/product-overview/what-is-simple-application-server)
+   (an app image with Docker preinstalled, or install Docker + the compose plugin yourself).
+   Open **port 80** (and **22** for SSH) in the SAS firewall / security group. If you deploy as
+   a non-root user, add it to the `docker` group (`sudo usermod -aG docker $USER`, re-login).
+
+2. **Dedicated CI SSH key.** Generate a keypair used only by the pipeline and authorize it on the box:
+   ```bash
+   ssh-keygen -t ed25519 -C "dailies-ci" -f ./dailies_ci -N ""
+   ssh-copy-id -i ./dailies_ci.pub <user>@<sas-public-ip>   # appends to ~/.ssh/authorized_keys
+   ```
+   Keep the **private** key (`dailies_ci`) for the GitHub secret; the public key stays on the box.
+
+3. **GitHub → Settings → Secrets and variables → Actions.**
+   - Secrets: `SERVER_HOST` = SAS **public IP**, `SERVER_USER` = the SSH user (`root` or your deploy
+     user), `SERVER_SSH_KEY` = the **private** key from step 2 (full PEM, including the header/footer lines).
+   - Variables: `ENV_NAME` = `prod`. (This is the hook for future `dev`/`staging` — copy the workflow,
+     point it at another box, change `ENV_NAME`.)
+   - Optional gate: **Settings → Environments → production → Required reviewers** turns each deploy into
+     a one-click manual approval.
+
+4. **Clone the repo onto the box** at `~/dailies`. The repo is public, so an anonymous clone works and
+   future `git fetch` needs no token:
+   ```bash
+   git clone https://github.com/Zen-cronic/qwen-hack-2026.git ~/dailies
+   ```
+   If you later make the repo **private**, use a fine-grained GitHub **PAT** (Repository access: this repo;
+   permissions **Contents: read**, **Metadata: read**) and clone with it:
+   ```bash
+   export GITHUB_TOKEN=<pat>
+   git clone https://oauth2:${GITHUB_TOKEN}@github.com/Zen-cronic/qwen-hack-2026.git ~/dailies
+   ```
+   (Note: embedding the token in the remote URL persists it in `~/dailies/.git/config`. Prefer a git
+   credential helper if that matters.)
+
+5. **Seed secrets on the box** (once — CD never rewrites this file):
+   ```bash
+   cd ~/dailies && cp .env.example .env
+   # edit .env: paste QWEN_API_KEY; set DAILIES_DEMO=1 for a zero-quota public URL, JUDGE_MODE as desired
+   ```
+
+6. **First deploy.** Either push to `main`, hit **Run workflow** (`workflow_dispatch`) in the Actions tab,
+   or run it by hand on the box: `chmod +x deploy/deploy-prod.sh && ./deploy/deploy-prod.sh`.
+
+### Per-deploy behavior & rollback
+
+Each run hard-resets the box checkout to `origin/main` (safe: `.env` and `data/` are gitignored, so
+secrets and the persisted cache/run-state volume are untouched), rebuilds, prunes dangling images, and
+waits up to ~120 s for the app container to report `healthy` — exiting non-zero (with `docker compose
+logs`) if it doesn't, so a broken build fails the Action instead of silently serving.
+
+To **roll back**, either revert the offending commit on `main` and push, or on the box:
+```bash
+cd ~/dailies && git reset --hard <good-sha> && ./deploy/deploy-prod.sh
+```
+
 ## Eligibility (manual, do on the box)
 
 1. Bring the stack up and confirm the public URL loads.
