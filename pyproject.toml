@@ -25,6 +25,11 @@ dev = [
 mcp = [
     "mcp>=1.0",
 ]
+agent = [
+    "qwen-agent[mcp]>=0.0.34",
+    "soundfile>=0.12",       # qwen-agent imports it eagerly but does not declare it
+    "python-dateutil>=2.8",  # same — pulled in by qwen-agent's code-interpreter tool
+]
 
 [build-system]
 requires = ["setuptools>=68"]
