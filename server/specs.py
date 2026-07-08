@@ -1,11 +1,13 @@
-"""The shot contract — Dailies' closed assertion vocabulary and validated types.
+"""The shot contract — Dailies' closed assertion DSL and validated types.
 
 This is the "CI for generated video" thesis in one module. A shot spec is a prompt
-plus a list of *assertions*: machine-checkable claims about the rendered clip. The
-vocabulary is CLOSED — exactly 10 assertion types across three cost tiers. The
-compiler (and the LLM output parser) run everything through `parse_assertions`,
-which rejects any invented type or malformed params. That closure is what lets
-downstream tiers assume every assertion is executable.
+plus a short program in a small domain-specific language: each *sentence* is an
+assertion (a `type` + typed `params`) — a machine-checkable claim about the rendered
+clip. The vocabulary is CLOSED — exactly 10 sentence types across three cost tiers. The
+compiler (and the LLM output parser) run everything through `parse_assertions`, which
+rejects any sentence outside the grammar (unknown type or malformed params) — the DSL's
+compile error. That closure is what lets downstream tiers assume every assertion is
+executable.
 
 Tiers, cheapest first:
   tier0  — checked on a single t2i still BEFORE any video spend (1/25th cost)

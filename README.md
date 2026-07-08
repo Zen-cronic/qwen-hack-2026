@@ -46,9 +46,10 @@ premise → script + specs (qwen-plus) → compiled assertion checklist
         → ffmpeg assembly → certified episode
 ```
 
-- **Closed vocabulary, 10 assertion types** across 3 tiers (`server/specs.py`). The compiler
-  rejects any invented or malformed assertion *before* spending a token — that rejection is
-  the "CI" in "CI for generated video".
+- **A closed assertion DSL — 10 sentence types** across 3 tiers (`server/specs.py`). A spec is a
+  short program in this language; the compiler translates each sentence to a call in a common check
+  library and rejects any sentence outside the grammar *before* spending a token — that rejection is
+  the DSL's compile error, and the literal "CI" in "CI for generated video". See [the grammar](#the-assertion-dsl) below.
 - **Tier-A** (`server/tier_a.py`) is deterministic OpenCV — duration, brightness, flicker,
   scene cuts, camera motion (optical flow), palette ΔE. Zero tokens, so it runs on every take.
 - **Cost-quality frontier** is a first-class, measured feature: every call logs token/quota
@@ -56,6 +57,49 @@ premise → script + specs (qwen-plus) → compiled assertion checklist
   cost-quality scatter, repair convergence, and cost-per-passing-second.
 - **Judge-safe:** a content-addressed cache makes re-verification of cached clips cost zero
   video quota, so the live URL survives the judging window.
+
+### The assertion DSL
+
+The vocabulary is a small **domain-specific language** — in the classic sense of "a small, usually
+declarative language" whose sentences are translated into "calls to a common [...] library", the
+"final and most mature phase of the evolution of a framework" (van Deursen, Klint & Visser, *ACM
+SIGPLAN Notices* 35(6), 2000). A *sentence* is one assertion: a `type` drawn from a **closed** set
+plus its typed `params`. The compiler (`server/specs.py` → `server/compiler.py`) translates each
+sentence to a call in a common check library — a zero-token OpenCV routine (Tier-A) or a `qwen-vl`
+prompt (Tier-B) — and **rejects any sentence outside the grammar before a token is spent**. That
+rejection is the DSL's compile error (`parse_assertions` raises on an unknown `type` or malformed
+`params`) and the CI gate everything downstream relies on.
+
+```ebnf
+spec       = { assertion } ;                          (* a spec is a program in the DSL *)
+assertion  = type , params ;                          (* one sentence = one machine-checkable claim *)
+type       = "duration_between" | "brightness_range"  (* closed set — exactly 10, no others *)
+           | "flicker_below"    | "scene_cuts"
+           | "camera_motion"    | "palette_deltae"
+           | "subject_present"  | "identity_consistent"
+           | "action_completed" | "title_card_present" ;
+params     = key/value pairs ; (* required keys fixed per type; extras/missing = compile error *)
+```
+
+The 10 sentence types, their tier, and what each compiles to:
+
+| Assertion type | Tier | Params | Compiles to |
+|---|---|---|---|
+| `duration_between` | A · deterministic | `min_s`, `max_s` | clip length within bounds |
+| `brightness_range` | A · deterministic | `min`, `max` | mean-luma within bounds |
+| `flicker_below` | A · deterministic | `max_std` | inter-frame luma std under threshold |
+| `scene_cuts` | A · deterministic | `max` | HSV-histogram cut count at or under max |
+| `camera_motion` | A · deterministic | `direction` (`left`\|`right`\|`up`\|`down`\|`static`\|`any`) | optical-flow pan direction |
+| `palette_deltae` | A · deterministic | `palette`, `max_delta` | dominant-color ΔE to a brand palette |
+| `subject_present` | 0 · pre-render still | `subject` | subject recognizable in the t2i still |
+| `identity_consistent` | B · advisory | `subject` | VLM: same identity across frames |
+| `action_completed` | B · advisory | `action` | VLM: the briefed action visibly completes |
+| `title_card_present` | B · advisory | *(none)* | VLM: a title / text card is visible |
+
+Tier-A sentences are deterministic and block promotion; Tier-B sentences are advisory (a VLM
+judgment is softer evidence than a pixel measurement, so it flags for the human and never blocks).
+User-authored plain-language rules are compiled *into* this same DSL (`server/script.py`), so a rule
+needing an unsupported modality is rejected at compile time rather than faked.
 
 ## Run it
 
