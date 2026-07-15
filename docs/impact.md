@@ -124,7 +124,7 @@ can run right now**. `run_shot_tests` is exposed as a console-script entry point
 server is **runnable as a package** without cloning internals:
 
 ```bash
-uvx --from . dailies-mcp        # or: pipx run --spec . dailies-mcp
+uvx --from '.[mcp]' dailies-mcp        # or: pipx run --spec '.[mcp]' dailies-mcp
 ```
 
 (Runnable as a package — **not** published to PyPI yet.) That an outside agent can install the gate

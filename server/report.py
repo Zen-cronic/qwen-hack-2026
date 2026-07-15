@@ -5,6 +5,8 @@ here spends anything; it's pure aggregation over takes + the ledger:
   * heatmap        — pass/fail/inconclusive per assertion type = an empirical
                      capability map of the draft model
   * frontier       — per-shot (cost, quality) scatter points
+  * convergence    — every take as a point, so the repair loop's trajectory per shot is
+                     readable: a failing take followed by a passing one is a convergence
   * repair         — retakes and how many repaired shots then certified
   * transfer_rate  — of shots with a Tier-0 still, how many passed on the FIRST
                      draft (image -> video transfer)
@@ -66,6 +68,16 @@ def build_report_metrics(p: ProjectState) -> dict:
         "certified": s.certified,
     } for s in shots]
 
+    # Every take, in order, as one point. Reading a shot's row left to right gives the
+    # repair loop's trajectory: a failing take followed by a passing one is a convergence.
+    convergence = [{
+        "shot": s.spec.index,
+        "take": t.take_no,
+        "tier": t.tier,
+        "passed": bool(t.passed),
+        "quality": _quality(t),
+    } for s in shots for t in s.takes]
+
     repaired = [s for s in shots if len(_drafts(s)) > 1]
     retakes_total = sum(max(0, len(_drafts(s)) - 1) for s in shots)
 
@@ -77,6 +89,7 @@ def build_report_metrics(p: ProjectState) -> dict:
         "summary": {"shots_total": len(shots), "certified": certified, "failed": failed},
         "heatmap": heatmap,
         "frontier": frontier,
+        "convergence": convergence,
         "repair": {"retakes_total": retakes_total, "shots_repaired": len(repaired),
                    "repair_successes": sum(1 for s in repaired if s.certified)},
         "cost_per_passing_second": (round(p.wallet.est_usd / passing_seconds, 4)

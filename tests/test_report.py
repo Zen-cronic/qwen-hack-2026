@@ -15,6 +15,34 @@ def _take(no, tier, prompt, res, passed):
                 results=[res], passed=passed)
 
 
+def test_convergence_traces_every_take_per_shot():
+    """One point per take, tagged with its shot — the repair loop's trajectory.
+
+    Shot 0 converges (draft FAIL -> draft PASS -> final); shot 1 never does. Reading a
+    shot's row in take order is exactly what the dashboard's convergence chart draws.
+    """
+    p = ProjectState(id="p", premise="x", pack="short_drama", max_shots=2)
+    p.shots = [
+        ShotState(spec=ShotSpec(index=0, prompt="a"), status=ShotStatus.CERTIFIED, certified=True,
+                  takes=[_take(0, "draft", "a", _res(Status.FAIL), False),
+                         _take(1, "draft", "a2", _res(Status.PASS), True),
+                         _take(2, "final", "a2", _res(Status.PASS), True)]),
+        ShotState(spec=ShotSpec(index=1, prompt="b"), status=ShotStatus.FAILED, certified=False,
+                  takes=[_take(0, "draft", "b", _res(Status.FAIL), False)]),
+    ]
+
+    conv = build_report_metrics(p)["convergence"]
+
+    assert [(c["shot"], c["take"], c["passed"]) for c in conv] == [
+        (0, 0, False), (0, 1, True), (0, 2, True), (1, 0, False),
+    ]
+    assert [c["tier"] for c in conv if c["shot"] == 0] == ["draft", "draft", "final"]
+    # (shot, take) must be unique or the scatter overplots and the trajectory is unreadable.
+    keys = [(c["shot"], c["take"]) for c in conv]
+    assert len(keys) == len(set(keys))
+    assert all(c["passed"] is False for c in conv if c["shot"] == 1)
+
+
 def test_report_metrics_end_to_end():
     p = ProjectState(id="p", premise="x", pack="short_drama", max_shots=2)
     s0 = ShotState(spec=ShotSpec(index=0, prompt="a"), status=ShotStatus.CERTIFIED, certified=True,

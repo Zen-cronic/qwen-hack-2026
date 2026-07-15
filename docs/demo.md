@@ -79,7 +79,7 @@ where **both ends are ours**.
 | 💡 Innovation & AI Creativity | Closed-vocabulary compiler + custom checks (Act 1.1); deterministic-before-probabilistic cascade + auto-repair (Act 1.3) |
 | ⚙️ Technical Depth & Engineering | MCP server, Qwen custom tool, and the MCP loop (Acts 2–3); the metrics ledger (Act 1.5) |
 | 🎯 Problem Value & Impact | Stakeholder-authored spec + human-override calibration data (Act 1.1, 1.4); see [impact.md](impact.md) |
-| 📝 Presentation & Documentation | The dashboard charts (Act 1.5); [architecture.md](architecture.md), [judging.md](judging.md) |
+| 📝 Presentation & Documentation | The dashboard charts (Act 1.5); [architecture.md](architecture.md) |
 
 ## Notes
 

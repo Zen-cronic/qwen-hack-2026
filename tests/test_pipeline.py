@@ -142,6 +142,45 @@ def test_failing_shot_is_repaired_then_certified(tmp_path):
     assert any(e.stage == "repairing" for e in p.ledger)
 
 
+def test_final_failing_tier_a_never_ships(tmp_path):
+    """A premium final that regresses on Tier-A must not be certified or assembled.
+
+    The promise is that a shot failing its checks never reaches the channel. _promote
+    re-verifies Tier-A on the final, so that FAIL has to gate certification — recording
+    it on the take is not enough. The passing draft carries the shot instead, matching
+    the fallback the budget and promotion-failure paths already take.
+    """
+    store = Store(tmp_path / "projects")
+    pid = _project(store, max_shots=1)
+    h = Harness(max_shots=1)
+    cfg = Config(data_dir=str(tmp_path / "projects"))
+
+    # The draft clears Tier-A; the premium re-render regresses on it. The fake clip path
+    # encodes the model that made it, so keying on final_model isolates the final.
+    def tier_a_fn(video_path, spec, evidence_dir):
+        failing = cfg.final_model in video_path
+        return [AssertionResult(type=AssertionType.SCENE_CUTS, tier=Tier.TIER_A, advisory=False,
+                                status=Status.FAIL if failing else Status.PASS, detail="fake tier_a")]
+    h.tier_a_fn = tier_a_fn
+
+    pipe = Pipeline(store, pid, _deps(h, tmp_path), cfg)
+    store.signal_review(pid)
+    pipe.run()
+
+    p = store.get(pid)
+    shot = p.shots[0]
+
+    final_takes = [t for t in shot.takes if t.tier == "final"]
+    assert len(final_takes) == 1
+    assert final_takes[0].passed is False       # the final really did fail Tier-A
+
+    assert shot.certified                       # the shot still certifies, on the passing draft
+    assert shot.final_path is not None
+    assert cfg.final_model not in shot.final_path      # the FAILING final is not what ships
+    assert cfg.draft_model in shot.final_path          # the passing draft is
+    assert h.assembled == [shot.final_path]            # and the episode contains only that
+
+
 def test_cache_hit_clips_are_free(tmp_path):
     store = Store(tmp_path / "projects")
     pid = _project(store, max_shots=1)

@@ -58,30 +58,16 @@ premise → script + specs (qwen-plus) → compiled assertion checklist
 - **Judge-safe:** a content-addressed cache makes re-verification of cached clips cost zero
   video quota, so the live URL survives the judging window.
 
-### The assertion DSL
+### The closed assertion vocabulary
 
-The vocabulary is a small **domain-specific language** — in the classic sense of "a small, usually
-declarative language" whose sentences are translated into "calls to a common [...] library", the
-"final and most mature phase of the evolution of a framework" (van Deursen, Klint & Visser, *ACM
-SIGPLAN Notices* 35(6), 2000). A *sentence* is one assertion: a `type` drawn from a **closed** set
-plus its typed `params`. The compiler (`server/specs.py` → `server/compiler.py`) translates each
-sentence to a call in a common check library — a zero-token OpenCV routine (Tier-A) or a `qwen-vl`
-prompt (Tier-B) — and **rejects any sentence outside the grammar before a token is spent**. That
-rejection is the DSL's compile error (`parse_assertions` raises on an unknown `type` or malformed
-`params`) and the CI gate everything downstream relies on.
+An assertion is a `type` from a **closed** set plus typed `params`. The compiler
+(`server/specs.py` → `server/compiler.py`) translates each one into a call in a common check
+library — a zero-token OpenCV routine (Tier-A) or a `qwen-vl` prompt (Tier-B) — and **rejects
+anything outside the set before a token is spent**: `parse_assertions` raises on an unknown `type`
+or malformed `params`. The closure holds at the process boundary too — send `{"type":
+"vibe_check"}` to the MCP server and it comes back `isError: True`, not a guess.
 
-```ebnf
-spec       = { assertion } ;                          (* a spec is a program in the DSL *)
-assertion  = type , params ;                          (* one sentence = one machine-checkable claim *)
-type       = "duration_between" | "brightness_range"  (* closed set — exactly 10, no others *)
-           | "flicker_below"    | "scene_cuts"
-           | "camera_motion"    | "palette_deltae"
-           | "subject_present"  | "identity_consistent"
-           | "action_completed" | "title_card_present" ;
-params     = key/value pairs ; (* required keys fixed per type; extras/missing = compile error *)
-```
-
-The 10 sentence types, their tier, and what each compiles to:
+The 10 types, their tier, and what each compiles to:
 
 | Assertion type | Tier | Params | Compiles to |
 |---|---|---|---|
@@ -98,18 +84,22 @@ The 10 sentence types, their tier, and what each compiles to:
 
 Tier-A sentences are deterministic and block promotion; Tier-B sentences are advisory (a VLM
 judgment is softer evidence than a pixel measurement, so it flags for the human and never blocks).
-User-authored plain-language rules are compiled *into* this same DSL (`server/script.py`), so a rule
-needing an unsupported modality is rejected at compile time rather than faked.
+User-authored plain-language rules compile *into* this same vocabulary (`server/script.py`). A rule
+needing a modality the vocabulary lacks — audio, on-screen text, a time window like "the outro" — is
+**omitted rather than approximated** with a type that means something else; the compiler never fakes
+a check it cannot run. Known gap: that omission is currently silent, so an author gets no diagnostic
+saying their rule went uncompiled.
 
 ## Run it
 
 **Backend + tests** (Python 3.12):
 
 ```bash
-cp .env.example .env         # add your QWEN_API_KEY
-pip install -e ".[dev]"
+python3.12 -m venv .venv && source .venv/bin/activate   # any Python 3.12 interpreter
+cp .env.example .env               # add your QWEN_API_KEY
+pip install -e ".[dev,mcp,agent]"  # mcp + agent extras: without them, those surfaces' tests skip
 python scripts/verify_quota.py     # day-1 gate: API access + video-gen quota
-pytest -q                          # 77 tests
+pytest -q                          # 79 passed
 uvicorn server.app:create_production_app --factory --port 8099
 ```
 
@@ -145,7 +135,6 @@ System dependency: `ffmpeg` (assembly).
 ## Docs
 
 - [docs/demo.md](docs/demo.md) — demo run-of-show (< 3 min) showcasing the workbench, Qwen custom tool, and MCP loop
-- [docs/judging.md](docs/judging.md) — judging rubric (4 weighted categories) + how Dailies maps to each
 - [docs/impact.md](docs/impact.md) — Problem Value & Impact: pain, buyer, competitor analysis, moat, productization path
 - [docs/architecture.md](docs/architecture.md) — C4 system-context + container diagrams (submission deliverable)
 - [docs/profiling.md](docs/profiling.md) — per-tier cost/latency profiling (measured demo run + modeled cost design)

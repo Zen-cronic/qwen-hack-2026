@@ -286,7 +286,14 @@ class Pipeline:
                           video_path=res.local_path, results=results,
                           passed=not [r for r in results if not r.advisory and r.status is Status.FAIL])
         self._append_take(idx, final_take)
-        self._set(lambda p: _certify(p, idx, res.local_path))
+        if final_take.passed:
+            self._set(lambda p: _certify(p, idx, res.local_path))
+        else:
+            # The premium final regressed on the deterministic tier even though the draft
+            # cleared it. Certify the draft rather than ship an unverified final — the same
+            # fallback the budget and promotion-failure paths above already take. Certifying
+            # res.local_path here would put a Tier-A FAIL into the episode.
+            self._set(lambda p: _certify(p, idx, last.video_path))
 
     def _assemble(self) -> None:
         self._status(ProjectStatus.ASSEMBLING)

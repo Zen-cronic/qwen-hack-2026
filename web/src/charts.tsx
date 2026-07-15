@@ -51,6 +51,14 @@ export function ChartsPanel({ m }: { m: Metrics }) {
   }));
   const frontier = m.frontier.map((f) => ({ ...f, quality: Math.round(f.quality * 100) }));
 
+  // Every take as one point. (shot, take) is unique, so nothing overplots: reading a
+  // shot's row left to right is the repair loop's trajectory for that shot.
+  const conv = m.convergence ?? [];
+  const maxTake = conv.reduce((n, t) => Math.max(n, t.take), 0);
+  const shotCount = conv.reduce((n, t) => Math.max(n, t.shot + 1), 0);
+  const takeTicks = Array.from({ length: maxTake + 1 }, (_, i) => i);
+  const shotTicks = Array.from({ length: shotCount }, (_, i) => i);
+
   // Decision-relevant headline numbers, derived from the same metrics block.
   const cells = Object.entries(m.heatmap);
   const defectsCaught = cells.reduce((n, [, c]) => n + c.fail, 0);
@@ -109,6 +117,35 @@ export function ChartsPanel({ m }: { m: Metrics }) {
           )}
         </Paper>
       </Box>
+
+      <Paper sx={{ p: 2 }}>
+        <Typography variant="h3" gutterBottom>Repair convergence — every take, per shot</Typography>
+        {conv.length === 0 ? <Typography color="text.secondary">No takes yet.</Typography> : (
+          <>
+            <Legend items={[{ c: C.pass, label: "take passed" }, { c: C.fail, label: "take failed" }]} />
+            <ResponsiveContainer width="100%" height={Math.max(150, shotCount * 44)}>
+              <ScatterChart margin={{ left: 0, bottom: 12, right: 16 }}>
+                <CartesianGrid stroke={tokens.border} />
+                <XAxis type="number" dataKey="take" name="take" domain={[-0.5, maxTake + 0.5]}
+                  ticks={takeTicks} allowDecimals={false} tick={{ fill: tokens.muted, fontSize: 11 }}
+                  label={{ value: "take", fill: tokens.muted, fontSize: 11, position: "insideBottom", offset: -6 }} />
+                <YAxis type="number" dataKey="shot" name="shot" reversed domain={[-0.5, shotCount - 0.5]}
+                  ticks={shotTicks} allowDecimals={false} width={62}
+                  tick={{ fill: tokens.muted, fontSize: 11 }} tickFormatter={(v) => `shot ${v}`} />
+                <ZAxis range={[110, 110]} />
+                <Tooltip {...tip} cursor={{ strokeDasharray: "3 3" }} />
+                <Scatter data={conv}>
+                  {conv.map((t, i) => <Cell key={i} fill={t.passed ? C.pass : C.fail} />)}
+                </Scatter>
+              </ScatterChart>
+            </ResponsiveContainer>
+            <Typography color="text.secondary" sx={{ fontSize: 12, mt: 0.5 }}>
+              A red take followed by a green one on the same row is the repair loop converging:
+              the blocking Tier-A failure fed back into a new prompt, and the retake passed.
+            </Typography>
+          </>
+        )}
+      </Paper>
     </Box>
   );
 }

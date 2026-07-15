@@ -25,3 +25,9 @@ web/dist/
 # Claude Code — local machine state, not shared (the skill under .claude/skills IS committed)
 .claude/settings.local.json
 .playwright-mcp/
+.claude/commands/
+.claude/workflows/
+.claude/skills/*
+!.claude/skills/frontend-design/
+
+references/

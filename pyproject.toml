@@ -32,9 +32,11 @@ agent = [
 ]
 
 [project.scripts]
-# Runnable as a package: `uvx --from . dailies-mcp` (or `pipx run --spec . dailies-mcp`)
-# starts the MCP server over stdio. Not published to PyPI — this is the productization
-# surface made installable, not a claim of distribution.
+# Runnable as a package: `uvx --from '.[mcp]' dailies-mcp` (or `pipx run --spec '.[mcp]'
+# dailies-mcp`) starts the MCP server over stdio. The [mcp] extra is required, not optional
+# garnish — mcp_server.py imports the `mcp` package at module scope, so `--from .` alone
+# resolves the entry point and then dies on the import. Not published to PyPI — this is the
+# productization surface made installable, not a claim of distribution.
 dailies-mcp = "server.mcp_server:main"
 
 [build-system]

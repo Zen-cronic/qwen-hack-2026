@@ -53,6 +53,7 @@ export interface Metrics {
   summary: { shots_total: number; certified: number; failed: number };
   heatmap: Record<string, HeatCell>;
   frontier: { shot: number; cost_seconds: number; cost_usd: number; quality: number; certified: boolean }[];
+  convergence: { shot: number; take: number; tier: string; passed: boolean; quality: number }[];
   repair: { retakes_total: number; shots_repaired: number; repair_successes: number };
   cost_per_passing_second: number | null;
   transfer_rate: number | null;
