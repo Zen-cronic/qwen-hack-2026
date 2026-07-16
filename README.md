@@ -99,7 +99,7 @@ python3.12 -m venv .venv && source .venv/bin/activate   # any Python 3.12 interp
 cp .env.example .env               # add your QWEN_API_KEY
 pip install -e ".[dev,mcp,agent]"  # mcp + agent extras: without them, those surfaces' tests skip
 python scripts/verify_quota.py     # day-1 gate: API access + video-gen quota
-pytest -q                          # 79 passed
+pytest -q                          # 86 passed
 uvicorn server.app:create_production_app --factory --port 8099
 ```
 
@@ -138,7 +138,7 @@ System dependency: `ffmpeg` (assembly).
 - [docs/impact.md](docs/impact.md) — Problem Value & Impact: pain, buyer, competitor analysis, moat, productization path
 - [docs/architecture.md](docs/architecture.md) — C4 system-context + container diagrams (submission deliverable)
 - [docs/profiling.md](docs/profiling.md) — per-tier cost/latency profiling (measured demo run + modeled cost design)
-- [docs/verification.md](docs/verification.md) — Day-1 quota/API/Tier-B verification log
+- [docs/verification.md](docs/verification.md) — verification log: the day-1 quota/API/Tier-B gate, and the first real end-to-end run (the four bugs synthetic clips hid)
 - [docs/deploy.md](docs/deploy.md) — Alibaba Cloud SAS deploy runbook
 - [docs/hackathon.md](docs/hackathon.md) — hackathon source links
 - [PLAN.md](PLAN.md) — build plan; [SUBMISSION.md](SUBMISSION.md) — deliverables checklist
