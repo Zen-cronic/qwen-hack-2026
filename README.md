@@ -84,6 +84,9 @@ The 10 types, their tier, and what each compiles to:
 
 Tier-A sentences are deterministic and block promotion; Tier-B sentences are advisory (a VLM
 judgment is softer evidence than a pixel measurement, so it flags for the human and never blocks).
+The single Tier-0 sentence is asked of the pre-render *still* — 325 tokens to learn a prompt can't
+render its own subject, before that shot costs a single video second — and its verdict is evidence
+at the human review gate rather than an automatic block ([measured](docs/verification.md#5-tier-0-the-gate-that-was-never-wired-jul-15)).
 User-authored plain-language rules compile *into* this same vocabulary (`server/script.py`). A rule
 needing a modality the vocabulary lacks — audio, on-screen text, a time window like "the outro" — is
 **omitted rather than approximated** with a type that means something else; the compiler never fakes
@@ -99,7 +102,7 @@ python3.12 -m venv .venv && source .venv/bin/activate   # any Python 3.12 interp
 cp .env.example .env               # add your QWEN_API_KEY
 pip install -e ".[dev,mcp,agent]"  # mcp + agent extras: without them, those surfaces' tests skip
 python scripts/verify_quota.py     # day-1 gate: API access + video-gen quota
-pytest -q                          # 86 passed
+pytest -q                          # 113 passed
 uvicorn server.app:create_production_app --factory --port 8099
 ```
 
@@ -138,7 +141,7 @@ System dependency: `ffmpeg` (assembly).
 - [docs/impact.md](docs/impact.md) — Problem Value & Impact: pain, buyer, competitor analysis, moat, productization path
 - [docs/architecture.md](docs/architecture.md) — C4 system-context + container diagrams (submission deliverable)
 - [docs/profiling.md](docs/profiling.md) — per-tier cost/latency profiling (measured demo run + modeled cost design)
-- [docs/verification.md](docs/verification.md) — verification log: the day-1 quota/API/Tier-B gate, and the first real end-to-end run (the four bugs synthetic clips hid)
+- [docs/verification.md](docs/verification.md) — verification log: the day-1 quota/API/Tier-B gate, the first real end-to-end run (the four bugs synthetic clips hid), and the Tier-0 gate that was billed but never wired
 - [docs/deploy.md](docs/deploy.md) — Alibaba Cloud SAS deploy runbook
 - [docs/hackathon.md](docs/hackathon.md) — hackathon source links
 - [PLAN.md](PLAN.md) — build plan; [SUBMISSION.md](SUBMISSION.md) — deliverables checklist

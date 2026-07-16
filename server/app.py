@@ -164,6 +164,7 @@ def build_runtime() -> Runtime:
     from server.script import compile_custom_rules, script_and_specs
     from server.tier_a import run_tier_a
     from server.tier_b import TierBVerifier
+    from server.tier0 import Tier0Verifier
     from server.wan import WanClient
 
     api_key = settings.QWEN_API_KEY
@@ -176,6 +177,7 @@ def build_runtime() -> Runtime:
     ledger = LedgerWriter(DATA_ROOT / "ledger.jsonl")
     cfg = Config(chat_model=chat_model, vl_model=vl_model, data_dir=str(DATA_ROOT / "projects"))
     tier_b = TierBVerifier(llm, model=vl_model)
+    tier0 = Tier0Verifier(llm, model=vl_model)
     repair = RepairAgent(llm, model=chat_model)
 
     deps = Deps(
@@ -183,7 +185,7 @@ def build_runtime() -> Runtime:
             premise, pack=pack, max_shots=max_shots, client=llm, model=chat_model),
         gen_image_fn=lambda prompt: wan.generate_image(prompt),
         gen_video_fn=governed_gen_video(wan, governor, final_model=cfg.final_model),
-        tier0_fn=lambda spec, still: [],  # Tier-0 still checks are a cut-line item
+        tier0_fn=tier0,
         tier_a_fn=run_tier_a,
         tier_b_fn=tier_b,
         repair_fn=repair,

@@ -31,6 +31,7 @@ probabilistic work only runs on candidates the cheap deterministic work already 
 | Tier / stage | Model | Cost basis | When it runs | Class |
 |---|---|---|---|---|
 | Tier-0 still | `wan2.1-t2i-plus` | ~**1/25** of a 5s draft ($0.02 vs $0.50) | once per shot, **before any video spend** | modeled |
+| Tier-0 subject check | `qwen-vl-plus` | **325 in / ~32 out** tokens per shot | on that still, **before any video spend** | measured |
 | Human gate | — | zero compute (a `threading.Event`) | once per batch, pre-video | — |
 | Draft | `wan2.1-t2v-turbo` | free tier **40 × 5s**; list $0.10/s | per take (incl. retakes) | modeled |
 | **Tier-A CV** | OpenCV | **ZERO tokens**; ~0.3s CPU/clip | **every take** (drafts + finals) | measured |
@@ -43,6 +44,15 @@ Two ratios are load-bearing and both are encoded in `server/metrics.py`: a Tier-
 **3×** a draft second (`$0.30 / $0.10`). Free-tier quota mirrors the intent — 40 cheap turbo
 takes to iterate against, 10 premium plus finals to certify (`.env.example`).
 
+The cascade only pays off if each rung is genuinely cheaper than the one it guards, and that
+is a property you can get wrong by accident: the t2i models return 1024×1024, VLM image
+tokens scale with pixel count, and a Tier-0 check on the full-res still would cost more than
+the seven downscaled frames Tier-B sends for the *whole video* — a pre-screen more expensive
+than the screen it precedes. `server/tier0.py` downscales to `STILL_WIDTH = 512` first, which
+holds the measured cost at 325 tokens/shot (27% of the full-res payload). Measured both
+directions on a real still — present subject PASS, absent subject FAIL — in
+[verification §5.2](verification.md#52-live-measurement--qwen-vl-plus-on-a-real-cached-still).
+
 ## Measured (demo run) — one 3-shot batch
 
 The default lighthouse premise, `short_drama` pack, 3 shots, run end-to-end. The ledger the
@@ -50,7 +60,7 @@ pipeline actually wrote:
 
 | Stage / resource | Calls | Billed units | Runs |
 |---|---|---|---|
-| `scripting` / chat (`qwen-plus`) | 1 | 270 in + 60 out tokens | once per batch |
+| `scripting` / chat (`qwen-plus`) | 1 | 180 in + 60 out tokens | once per batch |
 | `tier0` / image (`wan2.1-t2i-plus`) | 3 | 3 stills | once per shot, pre-video |
 | `drafting` / video_draft (`wan2.1-t2v-turbo`) | 4 | 20 video-s | per take (1 was a retake) |
 | `repairing` / chat (`qwen-plus`) | 1 | 90 in + 30 out tokens | per blocking failure |
@@ -58,6 +68,12 @@ pipeline actually wrote:
 
 Batch totals (wallet): **4 draft clips, 3 finals, 3 stills, 360 tokens, 35 billed video-seconds**,
 which the nominal list prices model at **~$6.56**. All 3 shots certified.
+
+Read the `tier0` row precisely: demo mode substitutes a deterministic zero-token stand-in for
+the subject check, so this batch bills 3 stills and no VLM tokens for that stage. It is not
+evidence that Tier-0 checks are free — in real mode the same stage adds ~325 tokens/shot
+(the row above). Demo mode exists to make the *control flow* free to re-run, and a number a
+fake produced is not a measurement of the thing it replaces.
 
 Note: in demo mode Tier-B runs offline (a deterministic stub), so the `verifying`/VLM token
 line is **0** in this run. In production it logs `qwen-vl-plus` tokens — on **drafts only**.

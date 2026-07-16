@@ -115,6 +115,7 @@ def build_fixture_runtime(data_dir: str | None = None):
     from server.app import Runtime  # imported here to avoid a cycle at module load
     from server.config import settings
     from server.tier_b import TierBVerifier
+    from server.tier0 import Tier0Verifier
 
     api_key = settings.QWEN_API_KEY
     root = Path(data_dir) if data_dir is not None else Path(settings.DATA_DIR)
@@ -129,7 +130,7 @@ def build_fixture_runtime(data_dir: str | None = None):
         # judge-mode cap exists to stop FRESH spend. Warming is the one intentional spend.
         gen_video_fn=lambda prompt, model, negative_prompt=None: wan.generate_video(
             prompt, model=model, negative_prompt=negative_prompt),
-        tier0_fn=lambda spec, still: [],
+        tier0_fn=Tier0Verifier(llm, model=settings.VL_MODEL),  # REAL qwen-vl on the real still
         tier_a_fn=run_tier_a,               # REAL deterministic CV, now on REAL video
         tier_b_fn=TierBVerifier(llm, model=settings.VL_MODEL),  # REAL qwen-vl on real frames
         repair_fn=_fixture_repair,

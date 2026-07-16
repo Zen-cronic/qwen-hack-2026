@@ -207,6 +207,10 @@ class Pipeline:
                         latency_ms=getattr(res, "latency_ms", 0),
                         note=_spend_note(res))
             results = self.deps.tier0_fn(spec, res.local_path) if res.ok else []
+            t0_in, t0_out = _pop_usage(self.deps.tier0_fn)
+            if t0_in or t0_out:
+                self._spend(kind=ResourceKind.VLM, model=self.cfg.vl_model, stage="tier0",
+                            shot_index=idx, tokens_in=t0_in, tokens_out=t0_out)
 
             def mut(p: ProjectState, idx=idx, res=res, results=results) -> None:
                 st = p.shots[idx]

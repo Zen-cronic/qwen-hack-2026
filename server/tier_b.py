@@ -3,9 +3,14 @@
 GO per the hour-zero smoke test (qwen-vl-plus reads pixels). Tier-B answers the
 questions deterministic CV can't: is this the SAME character across the clip
 (identity_consistent), did the described ACTION actually complete (action_completed),
-is the SUBJECT present (subject_present). Every Tier-B assertion is advisory — a
+is a title card visible (title_card_present). Every Tier-B assertion is advisory — a
 FAIL is surfaced to the human but never blocks promotion, because a VLM judgment
 is softer evidence than a pixel measurement.
+
+subject_present is NOT here: it is Tier-0, asked of the pre-render still by tier0.py,
+where a rejection is still cheap. This module once carried a _question branch for it
+that ASSERTION_META made unreachable — the tier filter below never selects it — which
+is precisely what disguised the check as wired while nothing ran it.
 
 NO-GO fallback (if the smoke test had failed): swap this stage for one that returns
 INCONCLUSIVE for every Tier-B assertion, and the UI shows human verdict buttons.
@@ -36,9 +41,6 @@ def _question(a: Assertion) -> str:
         return (f'These are ordered frames from one short video clip. Is the subject '
                 f'"{a.params["subject"]}" visually consistent — the same identity and '
                 f'appearance — across all frames, with no morphing, duplication, or drift?')
-    if a.type is AssertionType.SUBJECT_PRESENT:
-        return (f'These are ordered frames from one short video clip. Is "{a.params["subject"]}" '
-                f'clearly present and recognizable in the clip?')
     if a.type is AssertionType.TITLE_CARD_PRESENT:
         return ('These are ordered frames from one short video clip. Is a conspicuous on-screen '
                 'title or text card (a title, caption, or lower-third graphic) clearly visible '

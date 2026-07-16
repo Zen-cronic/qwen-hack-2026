@@ -152,7 +152,82 @@ architecture working, and it is checkable with `ls`.
 
 35 video-seconds total, ever. Every subsequent replay of the demo is free.
 
-## 5. Remaining eligibility items (manual)
+## 5. Tier-0: the gate that was never wired (Jul 15)
+
+Section 3b confirmed the t2i endpoint and that a still generates. It did not — and could
+not — confirm that anything ever *looked* at the still. Nothing did.
+
+`subject_present` is one of the ten types in the closed vocabulary, carries `advisory=False`
+(blocking-class, not a warning), and was evaluated by **nothing** in any production path:
+
+- `tier0_fn` was `lambda spec, still: []` in all three runtimes (`app.py`, `demo.py`,
+  `fixtures.py`), annotated "Tier-0 still checks are a cut-line item".
+- `pipeline._tier0` generated **and billed** one t2i still per shot anyway, then called that
+  stub and stored its empty list.
+- `tier_b.py` carried a `_question` branch for `subject_present` that `ASSERTION_META` made
+  unreachable — the type routes to `Tier.TIER0`, and Tier-B's filter selects only
+  `Tier.TIER_B`. That branch is what made the check look wired.
+
+The cut was half-made: the expensive half (generate the still) stayed, the valuable half
+(read it) was dropped, and three docs kept advertising both.
+
+### 5.1 Why a green suite missed it
+
+The same shape as the four bugs in 4.2 — *a fallback that makes failure look like success* —
+with a test-design twist worth naming. At
+
+```
+take.passed = not [r for r in results if not r.advisory and r.status is Status.FAIL]
+```
+
+a check that returns **no result** and a check that **passes** are the same empty list. Every
+existing test asserted on results that exist, so no test could fail when a result was
+silently missing. `test_specs.py`'s `len(ASSERTION_META) == 10` actively reinforced the
+illusion: it proves each type is *declared*, never that anything *evaluates* it.
+
+`tests/test_vocabulary_coverage.py` closes the class rather than the instance. It drives all
+ten types through their owning tier and demands a result comes back, then asserts that each
+of the three production runtimes injects a Tier-0 that returns a verdict. Both halves are
+needed — an evaluator existing and the pipeline calling it are different facts, and only the
+wiring test fails when the stub comes back.
+
+Confirmed by re-introducing the stub: the wiring test fails, and restoring it passes. A test
+never observed failing is not evidence.
+
+### 5.2 Live measurement — `qwen-vl-plus` on a real cached still
+
+| subject asked of the still | verdict | latency | tokens in/out |
+|---|---|---|---|
+| "a lighthouse keeper" (present) | PASS | 4.1 s | 325 / 33 |
+| "a yellow school bus" (absent) | **FAIL** | 2.7 s | 325 / 31 |
+
+Both directions were run deliberately: a check that only ever answers PASS is not a check.
+
+**325 tokens to avoid a 5-second premium clip** — the reject-before-spend thesis at the
+cheapest point in the cascade, now measured rather than asserted.
+
+The still is downscaled to 512 px before it is sent (`STILL_WIDTH` in `server/tier0.py`).
+The t2i models return 1024×1024; at source resolution the "1/25th of a clip" pre-screen
+would cost more image tokens than the seven frames Tier-B sends for the *entire* video,
+inverting the reason Tier-0 runs first. Downscaling cuts the payload to 27% of full-res.
+
+### 5.3 Scope, stated precisely
+
+A Tier-0 verdict is **evidence at the human review gate, not an automatic block.** Nothing
+gates on `tier0_results`: the pipeline stores them and the UI renders them at the one human
+checkpoint (`web/src/components.tsx:174`), where the human decides whether to release video
+budget. `advisory=False` marks `subject_present` blocking-class — it *would* block if it
+appeared in a take's results — but its Tier-0 job is to inform the gate, and it never reaches
+a take today.
+
+Where it is exercised: demo mode's second shot declares `subject_present` (deterministic,
+zero tokens). The fixture pack's three pinned shots declare no subject, so Tier-0 does not
+run there — adding it would put a live VLM call on the "warm = 6 s" path measured in 4.1 and
+that number would have to be re-measured, so it is left as a deliberate choice rather than a
+silent one. Real mode exercises Tier-0 whenever the script agent emits `subject_present`,
+which `server/script.py` instructs it to do for a named character.
+
+## 6. Remaining eligibility items (manual)
 
 - [ ] Alibaba Cloud Workbench screenshot showing running SAS resources ("no proof = not eligible")
 - [ ] Public GitHub repo with MIT badge visible

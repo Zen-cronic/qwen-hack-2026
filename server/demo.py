@@ -37,6 +37,8 @@ _DEMO_SHOTS = [
     {"prompt": "the keeper climbs the spiral staircase, camera slowly pans right to follow him",
      "subject": "the lighthouse keeper",
      "assertions": [{"type": "camera_motion", "params": {"direction": "right"}},
+                    # Tier-0: asked of the still, before this shot costs a single video second.
+                    {"type": "subject_present", "params": {"subject": "the lighthouse keeper"}},
                     {"type": "identity_consistent", "params": {"subject": "the lighthouse keeper"}}]},
     {"prompt": "close-up of the great lamp igniting, warm light flooding the glass room",
      "assertions": [{"type": "action_completed", "params": {"action": "the lamp ignites and glows"}}]},
@@ -151,6 +153,22 @@ def _demo_tier_b(video_path, spec: ShotSpec):
     return out
 
 
+def _demo_tier0(spec: ShotSpec, still_path: str):
+    """Deterministic Tier-0 verdicts on the pre-render still, zero tokens.
+
+    Demo mode passes Tier-0 on purpose: the planted kill-shot is Tier-A camera_motion,
+    and a second failure at the review gate would blur which tier caught what.
+    """
+    return [
+        AssertionResult.for_assertion(
+            a, Status.PASS,
+            detail=f"{a.params.get('subject', 'subject')} recognizable in the still",
+            evidence=[still_path] if still_path else [])
+        for a in spec.assertions
+        if a.tier is Tier.TIER0
+    ]
+
+
 def _demo_repair(spec: ShotSpec, failures):
     # Inject a [retake] directive so the next synthetic draft honors the asserted pan.
     directions = [f.measured.get("detected") for f in failures if f.type is AssertionType.CAMERA_MOTION]
@@ -174,7 +192,7 @@ def build_demo_runtime(data_dir: str | None = None) -> "object":
         script_fn=_demo_script,
         gen_image_fn=gen.gen_image,
         gen_video_fn=gen.gen_video,
-        tier0_fn=lambda spec, still: [],
+        tier0_fn=_demo_tier0,
         tier_a_fn=run_tier_a,          # REAL deterministic CV on the synthetic clips
         tier_b_fn=_demo_tier_b,
         repair_fn=_demo_repair,
