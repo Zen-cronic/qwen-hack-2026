@@ -45,6 +45,7 @@ class Settings(BaseSettings):
     # Modes
     JUDGE_MODE: bool = False          # cap fresh clips/session; cached replays free
     DAILIES_DEMO: bool = False        # run the pipeline on synthetic clips, zero video quota
+    DAILIES_FIXTURES: bool = False    # REAL Wan clips with pinned prompts; free once the cache is warm
 
 
 settings = Settings()

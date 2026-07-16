@@ -85,3 +85,43 @@ def test_cache_key_is_stable_and_input_sensitive():
     assert a == cache_key("m", "p", 1, "1280*720", None)
     assert a != cache_key("m", "p", 2, "1280*720", None)   # seed
     assert a != cache_key("m", "p2", 1, "1280*720", None)  # prompt
+
+
+def test_video_size_is_chosen_per_model(tmp_path):
+    """The premium final model rejects the draft model's frame size.
+
+    Verified live 2026-07-15: wan2.2-t2v-plus answers 1280*720 with
+    `InvalidParameter: size must be in 1080*1920,1920*1080,...`. Because _promote treats a
+    failed promote as "keep the passing draft", that rejection was invisible — every premium
+    final in the project's history silently never happened. The size must follow the model.
+    """
+    sent: list[dict] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        url = str(request.url)
+        if url.endswith("/video-synthesis"):
+            import json
+            sent.append(json.loads(request.content))
+            return httpx.Response(200, json={"output": {"task_id": "t9", "task_status": "SUCCEEDED",
+                                                        "video_url": "https://cdn.example/y.mp4"}})
+        if "/tasks/t9" in url:
+            return httpx.Response(200, json={"output": {"task_id": "t9", "task_status": "SUCCEEDED",
+                                                        "video_url": "https://cdn.example/y.mp4"}})
+        if url.endswith("y.mp4"):
+            return httpx.Response(200, content=b"FAKEMP4")
+        return httpx.Response(404)
+
+    c = _client(tmp_path, handler)
+    c.generate_video("a lighthouse", model="wan2.1-t2v-turbo")
+    c.generate_video("a lighthouse", model="wan2.2-t2v-plus")
+
+    sizes = [s["parameters"]["size"] for s in sent]
+    assert sizes == ["1280*720", "1920*1080"], f"size did not follow the model: {sizes}"
+
+
+def test_video_size_for_maps_models():
+    from server.wan import DEFAULT_VIDEO_SIZE, video_size_for
+
+    assert video_size_for("wan2.2-t2v-plus") == "1920*1080"   # rejects 1280*720
+    assert video_size_for("wan2.1-t2v-turbo") == DEFAULT_VIDEO_SIZE == "1280*720"
+    assert video_size_for("some-unknown-model") == DEFAULT_VIDEO_SIZE

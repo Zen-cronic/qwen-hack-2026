@@ -71,6 +71,22 @@ class Config:
     data_dir: str = "data/projects"
 
 
+def _spend_note(res) -> str:
+    """What the ledger records about one generation call.
+
+    A FAILED call must say why. Every wan2.2-t2v-plus promote was rejected with
+    InvalidParameter (wrong frame size) for the project's entire life and nobody noticed,
+    because a failed call and a no-op call both wrote an empty note while _promote quietly
+    fell back to the passing draft. The ledger is the audit trail; make it audit.
+    """
+    if getattr(res, "from_cache", False):
+        return "cache"
+    if not getattr(res, "ok", True):
+        code = getattr(res, "code", None) or getattr(res, "status", "FAILED")
+        return f"FAILED {code}: {getattr(res, 'message', '') or ''}".strip()[:180]
+    return ""
+
+
 def _pop_usage(stage_fn) -> tuple[int, int]:
     """A stage may expose token usage from its last call via pop_last_usage();
     plain-function stages (e.g. Tier-A) simply report nothing."""
@@ -189,7 +205,7 @@ class Pipeline:
             self._spend(kind=ResourceKind.IMAGE, model=self.cfg.t2i_model, stage="tier0",
                         shot_index=idx, images=0 if getattr(res, "from_cache", False) else 1,
                         latency_ms=getattr(res, "latency_ms", 0),
-                        note="cache" if getattr(res, "from_cache", False) else "")
+                        note=_spend_note(res))
             results = self.deps.tier0_fn(spec, res.local_path) if res.ok else []
 
             def mut(p: ProjectState, idx=idx, res=res, results=results) -> None:
@@ -220,7 +236,7 @@ class Pipeline:
             billed = 0 if getattr(res, "from_cache", False) else getattr(res, "seconds", 0)
             self._spend(kind=ResourceKind.VIDEO_DRAFT, model=self.cfg.draft_model, stage="drafting",
                         shot_index=idx, video_seconds=billed, latency_ms=getattr(res, "latency_ms", 0),
-                        note="cache" if getattr(res, "from_cache", False) else "")
+                        note=_spend_note(res))
             take = Take(take_no=take_no, tier="draft", model=self.cfg.draft_model, prompt=prompt,
                         status=TakeStatus.DONE if res.ok else TakeStatus.FAILED,
                         task_id=getattr(res, "task_id", None), video_path=res.local_path if res.ok else None)
@@ -273,7 +289,7 @@ class Pipeline:
         billed = 0 if getattr(res, "from_cache", False) else getattr(res, "seconds", 0)
         self._spend(kind=ResourceKind.VIDEO_FINAL, model=self.cfg.final_model, stage="promoting",
                     shot_index=idx, video_seconds=billed, latency_ms=getattr(res, "latency_ms", 0),
-                    note="cache" if getattr(res, "from_cache", False) else "")
+                    note=_spend_note(res))
         if not res.ok:
             # Promotion failed — keep the draft as the certified final.
             self._set(lambda p: _certify(p, idx, p.shots[idx].latest_take.video_path))

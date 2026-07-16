@@ -12,7 +12,7 @@ from __future__ import annotations
 import threading
 
 from server.config import settings
-from server.wan import WanClient, WanResult
+from server.wan import WanClient, WanResult, video_size_for
 
 
 class BudgetGovernor:
@@ -50,7 +50,10 @@ def governed_gen_video(wan: WanClient, governor: BudgetGovernor, *, final_model:
 
     def gen(prompt: str, model: str, negative_prompt: str | None = None) -> WanResult:
         tier = "final" if model == final_model else "draft"
-        cached = wan.is_cached("video", model, prompt, None, "1280*720", negative_prompt)
+        # Ask the model what size it uses — the size is part of the cache key, so hardcoding
+        # 1280*720 here looked up the wrong key for premium finals and reported every cached
+        # final as "fresh". In judge mode (fresh_final_cap=0) that refused free replays.
+        cached = wan.is_cached("video", model, prompt, None, video_size_for(model), negative_prompt)
         if not cached and not governor.allow_fresh(tier):
             return WanResult(status="FAILED", kind="video", code="JudgeCap",
                              message=f"judge-mode {tier} cap reached; cached replays only")

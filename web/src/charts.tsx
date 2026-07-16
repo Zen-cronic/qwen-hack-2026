@@ -85,9 +85,9 @@ export function ChartsPanel({ m }: { m: Metrics }) {
                   <XAxis type="number" hide />
                   <YAxis type="category" dataKey="type" width={130} tick={{ fill: tokens.muted, fontSize: 11 }} />
                   <Tooltip {...tip} />
-                  <Bar dataKey="pass" stackId="a" fill={C.pass} />
-                  <Bar dataKey="fail" stackId="a" fill={C.fail} />
-                  <Bar dataKey="inconclusive" stackId="a" fill={C.inconclusive} radius={[0, 3, 3, 0]} />
+                  <Bar dataKey="pass" stackId="a" fill={C.pass} isAnimationActive={false} />
+                  <Bar dataKey="fail" stackId="a" fill={C.fail} isAnimationActive={false} />
+                  <Bar dataKey="inconclusive" stackId="a" fill={C.inconclusive} radius={[0, 3, 3, 0]} isAnimationActive={false} />
                 </BarChart>
               </ResponsiveContainer>
             </>
@@ -102,13 +102,18 @@ export function ChartsPanel({ m }: { m: Metrics }) {
               <ResponsiveContainer width="100%" height={240}>
                 <ScatterChart margin={{ left: 0, bottom: 12 }}>
                   <CartesianGrid stroke={tokens.border} />
-                  <XAxis type="number" dataKey="cost_seconds" name="cost" tick={{ fill: tokens.muted, fontSize: 11 }}
+                  {/* Axis padding is load-bearing, not cosmetic: a certified shot sits at
+                      quality=100, and on a fully cached re-verify every shot sits at cost=0
+                      — both land exactly on an axis line and render as half-clipped slivers.
+                      Pad the axes so the "free replay, still certified" case is readable. */}
+                  <XAxis type="number" dataKey="cost_seconds" name="cost" padding={{ left: 22, right: 22 }}
+                    tick={{ fill: tokens.muted, fontSize: 11 }}
                     label={{ value: "cost (video s)", fill: tokens.muted, fontSize: 11, position: "insideBottom", offset: -6 }} />
-                  <YAxis type="number" dataKey="quality" name="quality" domain={[0, 100]}
-                    tick={{ fill: tokens.muted, fontSize: 11 }} />
+                  <YAxis type="number" dataKey="quality" name="quality" domain={[0, 108]}
+                    ticks={[0, 25, 50, 75, 100]} tick={{ fill: tokens.muted, fontSize: 11 }} />
                   <ZAxis range={[90, 90]} />
                   <Tooltip {...tip} cursor={{ strokeDasharray: "3 3" }} />
-                  <Scatter data={frontier}>
+                  <Scatter data={frontier} isAnimationActive={false}>
                     {frontier.map((f, i) => <Cell key={i} fill={f.certified ? C.pass : C.fail} />)}
                   </Scatter>
                 </ScatterChart>
@@ -134,7 +139,7 @@ export function ChartsPanel({ m }: { m: Metrics }) {
                   tick={{ fill: tokens.muted, fontSize: 11 }} tickFormatter={(v) => `shot ${v}`} />
                 <ZAxis range={[110, 110]} />
                 <Tooltip {...tip} cursor={{ strokeDasharray: "3 3" }} />
-                <Scatter data={conv}>
+                <Scatter data={conv} isAnimationActive={false}>
                   {conv.map((t, i) => <Cell key={i} fill={t.passed ? C.pass : C.fail} />)}
                 </Scatter>
               </ScatterChart>

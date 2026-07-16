@@ -50,6 +50,23 @@ POLL_TIMEOUT_SECONDS = 600
 
 TERMINAL_STATUSES = {"SUCCEEDED", "FAILED", "CANCELED", "UNKNOWN"}
 
+# Accepted frame sizes differ PER MODEL, and getting it wrong is not a soft failure — the
+# task is rejected outright with InvalidParameter. Verified live 2026-07-15: wan2.2-t2v-plus
+# refuses 1280*720 and answers "size must be in 1080*1920,1920*1080,1440*1440,1632*1248,
+# 1248*1632,480*832,832*480,624*624". Both entries below are 16:9, so the premium tier is
+# the same framing at 1080p — not a different crop.
+DEFAULT_VIDEO_SIZE = "1280*720"                 # wan2.1-t2v-turbo (drafts)
+VIDEO_SIZE_BY_MODEL = {
+    "wan2.2-t2v-plus": "1920*1080",             # premium finals; rejects 1280*720
+}
+
+
+def video_size_for(model: str) -> str:
+    """The frame size a given video model accepts. Callers must not hardcode this: the size
+    is part of the cache key, so a wrong guess both breaks the request and poisons cache
+    lookups for that model."""
+    return VIDEO_SIZE_BY_MODEL.get(model, DEFAULT_VIDEO_SIZE)
+
 
 def cache_key(model: str, prompt: str, seed: int | None, size: str, negative_prompt: str | None) -> str:
     raw = f"{model}|{prompt}|{seed}|{size}|{negative_prompt or ''}"
@@ -185,16 +202,20 @@ class WanClient:
         *,
         model: str | None = None,
         seed: int | None = None,
-        size: str = "1280*720",
+        size: str | None = None,
         negative_prompt: str | None = None,
     ) -> WanResult:
+        # Default the size FROM the model. It used to default to 1280*720 for every model,
+        # which meant every wan2.2-t2v-plus promote was rejected with InvalidParameter —
+        # silently, because _promote treats a failed promote as "keep the passing draft".
+        model = model or DRAFT_MODEL
         return self._generate(
             kind="video",
             endpoint=VIDEO_SYNTHESIS_URL,
-            model=model or DRAFT_MODEL,
+            model=model,
             prompt=prompt,
             seed=seed,
-            size=size,
+            size=size or video_size_for(model),
             negative_prompt=negative_prompt,
             ext="mp4",
             url_from_output=lambda out: out.get("video_url"),

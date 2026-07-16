@@ -67,7 +67,8 @@ def create_app(runtime: Runtime) -> FastAPI:
         # Readiness probe for the compose healthcheck: returns 200 only once the
         # runtime (opencv/numpy imports, store, deps) is fully wired. Lets `web`
         # gate on `app` being ready instead of merely started.
-        return {"status": "ok", "mode": "demo" if settings.DAILIES_DEMO else "real"}
+        mode = "demo" if settings.DAILIES_DEMO else "fixtures" if settings.DAILIES_FIXTURES else "real"
+        return {"status": "ok", "mode": mode}
 
     @app.post("/api/projects")
     def create_project(req: CreateReq):
@@ -205,6 +206,12 @@ def create_production_app() -> FastAPI:
     if settings.DAILIES_DEMO:
         from server.demo import build_demo_runtime
         app = create_app(build_demo_runtime())
+    elif settings.DAILIES_FIXTURES:
+        # Real Wan clips, pinned prompts — free once the cache is warm. Checked before the
+        # live runtime because it IS the live runtime, minus the two non-deterministic
+        # text stages that would otherwise miss the cache and re-bill every run.
+        from server.fixtures import build_fixture_runtime
+        app = create_app(build_fixture_runtime())
     else:
         app = create_app(build_runtime())
     _mount_spa(app)  # mounted AFTER /api routes so it doesn't shadow them

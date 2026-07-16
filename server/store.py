@@ -119,6 +119,32 @@ class Store:
         self._review_events: dict[str, threading.Event] = {}
         self._dir = Path(data_dir)
         self._dir.mkdir(parents=True, exist_ok=True)
+        self._restore()
+
+    def _restore(self) -> None:
+        """Read the snapshots back at boot.
+
+        They used to be write-only: every change was atomically persisted and then dropped
+        on restart, so a finished run 404'd from its own state.json while the deployment
+        diagram promised "cache + state persist across restarts". The cache did; state
+        didn't — and a push to main redeploys the box, so each release silently discarded
+        every run a viewer had made.
+
+        A restored run is inert: the pipeline thread that drove it is gone. Terminal runs
+        are the ones worth keeping; anything caught mid-flight can never advance again, so
+        it is marked failed rather than left to poll forever. A corrupt or half-written
+        snapshot is skipped instead of taking the process down at boot.
+        """
+        for f in sorted(self._dir.glob("*/state.json")):
+            try:
+                p = ProjectState.model_validate_json(f.read_text())
+            except Exception:  # noqa: BLE001 — one bad snapshot must not stop the boot
+                continue
+            if p.status not in (ProjectStatus.DONE, ProjectStatus.FAILED):
+                p.status = ProjectStatus.FAILED
+                p.error = "interrupted by a restart — the pipeline thread did not survive it"
+            self._projects[p.id] = p
+            self._review_events[p.id] = threading.Event()
 
     def create(self, project: ProjectState) -> ProjectState:
         with self._lock:

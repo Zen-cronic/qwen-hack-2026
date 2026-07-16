@@ -42,11 +42,22 @@ export default function App() {
     timer.current = window.setInterval(() => poll(id), 2500);  // state.md: SPA polls every 2.5s
   }, [poll]);
 
+  // Deep link (?p=<id>): reopen an existing run. Project state is a durable snapshot on
+  // disk, so a finished run is worth linking to — it survives a reload, can be handed to
+  // someone as a finished conformance report, and re-verifies from cache for free.
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get("p");
+    if (!id) return;
+    setProjectId(id);
+    startPolling(id);
+  }, [startPolling]);
+
   const onCreate = async (premise: string, pack: string, maxShots: number, customChecks: string[]) => {
     setBusy(true); setErr(null); setProject(null);
     try {
       const { id } = await createProject(premise, pack, maxShots, customChecks);
       setProjectId(id);
+      window.history.replaceState(null, "", `?p=${id}`);
       startPolling(id);
     } catch (e) { setErr(String(e)); setBusy(false); }
   };
@@ -57,6 +68,7 @@ export default function App() {
   };
   const onReset = () => {
     if (timer.current) { clearInterval(timer.current); timer.current = null; }
+    window.history.replaceState(null, "", window.location.pathname);
     setProject(null); setProjectId(null); setBusy(false); setErr(null);
   };
 
