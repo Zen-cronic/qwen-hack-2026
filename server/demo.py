@@ -105,7 +105,8 @@ class _DemoGen:
         if not cached:
             _write_clip(path, _direction_from_prompt(prompt))
         return WanResult(status="SUCCEEDED", kind="video", local_path=str(path),
-                         from_cache=cached, seconds=0 if cached else 5, latency_ms=120)
+                         from_cache=cached, seconds=0 if cached else 5,
+                         cached_seconds=5 if cached else 0, latency_ms=120)
 
     def gen_image(self, prompt: str) -> WanResult:
         key = self._key(prompt, "t2i")

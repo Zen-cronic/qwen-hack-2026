@@ -85,6 +85,10 @@ class WanResult:
     from_cache: bool = False
     latency_ms: int = 0
     seconds: int = 0            # billed video seconds (0 for images / cache hits)
+    cached_seconds: int = 0     # seconds a cache replay REPRESENTS (billed on a prior
+                                # run) — the wallet ignores this; the frontier needs it
+                                # so a warm re-verify still shows what each shot cost
+                                # to produce instead of collapsing to zero
 
     @property
     def ok(self) -> bool:
@@ -165,7 +169,7 @@ class WanClient:
         dest = self.cache_dir / f"{key}.{ext}"
         if dest.exists():
             return WanResult(status="SUCCEEDED", kind=kind, local_path=str(dest),
-                             from_cache=True, seconds=0)
+                             from_cache=True, seconds=0, cached_seconds=billed_seconds)
 
         body: dict = {"model": model, "input": {"prompt": prompt}}
         if negative_prompt:

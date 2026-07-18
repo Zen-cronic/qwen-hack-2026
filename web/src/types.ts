@@ -52,7 +52,16 @@ export interface HeatCell {
 export interface Metrics {
   summary: { shots_total: number; certified: number; failed: number };
   heatmap: Record<string, HeatCell>;
-  frontier: { shot: number; cost_seconds: number; cost_usd: number; quality: number; certified: boolean }[];
+  frontier: {
+    shot: number;
+    cost_seconds: number;       // billed by THIS run (0 on cache replays)
+    cost_usd: number;
+    production_seconds: number; // billed + cache-replayed — what the shot cost to produce
+    production_usd: number;
+    replayed: boolean;
+    quality: number;
+    certified: boolean;
+  }[];
   convergence: { shot: number; take: number; tier: string; passed: boolean; quality: number }[];
   repair: { retakes_total: number; shots_repaired: number; repair_successes: number };
   cost_per_passing_second: number | null;

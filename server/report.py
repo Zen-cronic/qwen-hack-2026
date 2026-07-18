@@ -52,18 +52,31 @@ def build_report_metrics(p: ProjectState) -> dict:
     for d in heatmap.values():
         d["pass_rate"] = round(d["pass"] / d["total"], 3) if d["total"] else 0.0
 
+    # Two cost views per shot, both true: what THIS run billed (cache replays are
+    # free — the wallet's number) and what the shot's artifacts cost to PRODUCE
+    # (billed + cache-replayed seconds). The frontier charts production cost;
+    # otherwise a warm re-verify collapses every shot to x=0 and the chart says
+    # nothing in exactly the mode judges re-run it in.
     sec_by_shot: dict[int, int] = {}
     usd_by_shot: dict[int, float] = {}
+    prod_sec_by_shot: dict[int, int] = {}
+    prod_usd_by_shot: dict[int, float] = {}
     for e in p.ledger:
         if e.shot_index is None:
             continue
         sec_by_shot[e.shot_index] = sec_by_shot.get(e.shot_index, 0) + e.video_seconds
         usd_by_shot[e.shot_index] = usd_by_shot.get(e.shot_index, 0.0) + e.est_usd
+        prod_sec_by_shot[e.shot_index] = (prod_sec_by_shot.get(e.shot_index, 0)
+                                          + e.video_seconds + e.cached_seconds)
+        prod_usd_by_shot[e.shot_index] = prod_usd_by_shot.get(e.shot_index, 0.0) + e.modeled_usd
 
     frontier = [{
         "shot": s.spec.index,
         "cost_seconds": sec_by_shot.get(s.spec.index, 0),
         "cost_usd": round(usd_by_shot.get(s.spec.index, 0.0), 4),
+        "production_seconds": prod_sec_by_shot.get(s.spec.index, 0),
+        "production_usd": round(prod_usd_by_shot.get(s.spec.index, 0.0), 4),
+        "replayed": prod_sec_by_shot.get(s.spec.index, 0) > sec_by_shot.get(s.spec.index, 0),
         "quality": _quality(s.takes[-1] if s.takes else None),
         "certified": s.certified,
     } for s in shots]

@@ -55,3 +55,32 @@ test("premise → review gate → certified episode, with live charts", async ({
   await page.goto(`/?p=${id}`);
   await expect(page.getByTestId("finalcut")).toBeVisible({ timeout: 15_000 });
 });
+
+/** Warm re-verify — the judge-mode path. Same premise twice: the second run is served
+ * entirely from the content-addressed cache, bills zero video-seconds, and the frontier
+ * must still read (production cost per shot, replay note visible) instead of collapsing
+ * every shot to a single dot at cost=0 — the original panel deduction #16. */
+test("a fully cached re-run keeps the frontier readable and the bill at zero", async ({ page, request }) => {
+  const run = async () => {
+    await page.goto("/");
+    await page.getByTestId("create").click();
+    await expect(page.getByTestId("reviewbar")).toBeVisible({ timeout: 60_000 });
+    await page.getByTestId("approve").click();
+    await expect(page.getByTestId("finalcut")).toBeVisible({ timeout: 120_000 });
+    return new URL(page.url()).searchParams.get("p");
+  };
+
+  await run();               // warms the cache (or is already warm — either is fine)
+  const id = await run();    // definitely warm: every clip is a replay
+
+  const proj = await (await request.get(`/api/projects/${id}`)).json();
+  const frontier: { cost_seconds: number; production_seconds: number; replayed: boolean }[] =
+    proj.metrics.frontier;
+  expect(frontier.length).toBeGreaterThan(0);
+  // This run billed nothing — the wallet's judge-mode "$0.00" story...
+  expect(frontier.every((f) => f.cost_seconds === 0)).toBeTruthy();
+  expect(proj.wallet.video_seconds).toBe(0);
+  // ...while the chart still shows what each shot cost to produce, replay flagged.
+  expect(frontier.every((f) => f.production_seconds > 0 && f.replayed)).toBeTruthy();
+  await expect(page.getByTestId("frontier-replay-note")).toBeVisible();
+});

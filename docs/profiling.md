@@ -134,6 +134,12 @@ Identical `(model, prompt, seed)` requests replay from disk with `video_seconds 
 whole video bill collapses to zero on re-verification. This is the mechanism that lets the live
 demo URL survive the judging window at no video quota — the same certification, re-run for free.
 
+One honest bookkeeping consequence: the ledger records both numbers. `video_seconds` is what
+*this run* billed (0 on replays — the wallet's number above), and `cached_seconds` is what a
+replay *represents* (billed on a prior run). The dashboard's frontier charts the second —
+per-shot **production** cost — because on a warm run the first is uniformly zero and a chart of
+it says nothing; the replay is disclosed in a caption under the chart.
+
 ## Reproduce
 
 ```bash

@@ -51,6 +51,8 @@ class LedgerEntry(BaseModel):
     tokens_out: int = 0
     images: int = 0
     video_seconds: int = 0
+    cached_seconds: int = 0          # seconds a cache replay represents (billed on a
+                                     # prior run); never counted by the wallet
     latency_ms: int = 0
     shot_index: int | None = None
     note: str = ""
@@ -62,6 +64,14 @@ class LedgerEntry(BaseModel):
         c += _PRICE_PER_1K_OUT.get(self.kind, 0.0) * self.tokens_out / 1000
         c += _PRICE_PER_IMAGE * self.images
         c += _PRICE_PER_VIDEO_SECOND.get(self.kind, 0.0) * self.video_seconds
+        return round(c, 6)
+
+    @property
+    def modeled_usd(self) -> float:
+        """est_usd plus what this entry's cache-replayed seconds cost when they WERE
+        billed — the production cost of the artifact, not this run's marginal cost.
+        The frontier charts this; the wallet never does."""
+        c = self.est_usd + _PRICE_PER_VIDEO_SECOND.get(self.kind, 0.0) * self.cached_seconds
         return round(c, 6)
 
 
@@ -118,6 +128,7 @@ class LedgerWriter:
         tokens_out: int = 0,
         images: int = 0,
         video_seconds: int = 0,
+        cached_seconds: int = 0,
         latency_ms: int = 0,
         shot_index: int | None = None,
         note: str = "",
@@ -131,6 +142,7 @@ class LedgerWriter:
             tokens_out=tokens_out,
             images=images,
             video_seconds=video_seconds,
+            cached_seconds=cached_seconds,
             latency_ms=latency_ms,
             shot_index=shot_index,
             note=note,

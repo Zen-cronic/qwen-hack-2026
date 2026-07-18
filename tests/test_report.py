@@ -71,3 +71,36 @@ def test_report_metrics_end_to_end():
 
     f0 = next(f for f in m["frontier"] if f["shot"] == 0)
     assert f0["cost_seconds"] == 10 and f0["quality"] == 1.0 and f0["certified"] is True
+    # Cold run: production cost == billed cost, nothing replayed.
+    assert f0["production_seconds"] == 10 and f0["replayed"] is False
+
+
+def test_frontier_survives_a_fully_cached_rerun():
+    """Regression: on a warm re-verify every ledger entry bills 0 seconds, and the
+    frontier used to collapse to a single dot at x=0 — blank in exactly the mode
+    judges re-run. Production cost (billed + cache-replayed) must survive the replay
+    while the wallet keeps billing zero."""
+    p = ProjectState(id="p", premise="x", pack="short_drama", max_shots=1)
+    p.shots = [
+        ShotState(spec=ShotSpec(index=0, prompt="a"), status=ShotStatus.CERTIFIED, certified=True,
+                  takes=[_take(0, "draft", "a", _res(Status.PASS), True),
+                         _take(1, "final", "a", _res(Status.PASS), True)]),
+    ]
+    p.ledger = [
+        LedgerEntry(ts=0, stage="drafting", kind=ResourceKind.VIDEO_DRAFT, model="turbo",
+                    video_seconds=0, cached_seconds=5, shot_index=0, note="cache"),
+        LedgerEntry(ts=0, stage="promoting", kind=ResourceKind.VIDEO_FINAL, model="plus",
+                    video_seconds=0, cached_seconds=5, shot_index=0, note="cache"),
+    ]
+    p.recompute_wallet()
+
+    f0 = build_report_metrics(p)["frontier"][0]
+    assert f0["cost_seconds"] == 0                    # this run really billed nothing
+    assert f0["production_seconds"] == 10             # but the shot cost 10s to produce
+    assert f0["production_usd"] == 2.0                # 5s draft @ .10 + 5s final @ .30
+    assert f0["replayed"] is True
+
+    # The wallet never counts replayed seconds — the judge-mode "$0.00" stays honest.
+    assert p.wallet.video_seconds == 0
+    assert p.wallet.draft_clips == 0 and p.wallet.final_clips == 0
+    assert p.wallet.est_usd == 0.0

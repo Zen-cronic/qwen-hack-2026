@@ -130,11 +130,11 @@ class Pipeline:
 
     def _spend(self, *, kind: ResourceKind, model: str, stage: str, shot_index: int | None = None,
                tokens_in: int = 0, tokens_out: int = 0, images: int = 0, video_seconds: int = 0,
-               latency_ms: int = 0, note: str = "") -> None:
+               cached_seconds: int = 0, latency_ms: int = 0, note: str = "") -> None:
         entry = self.deps.ledger.record(
             stage=stage, kind=kind, model=model, tokens_in=tokens_in, tokens_out=tokens_out,
-            images=images, video_seconds=video_seconds, latency_ms=latency_ms,
-            shot_index=shot_index, note=note,
+            images=images, video_seconds=video_seconds, cached_seconds=cached_seconds,
+            latency_ms=latency_ms, shot_index=shot_index, note=note,
         )
 
         def mut(p: ProjectState) -> None:
@@ -239,8 +239,9 @@ class Pipeline:
             res = self.deps.gen_video_fn(prompt, self.cfg.draft_model)
             billed = 0 if getattr(res, "from_cache", False) else getattr(res, "seconds", 0)
             self._spend(kind=ResourceKind.VIDEO_DRAFT, model=self.cfg.draft_model, stage="drafting",
-                        shot_index=idx, video_seconds=billed, latency_ms=getattr(res, "latency_ms", 0),
-                        note=_spend_note(res))
+                        shot_index=idx, video_seconds=billed,
+                        cached_seconds=getattr(res, "cached_seconds", 0),
+                        latency_ms=getattr(res, "latency_ms", 0), note=_spend_note(res))
             take = Take(take_no=take_no, tier="draft", model=self.cfg.draft_model, prompt=prompt,
                         status=TakeStatus.DONE if res.ok else TakeStatus.FAILED,
                         task_id=getattr(res, "task_id", None), video_path=res.local_path if res.ok else None)
@@ -292,8 +293,9 @@ class Pipeline:
         res = self.deps.gen_video_fn(last.prompt, self.cfg.final_model)
         billed = 0 if getattr(res, "from_cache", False) else getattr(res, "seconds", 0)
         self._spend(kind=ResourceKind.VIDEO_FINAL, model=self.cfg.final_model, stage="promoting",
-                    shot_index=idx, video_seconds=billed, latency_ms=getattr(res, "latency_ms", 0),
-                    note=_spend_note(res))
+                    shot_index=idx, video_seconds=billed,
+                    cached_seconds=getattr(res, "cached_seconds", 0),
+                    latency_ms=getattr(res, "latency_ms", 0), note=_spend_note(res))
         if not res.ok:
             # Promotion failed — keep the draft as the certified final.
             self._set(lambda p: _certify(p, idx, p.shots[idx].latest_take.video_path))

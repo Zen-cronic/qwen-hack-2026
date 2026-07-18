@@ -102,13 +102,14 @@ export function ChartsPanel({ m }: { m: Metrics }) {
               <ResponsiveContainer width="100%" height={240}>
                 <ScatterChart margin={{ left: 0, bottom: 12 }}>
                   <CartesianGrid stroke={tokens.border} />
-                  {/* Axis padding is load-bearing, not cosmetic: a certified shot sits at
-                      quality=100, and on a fully cached re-verify every shot sits at cost=0
-                      — both land exactly on an axis line and render as half-clipped slivers.
-                      Pad the axes so the "free replay, still certified" case is readable. */}
-                  <XAxis type="number" dataKey="cost_seconds" name="cost" padding={{ left: 22, right: 22 }}
-                    tick={{ fill: tokens.muted, fontSize: 11 }}
-                    label={{ value: "cost (video s)", fill: tokens.muted, fontSize: 11, position: "insideBottom", offset: -6 }} />
+                  {/* X is PRODUCTION cost (billed + cache-replayed seconds), not this run's
+                      bill: on a warm re-verify every shot bills 0, and a frontier where all
+                      x=0 says nothing in exactly the mode judges re-run. The caption below
+                      states the replay honestly. Axis padding is load-bearing: certified
+                      shots sit at quality=100 and would render as half-clipped slivers. */}
+                  <XAxis type="number" dataKey="production_seconds" name="production cost"
+                    padding={{ left: 22, right: 22 }} tick={{ fill: tokens.muted, fontSize: 11 }}
+                    label={{ value: "production cost (video s)", fill: tokens.muted, fontSize: 11, position: "insideBottom", offset: -6 }} />
                   <YAxis type="number" dataKey="quality" name="quality" domain={[0, 108]}
                     ticks={[0, 25, 50, 75, 100]} tick={{ fill: tokens.muted, fontSize: 11 }} />
                   <ZAxis range={[90, 90]} />
@@ -118,6 +119,12 @@ export function ChartsPanel({ m }: { m: Metrics }) {
                   </Scatter>
                 </ScatterChart>
               </ResponsiveContainer>
+              {frontier.some((f) => f.replayed) && (
+                <Typography color="text.secondary" sx={{ fontSize: 11, mt: 0.5 }} data-testid="frontier-replay-note">
+                  ⟳ served from the content-addressed cache — production cost shown; this run
+                  billed {frontier.reduce((n, f) => n + f.cost_seconds, 0)} video-seconds
+                </Typography>
+              )}
             </>
           )}
         </Paper>
