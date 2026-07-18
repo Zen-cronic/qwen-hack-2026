@@ -113,6 +113,7 @@ def test_every_production_path_wires_a_real_tier0(mode, monkeypatch, tmp_path):
     actually builds returns a verdict — the regression that would re-open it.
     """
     import server.app as app_mod
+    from server.config import settings as cfg_settings
     from server.demo import build_demo_runtime
     from server.fixtures import build_fixture_runtime
     from server.tier0 import Tier0Verifier
@@ -120,6 +121,9 @@ def test_every_production_path_wires_a_real_tier0(mode, monkeypatch, tmp_path):
     # No network is reachable from this test: the only outbound call Tier-0 makes is _ask.
     monkeypatch.setattr(Tier0Verifier, "_ask", lambda self, q, uri: ("pass", "knight visible"))
     monkeypatch.setattr(app_mod, "DATA_ROOT", tmp_path / "root")
+    # A wiring test needs no credential: the real/fixtures runtimes construct an OpenAI
+    # client, whose ctor raises on an empty key (e.g. in CI, where no .env exists).
+    monkeypatch.setattr(cfg_settings, "QWEN_API_KEY", "sk-test-wiring-only")
 
     if mode == "real":
         rt = app_mod.build_runtime()

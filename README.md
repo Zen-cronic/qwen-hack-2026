@@ -1,5 +1,7 @@
 # Dailies — the neutral conformance gate for AI-generated video
 
+[![CI](https://github.com/Zen-cronic/qwen-hack-2026/actions/workflows/ci.yml/badge.svg)](https://github.com/Zen-cronic/qwen-hack-2026/actions/workflows/ci.yml)
+
 *CI for video shots: assertions compile, the deterministic tier spends zero tokens, failures
 auto-repair or fail the build.* Built on Qwen Cloud for the Global AI Hackathon Series
 (Track 2 — AI Showrunner).
