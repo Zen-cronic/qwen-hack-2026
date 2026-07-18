@@ -42,11 +42,19 @@ export function WalletMeter({ w, judge }: { w: Wallet; judge?: { judge_mode: boo
   );
 }
 
+// One-click starting points: a cold visitor (or judge) should reach a running
+// pipeline without composing a premise first.
+const SAMPLE_PREMISES = [
+  "a lonely lighthouse keeper who discovers a message in a bottle",
+  "a street cat assembles a crew for a fish-market heist",
+  "a night-shift robot barista perfects latte art for its last customer",
+];
+
 export function NewProject({ packs, busy, onCreate }: {
   packs: Pack[]; busy: boolean;
   onCreate: (premise: string, pack: string, maxShots: number, customChecks: string[]) => void;
 }) {
-  const [premise, setPremise] = useState("a lonely lighthouse keeper who discovers a message in a bottle");
+  const [premise, setPremise] = useState(SAMPLE_PREMISES[0]);
   const [pack, setPack] = useState("short_drama");
   const [maxShots, setMaxShots] = useState(3);
   const [customChecks, setCustomChecks] = useState("");
@@ -55,14 +63,27 @@ export function NewProject({ packs, busy, onCreate }: {
   return (
     <Panel>
       <Typography variant="h2" gutterBottom>New run</Typography>
-      <Stack direction="row" spacing={1.5} useFlexGap sx={{ flexWrap: "wrap", alignItems: "flex-end" }}>
-        <TextField
-          label="Premise" size="small" value={premise} onChange={(e) => setPremise(e.target.value)}
-          sx={{ flex: 1, minWidth: 320 }}
-          slotProps={{ htmlInput: { "data-testid": "premise" } }}
-        />
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 1.75, maxWidth: 720 }}>
+        Type a premise; Dailies writes the shot list and compiles its assertion checklist. Every
+        rendered clip must pass that contract — deterministic CV first, at zero token cost —
+        before it can be promoted into the certified episode.
+      </Typography>
+      <TextField
+        label="Premise" multiline minRows={2} value={premise} onChange={(e) => setPremise(e.target.value)}
+        placeholder="What should this episode be about?"
+        sx={{ width: "100%" }}
+        slotProps={{ htmlInput: { "data-testid": "premise" } }}
+      />
+      <Stack direction="row" spacing={0.75} useFlexGap sx={{ flexWrap: "wrap", mt: 1 }}>
+        {SAMPLE_PREMISES.map((s) => (
+          <Chip key={s} size="small" variant="outlined" label={s} onClick={() => setPremise(s)}
+            sx={{ maxWidth: "100%", height: "auto", py: 0.4, "& .MuiChip-label": { whiteSpace: "normal" } }} />
+        ))}
+      </Stack>
+      <Stack direction="row" spacing={1.5} useFlexGap sx={{ flexWrap: "wrap", alignItems: "flex-end", mt: 1.75 }}>
         <TextField
           select label="Assertion pack" size="small" value={pack} onChange={(e) => setPack(e.target.value)}
+          helperText="The spec your shots are tested against"
           sx={{ minWidth: 190 }}
           slotProps={{ htmlInput: { "data-testid": "pack" } }}
         >
@@ -103,20 +124,49 @@ function Stage({ label, state }: { label: string; state: "idle" | "active" | "do
   return <Box component="span" sx={{ ...base, ...variants[state] }}>{label}</Box>;
 }
 
+// What each stage is doing, in the user's terms — the poll loop makes these live captions.
+const STAGE_CAPTIONS: Record<string, string> = {
+  queued: "Queued — the run starts in a moment.",
+  scripting: "The script agent is writing shots and their machine-checkable assertions.",
+  tier0: "Tier-0 — screening pre-render stills at ~1/25th of video cost.",
+  awaiting_review: "Paused at the one human gate. Nothing has spent video budget yet.",
+  drafting: "Rendering draft clips on the budget tier.",
+  verifying: "Running the checklist: deterministic CV first (zero tokens), VLM advisory on top.",
+  repairing: "A shot failed its contract — feeding the failure back into a retake prompt.",
+  promoting: "Certified shots re-render on the premium tier.",
+  assembling: "Cutting the certified episode with ffmpeg.",
+  done: "Done — every shipped clip passed its contract.",
+  failed: "The run failed — details above.",
+};
+
 export function Pipeline({ status }: { status: string }) {
   const cur = STAGES.indexOf(status);
   return (
-    <Stack direction="row" spacing={0.75} useFlexGap data-testid="pipeline" sx={{ flexWrap: "wrap", mb: 2.5 }}>
-      {STAGES.map((s, i) => {
-        const state = status === "failed" ? "idle" : i < cur ? "done" : i === cur ? "active" : "idle";
-        return <Stage key={s} label={s} state={state} />;
-      })}
-      {status === "failed" && <Stage label="failed" state="failed" />}
-    </Stack>
+    <Box sx={{ mb: 2.5 }}>
+      <Stack direction="row" spacing={0.75} useFlexGap data-testid="pipeline" sx={{ flexWrap: "wrap" }}>
+        {STAGES.map((s, i) => {
+          const state = status === "failed" ? "idle" : i < cur ? "done" : i === cur ? "active" : "idle";
+          return <Stage key={s} label={s} state={state} />;
+        })}
+        {status === "failed" && <Stage label="failed" state="failed" />}
+      </Stack>
+      {STAGE_CAPTIONS[status] && (
+        <Typography data-testid="stage-caption" variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>
+          {STAGE_CAPTIONS[status]}
+        </Typography>
+      )}
+    </Box>
   );
 }
 
-export function ReviewBar({ onApprove }: { onApprove: () => void }) {
+export function ReviewBar({ onApprove, shots }: { onApprove: () => void; shots?: ShotState[] }) {
+  // Tier-0 evidence summary: what the pre-render screen actually measured, so the
+  // approve decision is informed rather than a blind unlock.
+  const t0 = (shots ?? []).flatMap((s) => s.tier0_results);
+  const t0pass = t0.filter((r) => r.status === "pass").length;
+  const summary = t0.length
+    ? `Tier-0 screened ${t0.length} still check${t0.length === 1 ? "" : "s"}: ${t0pass} passed${t0.length - t0pass ? `, ${t0.length - t0pass} flagged` : ""}.`
+    : "Tier-0 stills are ready.";
   return (
     <Paper data-testid="reviewbar" sx={{
       display: "flex", alignItems: "center", justifyContent: "space-between", gap: 2,
@@ -125,8 +175,8 @@ export function ReviewBar({ onApprove }: { onApprove: () => void }) {
     }}>
       <Box>
         <Typography sx={{ fontWeight: 650 }}>Review the shot list before spending video budget</Typography>
-        <Typography variant="body2" color="text.secondary">
-          Tier-0 stills are ready. This is the one human gate — approve to start drafting.
+        <Typography variant="body2" color="text.secondary" data-testid="tier0-summary">
+          {summary} This is the one human gate — approve to start drafting.
         </Typography>
       </Box>
       <Button data-testid="approve" onClick={onApprove} sx={{ flexShrink: 0 }}>Approve &amp; generate</Button>
@@ -237,16 +287,33 @@ export function ConformanceBoard({ project, onVerdict }: {
 }
 
 export function FinalCut({ project }: { project: Project }) {
+  const [copied, setCopied] = useState(false);
   if (!project.episode_path) return null;
+  const copyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch { /* clipboard unavailable (http, permissions) — button just stays quiet */ }
+  };
   return (
     <Panel data-testid="finalcut">
       <Typography variant="h2" gutterBottom>Certified episode</Typography>
       <Box component="video" controls src={mediaUrl(project.episode_path)}
         sx={{ width: "100%", borderRadius: "10px", bgcolor: "#000", display: "block" }} />
-      <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-        {project.metrics.summary.certified}/{project.metrics.summary.shots_total} shots certified ·
-        re-verifies from cache at zero video cost.
-      </Typography>
+      <Stack direction="row" spacing={1.5} sx={{ mt: 1.25, alignItems: "center", flexWrap: "wrap" }}>
+        <Typography variant="body2" color="text.secondary" sx={{ flex: 1, minWidth: 260 }}>
+          {project.metrics.summary.certified}/{project.metrics.summary.shots_total} shots certified ·
+          re-verifies from cache at zero video cost.
+        </Typography>
+        <Button size="small" variant="outlined" color="inherit" data-testid="copylink" onClick={copyLink}>
+          {copied ? "Link copied ✓" : "Copy report link"}
+        </Button>
+        <Button size="small" variant="outlined" color="inherit" component="a"
+          href={mediaUrl(project.episode_path)} download="dailies-episode.mp4">
+          Download episode
+        </Button>
+      </Stack>
     </Panel>
   );
 }

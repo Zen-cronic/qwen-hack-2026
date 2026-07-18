@@ -96,7 +96,7 @@ export default function App() {
         {project && (
           <>
             <Pipeline status={project.status} />
-            {project.status === "awaiting_review" && <ReviewBar onApprove={onApprove} />}
+            {project.status === "awaiting_review" && <ReviewBar onApprove={onApprove} shots={project.shots} />}
             {project.error && <Paper sx={{ p: 2, mb: 2.5, borderColor: "error.main" }}>{project.error}</Paper>}
             <ChartsPanel m={project.metrics} />
             <ConformanceBoard project={project} onVerdict={onVerdict} />
