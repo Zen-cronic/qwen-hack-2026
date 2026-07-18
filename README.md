@@ -82,6 +82,12 @@ premise → script + specs (qwen-plus) → compiled assertion checklist
 - **Judge-safe:** a content-addressed cache makes re-verification of cached clips cost zero
   video quota, so the live URL survives the judging window.
 
+![The finished run — capability heatmap, cost–quality frontier, repair convergence, and the
+conformance board over a certified episode](dailies-done.png)
+
+*(The other checkpoint that matters: [the review gate](dailies-review.png) — Tier-0 still
+evidence on screen, before a single video-second is spent.)*
+
 ### The closed assertion vocabulary
 
 An assertion is a `type` from a **closed** set plus typed `params`. The compiler

@@ -70,6 +70,9 @@ def build_report_metrics(p: ProjectState) -> dict:
                                           + e.video_seconds + e.cached_seconds)
         prod_usd_by_shot[e.shot_index] = prod_usd_by_shot.get(e.shot_index, 0.0) + e.modeled_usd
 
+    # Only shots with at least one take: before drafting, a shot has no cost story
+    # and no quality — plotting it would paint "not certified at zero cost" dots at
+    # the review gate for work that simply hasn't happened yet.
     frontier = [{
         "shot": s.spec.index,
         "cost_seconds": sec_by_shot.get(s.spec.index, 0),
@@ -77,9 +80,9 @@ def build_report_metrics(p: ProjectState) -> dict:
         "production_seconds": prod_sec_by_shot.get(s.spec.index, 0),
         "production_usd": round(prod_usd_by_shot.get(s.spec.index, 0.0), 4),
         "replayed": prod_sec_by_shot.get(s.spec.index, 0) > sec_by_shot.get(s.spec.index, 0),
-        "quality": _quality(s.takes[-1] if s.takes else None),
+        "quality": _quality(s.takes[-1]),
         "certified": s.certified,
-    } for s in shots]
+    } for s in shots if s.takes]
 
     # Every take, in order, as one point. Reading a shot's row left to right gives the
     # repair loop's trajectory: a failing take followed by a passing one is a convergence.

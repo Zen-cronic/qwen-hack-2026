@@ -8,10 +8,14 @@ import { expect, test } from "@playwright/test";
 test("premise → review gate → certified episode, with live charts", async ({ page, request }) => {
   await page.goto("/");
 
-  // New-run panel: prompt-first entry, sample premise prefilled.
+  // New-run panel: prompt-first entry, sample premise prefilled. The custom check
+  // is deliberately an ADVISORY one (title card): it exercises the plain-language →
+  // vocabulary path without forcing a retake on every shot — "pan right" here would
+  // make all three shots fail take 0 and flatten the frontier to one equal-cost dot,
+  // hiding the planted kill-shot's 15s-vs-10s cost story the charts exist to tell.
   await expect(page.getByTestId("premise")).toBeVisible();
   await expect(page.getByTestId("premise")).not.toHaveValue("");
-  await page.getByTestId("custom-checks").fill("the camera should pan right");
+  await page.getByTestId("custom-checks").fill("a title card must be visible");
   await page.getByTestId("create").click();
 
   // Pipeline strip narrates each stage while the poll loop runs.
@@ -21,6 +25,15 @@ test("premise → review gate → certified episode, with live charts", async ({
   // The one human gate, with a tier-0 evidence summary instead of a blind unlock.
   await expect(page.getByTestId("reviewbar")).toBeVisible({ timeout: 60_000 });
   await expect(page.getByTestId("tier0-summary")).toContainText("Tier-0");
+
+  // The still thumbnails must actually LOAD, not just render an <img> tag: the
+  // media route once 404'd every still under a non-default DATA_DIR and the only
+  // visible symptom was broken-image icons a DOM assertion can't see.
+  const firstThumb = page.getByTestId("shot").first().locator("img");
+  await expect(firstThumb).toBeVisible();
+  await expect
+    .poll(() => firstThumb.evaluate((el) => (el as HTMLImageElement).naturalWidth))
+    .toBeGreaterThan(0);
   if (process.env.SCREENSHOTS) await page.screenshot({ path: "../dailies-review.png", fullPage: true });
   await page.getByTestId("approve").click();
 
@@ -49,7 +62,25 @@ test("premise → review gate → certified episode, with live charts", async ({
   expect(proj.shots[1].takes.length).toBeGreaterThan(1);
   expect(proj.shots[1].certified).toBeTruthy();
 
-  if (process.env.SCREENSHOTS) await page.screenshot({ path: "../dailies-done.png", fullPage: true });
+  if (process.env.SCREENSHOTS) {
+    // Let the episode player paint a real frame — a black rectangle with a spinner
+    // is not a deliverable screenshot of a "certified episode". Headless Chromium
+    // doesn't render a frame until a seek completes, even at readyState >= 2.
+    await page.waitForFunction(() => {
+      const v = document.querySelector("video");
+      return v !== null && v.readyState >= 2;
+    });
+    await page.evaluate(() => {
+      const v = document.querySelector("video");
+      if (v) v.currentTime = 0.1;
+    });
+    await page.waitForFunction(() => {
+      const v = document.querySelector("video");
+      return v !== null && !v.seeking && v.readyState >= 2;
+    });
+    await page.waitForTimeout(500); // let Chrome's seek-spinner overlay fade out
+    await page.screenshot({ path: "../dailies-done.png", fullPage: true });
+  }
 
   // The report link is durable: reopening the deep link restores the finished run.
   await page.goto(`/?p=${id}`);

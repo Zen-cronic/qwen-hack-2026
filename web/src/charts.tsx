@@ -96,7 +96,7 @@ export function ChartsPanel({ m }: { m: Metrics }) {
 
         <Paper sx={{ p: 2 }}>
           <Typography variant="h3" gutterBottom>Cost–quality frontier (per shot)</Typography>
-          {frontier.length === 0 ? <Typography color="text.secondary">No shots yet.</Typography> : (
+          {frontier.length === 0 ? <Typography color="text.secondary">No takes yet — the frontier fills in as drafts render.</Typography> : (
             <>
               <Legend items={[{ c: C.pass, label: "certified" }, { c: C.fail, label: "not certified" }]} />
               <ResponsiveContainer width="100%" height={240}>

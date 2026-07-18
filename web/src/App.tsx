@@ -82,7 +82,7 @@ export default function App() {
           <Stack direction="row" spacing={1.25} sx={{ alignItems: "baseline", flexGrow: 1 }}>
             <Typography component="span" onClick={onReset}
               sx={{ fontSize: 20, fontWeight: 750, letterSpacing: "-0.02em", cursor: "pointer" }}>◉ Dailies</Typography>
-            <Typography component="span" color="text.secondary" sx={{ fontSize: 13 }}>CI for generated video</Typography>
+            <Typography component="span" color="text.secondary" sx={{ fontSize: 13 }}>the neutral conformance gate for AI-generated video</Typography>
           </Stack>
           {project && <WalletMeter w={project.wallet} />}
         </Toolbar>
