@@ -19,8 +19,10 @@ defaults:
   # Absolutely no mid-clip cuts in a brand asset.
   - type: scene_cuts
     params: { max: 0 }
-  # Stay near the brand palette (edit these hexes to your brand).
+  # Stay near the brand palette (edit these hexes to your brand). max_delta is true
+  # CIE ΔE*76: ~2 is a just-noticeable difference, ~10 a clearly related shade, 30
+  # the edge of "same color family" — generous enough for video compression drift.
   - type: palette_deltae
     params:
       palette: ["#0b5fff", "#f5f7fa", "#0e1116"]
-      max_delta: 45.0
+      max_delta: 30.0

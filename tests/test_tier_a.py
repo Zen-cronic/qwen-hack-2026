@@ -7,6 +7,7 @@ import pytest
 from server.specs import AssertionType, ShotSpec, Status, parse_assertions
 from server.tier_a import (
     Clip,
+    _hex_to_lab,
     check_brightness,
     check_camera_motion,
     check_duration,
@@ -109,6 +110,29 @@ def test_palette_deltae():
     clip = Clip([red] * 4, gray, 8.0, 5.0, 64, 48)
     assert check_palette_deltae(clip, {"palette": ["#ff0000"], "max_delta": 30.0})[0] is Status.PASS
     assert check_palette_deltae(clip, {"palette": ["#00ff00"], "max_delta": 30.0})[0] is Status.FAIL
+
+
+def test_lab_conversion_is_true_cie_scale():
+    # White is L*=100, a*=b*=0 in real CIE Lab. The old uint8 path returned
+    # [255, 128, 128] — L* scaled by 2.55, which made "ΔE" overweight lightness.
+    white = _hex_to_lab("#ffffff")
+    assert abs(white[0] - 100.0) < 1.0 and abs(white[1]) < 1.0 and abs(white[2]) < 1.0
+    # sRGB red, published CIE value (D65): (53.24, 80.09, 67.20).
+    red = _hex_to_lab("#ff0000")
+    assert abs(red[0] - 53.24) < 2.0
+    assert abs(red[1] - 80.09) < 3.0
+    assert abs(red[2] - 67.20) < 3.0
+
+
+def test_palette_deltae_lightness_no_longer_dominates():
+    # Regression for the 2.55x lightness overweight: mid-gray footage vs a slightly
+    # lighter gray in the palette is a pure-lightness pair, true ΔE*76 ≈ 10.4. The
+    # broken scale measured ~26 and FAILed a threshold of 15 that should PASS.
+    g = np.full((48, 64, 3), 128, np.uint8)
+    clip = Clip([g] * 4, [cv2.cvtColor(g, cv2.COLOR_BGR2GRAY)] * 4, 8.0, 5.0, 64, 48)
+    status, measured, _ = check_palette_deltae(clip, {"palette": ["#9b9b9b"], "max_delta": 15.0})
+    assert status is Status.PASS
+    assert 8.0 < measured["mean_deltae"] < 13.0  # pins the metric, not just the verdict
 
 
 def test_run_tier_a_end_to_end_on_real_mp4(tmp_path):

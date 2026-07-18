@@ -161,10 +161,18 @@ def check_camera_motion(clip: Clip, p: dict):
             f"camera {detected} (want {want}), |v|={mag:.2f}")
 
 
+def _rgb_to_lab(rgb) -> np.ndarray:
+    """True CIE L*a*b* — L* in [0,100], a*/b* in ~[-127,127], so Euclidean distance
+    is ΔE*76. Must go through the float path: cv2's uint8 Lab scales L* by 255/100
+    while only offsetting a*/b*, so distances there overweight lightness ~2.55x and
+    are not ΔE of any kind (white comes back as [255,128,128] instead of [100,0,0])."""
+    arr = np.float32(rgb).reshape(1, 1, 3) / 255.0
+    return cv2.cvtColor(arr, cv2.COLOR_RGB2LAB)[0, 0].astype(float)
+
+
 def _hex_to_lab(h: str) -> np.ndarray:
     h = h.lstrip("#")
-    rgb = np.uint8([[[int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)]]])
-    return cv2.cvtColor(rgb, cv2.COLOR_RGB2LAB)[0, 0].astype(float)
+    return _rgb_to_lab([int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)])
 
 
 def _dominant_labs(clip: Clip, k: int) -> list[np.ndarray]:
@@ -179,7 +187,7 @@ def _dominant_labs(clip: Clip, k: int) -> list[np.ndarray]:
     kk = max(1, min(k, len(data)))
     crit = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 10, 1.0)
     _, _, centers = cv2.kmeans(data, kk, None, crit, 3, cv2.KMEANS_PP_CENTERS)
-    return [cv2.cvtColor(np.uint8([[c]]), cv2.COLOR_RGB2LAB)[0, 0].astype(float) for c in centers]
+    return [_rgb_to_lab(c) for c in centers]
 
 
 def check_palette_deltae(clip: Clip, p: dict):
@@ -191,7 +199,7 @@ def check_palette_deltae(clip: Clip, p: dict):
     mean_d = float(np.mean(deltas))
     ok = mean_d <= p["max_delta"]
     return (Status.PASS if ok else Status.FAIL, {"mean_deltae": round(mean_d, 2)},
-            f"mean ΔE {mean_d:.1f} vs <= {p['max_delta']}")
+            f"mean ΔE*76 {mean_d:.1f} vs <= {p['max_delta']}")
 
 
 _CHECKS = {
