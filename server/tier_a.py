@@ -74,6 +74,12 @@ def _luma_per_frame(clip: Clip) -> list[float]:
 
 
 def check_duration(clip: Clip, p: dict):
+    # An unreadable clip measures 0.00s, which would FAIL the bounds — reporting a
+    # harness error as a contract violation. INCONCLUSIVE, never a fabricated verdict.
+    if clip.n == 0:
+        return Status.INCONCLUSIVE, {}, "no decodable frames — unreadable clip, not a short one"
+    if clip.duration_s <= 0:
+        return Status.INCONCLUSIVE, {}, "container reports no duration/fps — cannot measure"
     d = clip.duration_s
     ok = p["min_s"] <= d <= p["max_s"]
     return (Status.PASS if ok else Status.FAIL, {"duration_s": round(d, 3)},

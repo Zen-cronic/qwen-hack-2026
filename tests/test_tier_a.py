@@ -14,6 +14,7 @@ from server.tier_a import (
     check_palette_deltae,
     check_scene_cuts,
     detect_camera_direction,
+    extract_clip,
     run_tier_a,
 )
 
@@ -40,6 +41,22 @@ def test_duration():
     clip = _gray_clip([_solid_gray(128)] * 4, duration=5.0)
     assert check_duration(clip, {"min_s": 4.0, "max_s": 6.0})[0] is Status.PASS
     assert check_duration(clip, {"min_s": 5.5, "max_s": 6.0})[0] is Status.FAIL
+
+
+def test_duration_unreadable_clip_is_inconclusive_not_fail(tmp_path):
+    # Regression: a missing/corrupt clip measured 0.00s and FAILed the duration
+    # contract — a harness error fabricated as a rejection.
+    empty = Clip([], [], 0.0, 0.0, 320, 0)
+    assert check_duration(empty, {"min_s": 4.0, "max_s": 6.0})[0] is Status.INCONCLUSIVE
+
+    bogus = tmp_path / "not_a_video.mp4"
+    bogus.write_bytes(b"this is not an mp4")
+    clip = extract_clip(str(bogus))
+    assert check_duration(clip, {"min_s": 4.0, "max_s": 6.0})[0] is Status.INCONCLUSIVE
+
+    # Frames decoded but the container lies about fps/duration: still not a verdict.
+    no_meta = _gray_clip([_solid_gray(128)] * 3, fps=0.0, duration=0.0)
+    assert check_duration(no_meta, {"min_s": 4.0, "max_s": 6.0})[0] is Status.INCONCLUSIVE
 
 
 def test_brightness():
