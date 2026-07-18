@@ -136,6 +136,13 @@ uvicorn server.app:create_production_app --factory --port 8099
 DAILIES_DEMO=1 SPA_DIST=web/dist uvicorn server.app:create_production_app --factory --port 8099
 ```
 
+**End-to-end UI test** (Playwright drives the whole journey — premise → review gate →
+certified episode — against the demo runtime; boots its own server, zero video quota):
+
+```bash
+npm --prefix web run build && npm --prefix web run e2e
+```
+
 **Qwen tool & MCP integration** (needs `pip install -e ".[agent]"` + a live key; chat tokens only):
 
 ```bash
