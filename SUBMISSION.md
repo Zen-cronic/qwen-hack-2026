@@ -38,7 +38,8 @@ Adobe wins). The one moat with a real mechanism is the **human-override calibrat
 at the approve gate — collectable only from the buyer-side review seat.
 
 **Productization / OSS path.** Assertion packs are *data, not code*, so the engine lifts out as a
-consumable `@dailies/vidtest` package and an **MCP server** (`run_shot_tests`, shipped in
+consumable Python package — runnable today, unpublished to PyPI yet: `uvx --from '.[mcp]'
+dailies-mcp` — and an **MCP server** (`run_shot_tests`, shipped in
 `server/mcp_server.py`) that lets any pipeline or agent gate video the way it already gates code.
 It is model-agnostic by construction — checks take frames, not generator internals — so assertion
 packs run as CI regression tests that *outlive any one generator*.

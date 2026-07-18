@@ -31,6 +31,31 @@ shipping unattended AI video."** The core insight is organizational, not technic
 That is spec-driven development applied to media — the same shift software made from "manually
 eyeball each build" to "CI runs the tests."
 
+## The thesis, measured (twice)
+
+"Existing tools maximize output; **nobody tests the product**" is a falsifiable claim, so we
+tested it two ways rather than leaning on it as rhetoric.
+
+**Simulated field (2026-07-15).** We ran 15 independent LLM brainstorms over this track's
+public brief — two model families, 14 personas, each seeing only the brief and the rubric
+weights, none seeing this repo or each other; ~150 ideas in total. **All 15 produced a
+premise-in, episode-out generator. Zero produced a way to check whether the episode came out
+right** — no assertion grammar, no deterministic check tier, no gate that could judge a
+pipeline it doesn't own. Two brainstorms even emitted the "CI for AI-generated video" phrase
+verbatim, and both still attached it to a generator; one listed a continuity-QA service and a
+budget-aware render router as *separate, unconnected ideas in the same list of ten*. The mode
+contains the pitch. It does not contain the architecture.
+
+**Observed field (2026-07-18).** Two days before the deadline we read the eight most
+substantial shipped entries in this track's public GitHub field. Every one routes its quality
+checks through a token-billed model call; six of the eight import no computer-vision library
+at all (verified by grep); none ships a closed assertion vocabulary; none can gate a video it
+didn't generate. One even ships a review stage named "dailies" — switched off by default, for
+speed (the config line quoted in the README's "Why Dailies").
+
+The pain described above predicts exactly this shape of field. These two measurements are
+that prediction, counted.
+
 ## Why it matters (the impact, and who pays)
 
 The buyer is **marketing ops**, not the freelancer. They already own brand-risk liability and
