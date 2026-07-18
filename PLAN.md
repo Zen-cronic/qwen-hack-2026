@@ -3,6 +3,28 @@
 Deadline: **Jul 9, 2:00pm PDT** (submit by ~10:00am PDT — Alibaba's own X post said "Jul 8"; ambiguity = buffer).
 Demo video is a first-class deliverable, not an afterthought.
 
+> ⚠️ **Jul 15 DEADLINE CORRECTION:** the organizer's page reads **Jul 20, 2:00pm PDT** — the
+> Jul 9 date above was the pre-correction reading. Submit target: **Jul 20, ~10:00am PDT**.
+
+## Current state — Jul 18 (T-2)
+
+**Shipped since the Jul 15 panel** (each item closes a recorded panel deduction or red-team action):
+- Tier-0 still screen wired into every runtime path — it was billed but never evaluated (`7a5a374`)
+- First real end-to-end run on Wan clips; the four bugs synthetic clips hid, found and fixed (`93c2603`, log in docs/verification.md)
+- `check_duration`: unreadable clip → INCONCLUSIVE, not a fake 0.00s FAIL (`edf0572`)
+- `palette_deltae`: true CIE ΔE*76 via the float Lab path — was 2.55×-lightness distance (`07d83b7`)
+- CI test job — the CI-branded repo now runs its own suite, keyless (`affbc04`)
+- README wedge rewritten shape-not-primacy + the cited market survey published (`31caca4`, docs/market-landscape.md)
+- Impact doc carries both adversarial measurements: 15/15 probe + 0/8 observed field (`39757db`)
+- Prompt-to-episode UX pass: sample premises, live stage captions, informed review gate, shareable final cut (`dc0d147`)
+- Playwright e2e over the demo runtime — full journey + #16/repair-loop regressions pinned; `npm run e2e` (`e1571d7`)
+
+**Remaining before submit (operator-owned unless noted):**
+- G1 flip repo public · G2 Workbench screenshot · G3 live URL · G4 green deploy (CI half exists; SAS deploy needs the box)
+- Demo video (< 3 min, run-of-show in docs/demo.md) — the one mandatory deliverable with no draft
+- Fresh UI screenshots on a cold run (agent-side, after the current chart work lands)
+- Final pass: SUBMISSION.md checklist top to bottom on submit morning, each box re-verified by command
+
 > ⚠️ **Jul 6 PIVOT:** the product is now **Dailies — CI for generated video**. Everything from the "Jul 6" section down is SUPERSEDED by [Pivot (Jul 6): Dailies](#pivot-jul-6-dailies--ci-for-generated-video) at the end of this file. The Jul 5 verify-or-abort results (quota, Wan API lifecycle) remain valid and load-bearing.
 
 ## Jul 5 (tonight) — verify-or-abort + bank eligibility deliverables
