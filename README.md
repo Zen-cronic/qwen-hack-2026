@@ -132,7 +132,7 @@ python3.12 -m venv .venv && source .venv/bin/activate   # any Python 3.12 interp
 cp .env.example .env               # add your QWEN_API_KEY
 pip install -e ".[dev,mcp,agent]"  # mcp + agent extras: without them, those surfaces' tests skip
 python scripts/verify_quota.py     # day-1 gate: API access + video-gen quota
-pytest -q                          # 113 passed
+pytest -q                          # 118 passed
 uvicorn server.app:create_production_app --factory --port 8099
 ```
 

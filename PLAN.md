@@ -18,11 +18,16 @@ Demo video is a first-class deliverable, not an afterthought.
 - Impact doc carries both adversarial measurements: 15/15 probe + 0/8 observed field (`39757db`)
 - Prompt-to-episode UX pass: sample premises, live stage captions, informed review gate, shareable final cut (`dc0d147`)
 - Playwright e2e over the demo runtime — full journey + #16/repair-loop regressions pinned; `npm run e2e` (`e1571d7`)
+- Frontier charts per-shot PRODUCTION cost (billed + cache-replayed), so the warm judge-mode re-run no longer collapses to one dot at $0; wallet still bills zero (`9309a54`)
+- Media route served thumbnails only under the default DATA_DIR — every still 404'd in e2e/scratch runs; contract fixed + regression tests (`1365035`)
+- Judged-surface polish: favicon, wedge in tab/header, honest empty states, nginx no-store on index.html, fresh screenshots embedded in README (`a6e8962`)
 
 **Remaining before submit (operator-owned unless noted):**
-- G1 flip repo public · G2 Workbench screenshot · G3 live URL · G4 green deploy (CI half exists; SAS deploy needs the box)
+- G4 green deploy — root cause diagnosed Jul 18: **zero GitHub secrets exist**; all three failures are
+  `Error: missing server host` at ~5s. Fix = runbook "One-time setup" step 3 (`SERVER_HOST`,
+  `SERVER_USER`, `SERVER_SSH_KEY`), then re-run the workflow. The YAML itself is fine.
+- G1 flip repo public · G2 Workbench screenshot · G3 live URL (G2/G3 follow from a green G4)
 - Demo video (< 3 min, run-of-show in docs/demo.md) — the one mandatory deliverable with no draft
-- Fresh UI screenshots on a cold run (agent-side, after the current chart work lands)
 - Final pass: SUBMISSION.md checklist top to bottom on submit morning, each box re-verified by command
 
 > ⚠️ **Jul 6 PIVOT:** the product is now **Dailies — CI for generated video**. Everything from the "Jul 6" section down is SUPERSEDED by [Pivot (Jul 6): Dailies](#pivot-jul-6-dailies--ci-for-generated-video) at the end of this file. The Jul 5 verify-or-abort results (quota, Wan API lifecycle) remain valid and load-bearing.

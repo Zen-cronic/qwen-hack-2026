@@ -193,8 +193,9 @@ flowchart LR
     classDef external fill:#eceff3,stroke:#6e7781,color:#24292f
 ```
 
-A push to `main` auto-deploys (GitHub Actions → SSH → rebuild + health-gate; see
-[deploy.md](deploy.md)). Proof-of-deployment: the sanctioned Qwen Cloud base URL is visible in
-code (`.env.example`, `server/wan.py`, `server/app.py`), plus the Alibaba Cloud Workbench
-screenshot showing running resources — backend compute runs on the SAS box, not just API calls
-from elsewhere.
+A push to `main` triggers the deploy workflow (GitHub Actions → SSH → rebuild + health-gate;
+setup and failure signatures in [deploy.md](deploy.md)). Proof-of-deployment has two limbs: the
+sanctioned Qwen Cloud base URL visible in code (`.env.example`, `server/wan.py`,
+`server/app.py`) — done — and the Alibaba Cloud Workbench screenshot of running resources,
+captured on the box at deploy time per the runbook's eligibility section. Backend compute runs
+on the SAS box, not just API calls from elsewhere.

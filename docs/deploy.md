@@ -90,13 +90,14 @@ secret in GitHub is the deploy SSH key; `QWEN_API_KEY` never leaves the box.
    - Optional gate: **Settings → Environments → production → Required reviewers** turns each deploy into
      a one-click manual approval.
 
-4. **Clone the repo onto the box** at `~/dailies`. The repo is public, so an anonymous clone works and
-   future `git fetch` needs no token:
+4. **Clone the repo onto the box** at `~/dailies`. While the repo is **private** (it stays private
+   until the submission flip), clone with a fine-grained GitHub **PAT** (Repository access: this
+   repo; permissions **Contents: read**, **Metadata: read**) — once it flips public, an anonymous
+   clone works and future `git fetch` needs no token:
    ```bash
    git clone https://github.com/Zen-cronic/qwen-hack-2026.git ~/dailies
    ```
-   If you later make the repo **private**, use a fine-grained GitHub **PAT** (Repository access: this repo;
-   permissions **Contents: read**, **Metadata: read**) and clone with it:
+   PAT-based clone while private:
    ```bash
    export GITHUB_TOKEN=<pat>
    git clone https://oauth2:${GITHUB_TOKEN}@github.com/Zen-cronic/qwen-hack-2026.git ~/dailies
@@ -129,6 +130,17 @@ To **roll back**, either revert the offending commit on `main` and push, or on t
 ```bash
 cd ~/dailies && git reset --hard <good-sha> && ./deploy/deploy-prod.sh
 ```
+
+### Failure signatures
+
+- **Run fails in <10 s, log ends `Error: missing server host`** — step 3 was never done: the
+  `SERVER_HOST`/`SERVER_USER`/`SERVER_SSH_KEY` secrets are absent (`gh secret list` returns
+  nothing), so the SSH action aborts before opening a connection. This is exactly what a run
+  failing in seconds means — auth failures take ~30 s of retries, script failures take minutes;
+  a near-instant death is always missing configuration, and no amount of workflow-file editing
+  fixes it.
+- **Run fails after minutes at the health gate** — the build broke or the app container never
+  reported `healthy`; the Action prints `docker compose logs` for exactly this case.
 
 ## Eligibility (manual, do on the box)
 
