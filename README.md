@@ -1,6 +1,8 @@
-# Dailies — CI for AI-generated video
+# Dailies — the neutral conformance gate for AI-generated video
 
-*pytest for video shots.* Built on Qwen Cloud for the Global AI Hackathon Series (Track 2 — AI Showrunner).
+*CI for video shots: assertions compile, the deterministic tier spends zero tokens, failures
+auto-repair or fail the build.* Built on Qwen Cloud for the Global AI Hackathon Series
+(Track 2 — AI Showrunner).
 
 Dailies takes a premise, writes a shot list, and — before any clip ships — runs each
 generated shot through a **cost-tiered conformance cascade**. A shot that violates its
@@ -10,14 +12,34 @@ contract never costs premium tokens and never reaches your channel.
 
 AI video fails *in motion*, after you've already paid for it — a gorgeous keyframe
 becomes a clip that pans the wrong way, flickers, or drops the character. Existing tools
-maximize output; **nobody tests the product**. Research prototypes (Genflow Ad Studio,
-VideoRepair) explore VLM-critique loops but don't ship; VBench grades *models* on a
-benchmark suite, not *your shots* against *your spec*; LTX Studio locks storyboards on the
-authoring side but never verifies the rendered result.
+maximize output; **nobody tests the product**.
 
-Dailies is the first shipped **per-shot conformance harness**: shot specs compile to a
-closed vocabulary of machine-checkable assertions, run as a cost-tiered cascade with
-budget-bounded auto-repair.
+Dailies is the only **standalone, model-agnostic per-shot conformance gate**: authored shot
+specs compile through a closed assertion DSL into a cost-tiered cascade with bounded
+auto-repair. The spine of that cascade is deterministic OpenCV that spends **zero tokens — so
+it runs on every take**; model-graded judgment is the advisory layer on top, never the
+foundation. And because checks read frames, not generator internals, the gate stands outside
+the pipeline it judges: point it at any mp4, from any generator.
+
+That claim is shape, not primacy, and it is checkable. Research prototypes (Genflow Ad
+Studio, VideoRepair) explore VLM-critique loops but don't ship; OpenMontage (~39.8k stars)
+hard-gates its own renders — video-level, self-graded, inside its own pipeline, no assertion
+grammar; Kinocut gates release on MCP quality checkpoints with no shot spec and no repair;
+VBench grades *models* on a benchmark suite, not *your shots* against *your spec*; LTX Studio
+locks storyboards on the authoring side but never verifies the rendered result; broadcast QC
+has gated delivery against *technical* specs for a decade, never creative intent. The full
+survey — including how it forced this paragraph's own rewrite — is in
+[docs/market-landscape.md](docs/market-landscape.md).
+
+### Why "Dailies"
+
+In film production, *dailies* are the screening where yesterday's footage is reviewed before
+more money is spent on top of it. Generation pipelines have started borrowing the word — and
+proving the thesis while doing it: one shipping logline-to-video pipeline we surveyed carries
+the config line `DAILIES_QC = False  # off = faster pipeline`, its review stage built and
+then shipped switched off. When the gate lives inside the generator's codebase, the gate is
+what gets traded for throughput. Dailies is the review stage that can't be quietly switched
+off — because it doesn't belong to the pipeline it judges.
 
 ## Who it's for (and why it matters)
 
@@ -130,8 +152,9 @@ npm --prefix web run dev                                  # dev server, proxies 
 ```
 
 **Docker (deploy topology):** `docker compose up -d --build` → nginx (`:80`) serves the SPA
-and proxies `/api` to the uvicorn app. A push to `main` auto-deploys to the Alibaba Cloud SAS
-box (GitHub Actions → SSH → rebuild + health-gate); see [docs/deploy.md](docs/deploy.md).
+and proxies `/api` to the uvicorn app. A push to `main` triggers the deploy workflow
+(GitHub Actions → SSH into the Alibaba Cloud SAS box → rebuild + health-gate); it needs the
+three `SERVER_*` secrets from the runbook — see [docs/deploy.md](docs/deploy.md).
 
 System dependency: `ffmpeg` (assembly).
 
@@ -139,6 +162,7 @@ System dependency: `ffmpeg` (assembly).
 
 - [docs/demo.md](docs/demo.md) — demo run-of-show (< 3 min) showcasing the workbench, Qwen custom tool, and MCP loop
 - [docs/impact.md](docs/impact.md) — Problem Value & Impact: pain, buyer, competitor analysis, moat, productization path
+- [docs/market-landscape.md](docs/market-landscape.md) — the cited survey behind the improvement statement (and how it rewrote our own claim)
 - [docs/architecture.md](docs/architecture.md) — C4 system-context + container diagrams (submission deliverable)
 - [docs/profiling.md](docs/profiling.md) — per-tier cost/latency profiling (measured demo run + modeled cost design)
 - [docs/verification.md](docs/verification.md) — verification log: the day-1 quota/API/Tier-B gate, the first real end-to-end run (the four bugs synthetic clips hid), and the Tier-0 gate that was billed but never wired

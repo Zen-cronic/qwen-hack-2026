@@ -49,7 +49,7 @@ SlackHack (Jul 13) demo-video day is reserved Jul 10–11 and survives ONLY if t
 - **Primary (demo + Impact story):** marketing/social teams running unattended AI-video batch — brand rules as assertions; the QC gate is what makes unattended generation deployable (attested day-job pain: one-person social team).
 - **Secondary (OSS path):** devs building on video-gen APIs — assertion packs as regression tests in CI; model-agnostic, outlives Wan.
 - **Tertiary (theme fit):** AI drama studios — the certified episode IS the track's "short drama creation pipeline".
-- **Prior-art improvement statement (say it before judges do):** Genflow Ad Studio (arXiv 2605.16748) / VideoRepair = unshipped research on VLM-critique loops; VBench grades *models* on benchmark suites, not *your shots* against *your spec*; LTX Studio locks storyboards on the authoring side but never verifies rendered output. Dailies is the first shipped per-shot conformance harness with a cost-tiered cascade and budget-bounded auto-repair.
+- **Prior-art improvement statement (say it before judges do):** Genflow Ad Studio (arXiv 2605.16748) / VideoRepair = unshipped research on VLM-critique loops; VBench grades *models* on benchmark suites, not *your shots* against *your spec*; LTX Studio locks storyboards on the authoring side but never verifies rendered output. Dailies is the only standalone, model-agnostic per-shot conformance gate — claim rewritten Jul 18 from "first shipped" (which a 2026-07-14 market survey falsified via OpenMontage/Kinocut) to shape-not-primacy; the cited survey is docs/market-landscape.md.
 
 ## Demo (<3 min, target 2:45 — "real working app", no third-party IP)
 
