@@ -140,9 +140,13 @@ def create_app(runtime: Runtime) -> FastAPI:
 
     @app.get("/api/media/{path:path}")
     def media(path: str):
-        if path.startswith("data/"):
-            path = path[len("data/"):]
-        fp = (DATA_ROOT / path).resolve()
+        # The client sends the stored path verbatim (CWD-relative or absolute —
+        # exactly how the pipeline recorded it). resolve() rebases it the same way,
+        # and the DATA_ROOT containment check is the one real security boundary.
+        # The old version stripped a "data/" prefix and rejoined onto DATA_ROOT,
+        # which silently 404'd every thumbnail whenever DATA_DIR wasn't literally
+        # "data" (e2e uses data/e2e).
+        fp = Path(path).resolve()
         try:
             fp.relative_to(DATA_ROOT)  # reject path traversal
         except ValueError:

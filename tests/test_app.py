@@ -159,3 +159,33 @@ def test_production_factory_demo_mode(tmp_path, monkeypatch):
     first_cam = next(r for r in killshot["takes"][0]["results"] if r["type"] == "camera_motion")
     last_cam = next(r for r in killshot["takes"][-1]["results"] if r["type"] == "camera_motion")
     assert first_cam["status"] == "fail" and last_cam["status"] == "pass"
+
+
+def test_media_serves_stored_paths_whatever_data_dir_is(client, tmp_path, monkeypatch):
+    """Regression: the media route stripped a leading "data/" and rejoined onto
+    DATA_ROOT, which 404'd every thumbnail whenever DATA_DIR wasn't literally
+    "data" (the e2e suite runs DATA_DIR=data/e2e). The contract now: the client
+    sends the stored path verbatim; the route resolves it and only requires the
+    result to live under DATA_ROOT."""
+    import server.app as app_mod
+
+    root = (tmp_path / "data" / "e2e").resolve()
+    still = root / "demo" / "cache" / "still.png"
+    still.parent.mkdir(parents=True)
+    still.write_bytes(b"\x89PNG fake")
+    monkeypatch.setattr(app_mod, "DATA_ROOT", root)
+
+    # Absolute stored path (scratch runs) — served.
+    assert client.get(f"/api/media/{still}").status_code == 200
+
+    # CWD-relative stored path, exactly as the pipeline records it when
+    # DATA_DIR=data/e2e — "data/e2e/…" is the shape the old prefix-stripping
+    # rewrote into data/e2e/e2e/… and 404'd. chdir so relative resolution matches
+    # the server process's view.
+    monkeypatch.chdir(tmp_path)
+    assert client.get("/api/media/data/e2e/demo/cache/still.png").status_code == 200
+
+    # A real file OUTSIDE DATA_ROOT — the traversal guard must refuse it.
+    outside = tmp_path / "secret.txt"
+    outside.write_text("no")
+    assert client.get(f"/api/media/{outside}").status_code == 404

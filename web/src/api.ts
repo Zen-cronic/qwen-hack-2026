@@ -22,6 +22,9 @@ export const sendVerdict = (id: string, shot_index: number, assertion_type: stri
 
 export const getPacks = () => fetch("/api/packs").then(j<{ packs: Pack[] }>);
 
-// Backend stores paths under data/; the media route strips a leading data/.
+// The stored path IS the contract: pass it verbatim and let the media route
+// resolve it against its own DATA_ROOT guard. Any client-side prefix surgery
+// here has to guess the server's DATA_DIR — and guesses wrong the moment it
+// isn't literally "data" (e2e runs use data/e2e; scratch runs are absolute).
 export const mediaUrl = (p: string | null): string =>
-  p ? `/api/media/${p.replace(/^data\//, "")}` : "";
+  p ? `/api/media/${p}` : "";
