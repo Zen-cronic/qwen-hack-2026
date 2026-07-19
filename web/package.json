@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "e2e": "playwright test",
-    "e2e:shots": "SCREENSHOTS=1 playwright test"
+    "e2e:shots": "SCREENSHOTS=1 playwright test",
+    "shots:fixtures": "playwright test -c playwright.fixtures.config.ts"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",
