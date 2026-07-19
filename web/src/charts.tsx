@@ -65,6 +65,12 @@ export function ChartsPanel({ m }: { m: Metrics }) {
   const tierA = cells.reduce((n, [t, c]) => n + (TIER_A_TYPES.has(t) ? c.total : 0), 0);
   const tierB = cells.reduce((n, [t, c]) => n + (TIER_B_TYPES.has(t) ? c.total : 0), 0);
 
+  // Progressive disclosure: before any take exists (pre-approval, early drafting)
+  // there is nothing to chart, and a wall of empty panels reads as a broken product.
+  // The panels mount as data lands; the per-panel empty states still cover the
+  // mid-run window where one chart fills before another.
+  if (heat.length === 0 && frontier.length === 0 && conv.length === 0) return null;
+
   return (
     <Box data-testid="charts">
       <Box sx={{ display: "grid", gridTemplateColumns: { xs: "repeat(2, 1fr)", sm: "repeat(4, 1fr)" }, gap: 1.5, mb: 2.5 }}>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import ButtonBase from "@mui/material/ButtonBase";
@@ -13,9 +13,6 @@ import { alpha, styled } from "@mui/material/styles";
 import { mediaUrl } from "./api";
 import { mono, statusColor, tokens } from "./theme";
 import type { AssertionResult, Pack, ShotState, Take, Wallet, Project } from "./types";
-
-const STAGES = ["queued", "scripting", "tier0", "awaiting_review", "drafting",
-  "verifying", "repairing", "promoting", "assembling", "done"];
 
 // Flat bordered surface — the repeated "panel" from the old CSS, now one component.
 const Panel = styled(Paper)({ padding: "18px 20px", marginBottom: 20 });
@@ -173,23 +170,46 @@ export function NewProject({ packs, busy, onCreate }: {
   );
 }
 
-function Stage({ label, state }: { label: string; state: "idle" | "active" | "done" | "failed" }) {
+// The ten internal stages, grouped into the five phases a user actually follows.
+// The pill stays coarse; the caption underneath stays precise (raw stage + detail).
+const PHASES: { label: string; stages: string[] }[] = [
+  { label: "Script", stages: ["queued", "scripting"] },
+  { label: "Stills", stages: ["tier0"] },
+  { label: "Review", stages: ["awaiting_review"] },
+  { label: "Takes", stages: ["drafting", "verifying", "repairing", "promoting"] },
+  { label: "Cut", stages: ["assembling", "done"] },
+];
+
+function PhasePill({ label, state }: { label: string; state: "idle" | "active" | "done" | "failed" }) {
   const base = {
-    fontSize: 11, px: 1.25, py: "5px", borderRadius: "6px", border: 1,
+    display: "inline-flex", alignItems: "center", gap: 0.75, fontSize: 13,
+    px: 1.75, py: "6px", borderRadius: 999, border: 1,
     borderColor: "divider", color: "text.secondary", whiteSpace: "nowrap",
   } as const;
   const variants = {
     idle: {},
-    active: { bgcolor: "primary.main", color: "primary.contrastText", borderColor: "primary.main", fontWeight: 650 },
-    done: { color: "success.main", borderColor: alpha(tokens.pass, 0.4) },
-    failed: { bgcolor: "error.main", color: "error.contrastText", borderColor: "error.main", fontWeight: 650 },
+    active: { bgcolor: "primary.main", color: "primary.contrastText", borderColor: "primary.main", fontWeight: 600 },
+    done: { color: "success.main", borderColor: alpha(tokens.pass, 0.4), bgcolor: alpha(tokens.pass, 0.08) },
+    failed: { bgcolor: "error.main", color: "error.contrastText", borderColor: "error.main", fontWeight: 600 },
   };
-  return <Box component="span" sx={{ ...base, ...variants[state] }}>{label}</Box>;
+  return (
+    <Box component="span" sx={{ ...base, ...variants[state] }}>
+      {state === "active" && (
+        <Box component="span" sx={{
+          width: 7, height: 7, borderRadius: "50%", bgcolor: "currentColor",
+          animation: "dailies-pulse 1.6s ease-in-out infinite",
+          "@keyframes dailies-pulse": { "0%, 100%": { opacity: 1 }, "50%": { opacity: 0.35 } },
+        }} />
+      )}
+      {state === "done" && <Box component="span" sx={{ fontSize: 11 }}>✓</Box>}
+      {label}
+    </Box>
+  );
 }
 
 // What each stage is doing, in the user's terms — the poll loop makes these live captions.
 const STAGE_CAPTIONS: Record<string, string> = {
-  queued: "Queued — the run starts in a moment.",
+  queued: "The run starts in a moment.",
   scripting: "The script agent is writing shots and their machine-checkable assertions.",
   tier0: "Tier-0 — screening pre-render stills at ~1/25th of video cost.",
   awaiting_review: "Paused at the one human gate. Nothing has spent video budget yet.",
@@ -198,24 +218,33 @@ const STAGE_CAPTIONS: Record<string, string> = {
   repairing: "A shot failed its contract — feeding the failure back into a retake prompt.",
   promoting: "Certified shots re-render on the premium tier.",
   assembling: "Cutting the certified episode with ffmpeg.",
-  done: "Done — every shipped clip passed its contract.",
-  failed: "The run failed — details above.",
+  done: "Every shipped clip passed its contract.",
+  failed: "The run stopped — details above.",
 };
 
 export function Pipeline({ status }: { status: string }) {
-  const cur = STAGES.indexOf(status);
+  const done = status === "done";
+  const cur = PHASES.findIndex((p) => p.stages.includes(status));
   return (
-    <Box sx={{ mb: 2.5 }}>
-      <Stack direction="row" spacing={0.75} useFlexGap data-testid="pipeline" sx={{ flexWrap: "wrap" }}>
-        {STAGES.map((s, i) => {
-          const state = status === "failed" ? "idle" : i < cur ? "done" : i === cur ? "active" : "idle";
-          return <Stage key={s} label={s} state={state} />;
+    <Box sx={{ mb: 3 }}>
+      <Stack direction="row" spacing={1} useFlexGap data-testid="pipeline"
+        sx={{ flexWrap: "wrap", alignItems: "center" }}>
+        {PHASES.map((p, i) => {
+          const state = status === "failed" ? "idle" : done || i < cur ? "done" : i === cur ? "active" : "idle";
+          return (
+            <Fragment key={p.label}>
+              {i > 0 && <Box component="span" sx={{ color: "text.secondary", fontSize: 12, userSelect: "none" }}>›</Box>}
+              <PhasePill label={p.label} state={state} />
+            </Fragment>
+          );
         })}
-        {status === "failed" && <Stage label="failed" state="failed" />}
+        {status === "failed" && <PhasePill label="failed" state="failed" />}
       </Stack>
       {STAGE_CAPTIONS[status] && (
-        <Typography data-testid="stage-caption" variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>
-          {STAGE_CAPTIONS[status]}
+        <Typography data-testid="stage-caption" variant="body2" color="text.secondary"
+          sx={{ mt: 1, fontFamily: mono, fontSize: 12.5 }}>
+          <Box component="span" sx={{ color: "text.primary", fontWeight: 600 }}>{status}</Box>
+          {" — "}{STAGE_CAPTIONS[status]}
         </Typography>
       )}
     </Box>
@@ -232,17 +261,25 @@ export function ReviewBar({ onApprove, shots }: { onApprove: () => void; shots?:
     : "Tier-0 stills are ready.";
   return (
     <Paper data-testid="reviewbar" sx={{
-      display: "flex", alignItems: "center", justifyContent: "space-between", gap: 2,
-      p: "14px 18px", mb: 2.5, border: 1, borderColor: "warning.main",
-      background: `linear-gradient(90deg, ${alpha(tokens.inconclusive, 0.14)}, transparent)`,
+      p: { xs: 2.5, sm: 3.5 }, mb: 2.5, border: 1, borderColor: "warning.main", borderRadius: "16px",
+      background: `linear-gradient(135deg, ${alpha(tokens.inconclusive, 0.12)}, transparent 55%)`,
     }}>
-      <Box>
-        <Typography sx={{ fontWeight: 650 }}>Review the shot list before spending video budget</Typography>
-        <Typography variant="body2" color="text.secondary" data-testid="tier0-summary">
-          {summary} This is the one human gate — approve to start drafting.
-        </Typography>
-      </Box>
-      <Button data-testid="approve" onClick={onApprove} sx={{ flexShrink: 0 }}>Approve &amp; generate</Button>
+      <Stack direction={{ xs: "column", sm: "row" }} spacing={2.5}
+        sx={{ alignItems: { xs: "flex-start", sm: "center" }, justifyContent: "space-between" }}>
+        <Box>
+          <Typography variant="overline" sx={{ color: "warning.main", letterSpacing: "0.08em" }}>
+            The one human gate
+          </Typography>
+          <Typography sx={{ fontSize: { xs: 20, sm: 23 }, fontWeight: 700, letterSpacing: "-0.02em", lineHeight: 1.2, mb: 0.75 }}>
+            Review the shot list before spending video budget
+          </Typography>
+          <Typography variant="body2" color="text.secondary" data-testid="tier0-summary">
+            {summary} Approve to start drafting — nothing has spent a video-second yet.
+          </Typography>
+        </Box>
+        <Button size="large" data-testid="approve" onClick={onApprove}
+          sx={{ flexShrink: 0, px: 3.5, py: 1.25 }}>Approve &amp; generate</Button>
+      </Stack>
     </Paper>
   );
 }
@@ -290,11 +327,18 @@ export function ShotCard({ shot, onVerdict }: {
 
   return (
     <Paper data-testid="shot" sx={{ overflow: "hidden", display: "flex", flexDirection: "column" }}>
-      <Box
-        component={thumb ? "img" : "div"} alt={`shot ${shot.spec.index}`}
-        src={thumb ? mediaUrl(thumb) : undefined}
-        sx={{ aspectRatio: "16 / 9", width: "100%", objectFit: "cover", bgcolor: "#000", display: "block" }}
-      />
+      {thumb ? (
+        <Box component="img" alt={`shot ${shot.spec.index}`} src={mediaUrl(thumb)}
+          sx={{ aspectRatio: "16 / 9", width: "100%", objectFit: "cover", bgcolor: "#000", display: "block" }} />
+      ) : (
+        <Box sx={{
+          aspectRatio: "16 / 9", width: "100%", bgcolor: "background.default",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          borderBottom: 1, borderColor: "divider",
+        }}>
+          <Typography sx={{ fontFamily: mono, fontSize: 11, color: "text.secondary" }}>awaiting first frame…</Typography>
+        </Box>
+      )}
       <Box sx={{ p: 1.75, display: "flex", flexDirection: "column", gap: 1.25 }}>
         <Stack direction="row" spacing={1} sx={{ justifyContent: "space-between", alignItems: "flex-start" }}>
           <Box>
@@ -361,7 +405,10 @@ export function FinalCut({ project }: { project: Project }) {
   };
   return (
     <Panel data-testid="finalcut">
-      <Typography variant="h2" gutterBottom>Certified episode</Typography>
+      <Stack direction="row" spacing={1.25} sx={{ alignItems: "center", mb: 1.25 }}>
+        <Typography variant="h2">Certified episode</Typography>
+        <Chip size="small" label="every contract passed" sx={badgeSx("certified")} />
+      </Stack>
       <Box component="video" controls src={mediaUrl(project.episode_path)}
         sx={{ width: "100%", borderRadius: "10px", bgcolor: "#000", display: "block" }} />
       <Stack direction="row" spacing={1.5} sx={{ mt: 1.25, alignItems: "center", flexWrap: "wrap" }}>

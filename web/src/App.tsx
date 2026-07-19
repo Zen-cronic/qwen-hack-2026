@@ -11,7 +11,7 @@ import { alpha } from "@mui/material/styles";
 import { createProject, getPacks, getProject, review, sendVerdict } from "./api";
 import { ChartsPanel } from "./charts";
 import { ConformanceBoard, FinalCut, NewProject, Pipeline, ReviewBar, WalletMeter } from "./components";
-import { tokens } from "./theme";
+import { mono, tokens } from "./theme";
 import type { Pack, Project } from "./types";
 
 export default function App() {
@@ -106,6 +106,12 @@ export default function App() {
             </Box>
           </>
         )}
+
+        <Typography component="footer" sx={{
+          mt: 8, textAlign: "center", fontFamily: mono, fontSize: 11.5, color: "text.secondary",
+        }}>
+          qwen-plus scripting · wan2.1-turbo drafts · wan2.2-plus finals · qwen-vl-plus advisory — on Alibaba Cloud
+        </Typography>
       </Container>
     </>
   );
