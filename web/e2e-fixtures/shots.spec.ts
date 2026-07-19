@@ -27,6 +27,9 @@ test("real-footage screenshots: review gate + certified episode", async ({ page 
     const el = document.querySelector('[data-testid="shot"] img') as HTMLImageElement | null;
     return !!el && el.naturalWidth > 0;
   });
+  // Reset scroll so the sticky AppBar composites at the top of the full-page capture.
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.waitForTimeout(200);
   await page.screenshot({ path: "../dailies-review.png", fullPage: true });
 
   // Approve → draft → Tier-A catches the real static kill-shot → repaired pan → certified cut.
@@ -47,5 +50,7 @@ test("real-footage screenshots: review gate + certified episode", async ({ page 
     return v !== null && !v.seeking && v.readyState >= 2;
   });
   await page.waitForTimeout(1000);
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.waitForTimeout(200);
   await page.screenshot({ path: "../dailies-done.png", fullPage: true });
 });
