@@ -69,8 +69,71 @@ push/merge → main
 ```
 
 No Doppler and no host-side node build: secrets live in `~/dailies/.env` on the box, and the
-SPA is built inside the Docker `spa` stage. CI's only job is SSH reach — the single long-lived
-secret in GitHub is the deploy SSH key; `QWEN_API_KEY` never leaves the box.
+SPA is built inside the Docker `spa` stage. The deploy job's only job is SSH reach — the single
+long-lived secret in GitHub is the deploy SSH key; `QWEN_API_KEY` never leaves the box.
+
+**CI and CD are separate workflows.** `ci.yml` (the test suite) and `deploy-prod.yml` (this
+deploy) trigger independently on push to `main`. A red CI does **not** block a deploy, and the
+deploy job runs no tests — so a green deploy with a red CI is possible and means exactly what
+it says: the box is serving, but the suite is unhappy. Watch both checks.
+
+### Quick sequence (this box, in order)
+
+The exact path this deployment took — CD via GitHub Actions, key-only auth, secrets scoped to
+the `production` environment. The ssh commands assume a `~/.ssh/config` alias `sas-qwen-hack`
+for the box (laptop-only; CI can't read your ssh config, so its secret uses the literal IP).
+Each step's *why* is in "One-time setup" below; this is the command record.
+
+**On your machine — mint the CI key and prove it** (never generate on the box: it receives only
+the public half, and GitHub Actions is the SSH *client* that holds the private half):
+```bash
+ssh-keygen -t ed25519 -C "qwen-hack-2026-ci" -f ~/.ssh/qwen-hack-2026-ci -N ""
+ssh-copy-id -i ~/.ssh/qwen-hack-2026-ci.pub sas-qwen-hack          # authenticates with the SAS password, once
+ssh -i ~/.ssh/qwen-hack-2026-ci -o IdentitiesOnly=yes sas-qwen-hack 'echo key-auth-ok'
+```
+`IdentitiesOnly=yes` is load-bearing on that last line. Plain `ssh -i <key>` *adds* the named
+key to the identities it offers rather than restricting to it, so an already-authorized
+`~/.ssh/id_ed25519` can answer the challenge and print `key-auth-ok` while the CI key was never
+accepted — a green test hiding a credential CI will be rejected with. The flag forces ssh to
+offer only this one key with no agent, which is exactly the runner's situation, so the test now
+proves what CI will actually experience.
+
+**Register the secrets against the `production` environment** (not the repo — `SERVER_USER` is
+`root`, so only a job declaring `environment: production` should read them):
+```bash
+gh secret set SERVER_SSH_KEY --env production --repo Zen-cronic/qwen-hack-2026 < ~/.ssh/qwen-hack-2026-ci
+gh secret set SERVER_HOST    --env production --repo Zen-cronic/qwen-hack-2026 --body "<sas-public-ip>"
+gh secret set SERVER_USER    --env production --repo Zen-cronic/qwen-hack-2026 --body "root"
+gh variable set ENV_NAME     --env production --repo Zen-cronic/qwen-hack-2026 --body "prod"   # optional; the script defaults to prod
+gh secret list               --env production --repo Zen-cronic/qwen-hack-2026    # expect SERVER_HOST / SERVER_USER / SERVER_SSH_KEY
+```
+Feed the key from the file with `<`, never paste it — a mangled newline is the most common
+handshake failure. Keep the literal `<sas-public-ip>` out of every committed file; it lives only
+in the `SERVER_HOST` secret and the `curl` below (this repo goes public).
+
+**On the box — size it, clone it, seed its secret** (once):
+```bash
+# 1.8 GiB RAM, no swap out of the box. The on-box SPA build (npm ci + vite) is the memory peak,
+# and a RE-deploy builds while the old app container is still resident -- add 2 GiB so a spike
+# kills only the build, never nginx or sshd (which would drop the URL or lock you out).
+sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+git clone https://oauth2:${GITHUB_TOKEN}@github.com/Zen-cronic/qwen-hack-2026.git ~/dailies   # PAT while private
+cd ~/dailies && cp .env.example .env    # paste QWEN_API_KEY; set JUDGE_MODE / DAILIES_DEMO as desired
+```
+
+**Trigger the deploy and watch it** (no commit needed — the workflow has `workflow_dispatch`):
+```bash
+gh workflow run deploy-prod.yml --repo Zen-cronic/qwen-hack-2026
+gh run watch --repo Zen-cronic/qwen-hack-2026
+```
+
+**Confirm it's live, then seed the replay cache** so judge runs replay real footage for free
+instead of spending the nearly-exhausted premium quota:
+```bash
+curl http://<sas-public-ip>/api/health      # -> {"status":"ok","mode":"real"}
+rsync -avz ./data/cache/ sas-qwen-hack:/root/dailies/data/cache/     # ~81 MB, 33 clips; data/ is gitignored so a clone arrives empty
+```
 
 ### One-time setup
 
