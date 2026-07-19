@@ -81,7 +81,7 @@ export default function App() {
         <Toolbar sx={{ maxWidth: 1200, width: "100%", mx: "auto", px: { xs: 2, sm: 2.5 } }}>
           <Stack direction="row" spacing={1.25} sx={{ alignItems: "baseline", flexGrow: 1 }}>
             <Typography component="span" onClick={onReset}
-              sx={{ fontSize: 20, fontWeight: 750, letterSpacing: "-0.02em", cursor: "pointer" }}>◉ Dailies</Typography>
+              sx={{ fontSize: 20, fontWeight: 700, letterSpacing: "-0.02em", cursor: "pointer" }}>◉ Dailies</Typography>
             <Typography component="span" color="text.secondary" sx={{ fontSize: 13 }}>the neutral conformance gate for AI-generated video</Typography>
           </Stack>
           {project && <WalletMeter w={project.wallet} />}

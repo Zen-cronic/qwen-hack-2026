@@ -23,7 +23,7 @@ const Panel = styled(Paper)({ padding: "18px 20px", marginBottom: 20 });
 function Cell({ v, k }: { v: string | number; k: string }) {
   return (
     <Box sx={{ textAlign: "right" }}>
-      <Typography sx={{ fontFamily: mono, fontWeight: 650, fontVariantNumeric: "tabular-nums", lineHeight: 1.15 }}>{v}</Typography>
+      <Typography sx={{ fontFamily: mono, fontWeight: 600, fontVariantNumeric: "tabular-nums", lineHeight: 1.15 }}>{v}</Typography>
       <Typography variant="overline" component="div" color="text.secondary" sx={{ textTransform: "uppercase" }}>{k}</Typography>
     </Box>
   );

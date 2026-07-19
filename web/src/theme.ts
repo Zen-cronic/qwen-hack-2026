@@ -21,9 +21,10 @@ export const tokens = {
 } as const;
 
 // Measurements read as a test report — the one deliberate risk. Metric values,
-// assertion details and take labels use this; prose stays sans.
-export const mono = 'ui-monospace, SFMono-Regular, Menlo, "Cascadia Code", monospace';
-const sans = 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
+// assertion details and take labels use this; prose stays sans. Both families are
+// bundled (see main.tsx); the rest of each stack is the offline fallback.
+export const mono = '"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace';
+const sans = '"Instrument Sans Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
 
 // One place that maps an assertion/badge status to its hex, used by dots, chips
 // and Recharts cells so a status is the same color everywhere.
@@ -58,7 +59,8 @@ export const theme = createTheme({
   shape: { borderRadius: 12 },
   typography: {
     fontFamily: sans,
-    h1: { fontWeight: 750, letterSpacing: "-0.02em" },
+    // Instrument Sans Variable's weight axis tops out at 700 — heavier values clamp.
+    h1: { fontWeight: 700, letterSpacing: "-0.02em" },
     h2: { fontSize: "0.94rem", fontWeight: 650 },
     h3: { fontSize: "0.82rem", fontWeight: 600, color: tokens.muted },
     button: { textTransform: "none", fontWeight: 650 },
