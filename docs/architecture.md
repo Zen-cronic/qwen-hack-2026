@@ -114,8 +114,13 @@ flowchart TB
 
         ledger["Metrics ledger<br/><i>metrics.py + report.py</i><br/>Append-only JSONL; derives the<br/>cost-quality frontier + report metrics"]:::container
         store["Store + snapshots<br/><i>store.py, in-memory + JSON</i><br/>State under RLock; atomic state.json;<br/>content-addressed media cache"]:::container
-        mcp["MCP server<br/><i>FastMCP over stdio, mcp_server.py</i><br/>run_shot_tests (Tier-A, free) +<br/>patch_clip (acts; spends one generation)"]:::container
-        tool["Qwen tool surface<br/><i>qwen_tools.py / mcp_agent.py</i><br/>run_shot_tests as function-calling +<br/>Qwen-Agent tool; also an MCP client"]:::container
+        subgraph reuse["Reuse surface — one run_shot_tests engine, exposed three ways"]
+            direction TB
+            fc["Skill 1 · function-calling tool<br/><i>qwen_tools.py</i><br/>RUN_SHOT_TESTS_TOOL (OpenAI-compat tools=)"]:::container
+            skill["Skill 2 · Qwen-Agent custom skill<br/><i>qwen_tools.py</i><br/>@register_tool BaseTool"]:::container
+            mcpsrv["Skill 3 · MCP server (producer)<br/><i>FastMCP stdio, mcp_server.py</i><br/>run_shot_tests (free) + patch_clip"]:::container
+            mcpcli["MCP client (consumer)<br/><i>Qwen-Agent, mcp_agent.py</i><br/>mcpServers block — closes the loop"]:::container
+        end
     end
 
     qwen["Qwen Cloud<br/><i>External System</i><br/>qwen-plus · qwen-vl-plus · qwen3-tts-flash ·<br/>wan2.1-t2v-turbo / wan2.2-t2v-plus / wan2.1-t2i-plus"]:::external
@@ -144,10 +149,13 @@ flowchart TB
     store --> disk
     ledger --> disk
 
-    mcp -->|"reuses"| tierA
-    tool --> mcp
-    tool -->|"function-calling loop"| qwen
-    mcphost -->|"ListTools / CallTool (stdio)"| mcp
+    fc -->|"reuses"| tierA
+    skill -->|"reuses"| tierA
+    mcpsrv -->|"reuses"| tierA
+    fc -->|"function-calling loop"| qwen
+    skill -->|"Qwen-Agent Assistant"| qwen
+    mcpcli -->|"mcpServers stdio — both ends ours"| mcpsrv
+    mcphost -->|"ListTools / CallTool (stdio)"| mcpsrv
 
     subgraph legend2["Legend / key"]
         direction LR
@@ -183,9 +191,12 @@ Reading it as the request flows:
 - **Store + snapshots** (`server/store.py`) is the "database": in-memory state mutated under an
   RLock, written as an **atomic `state.json` snapshot** after each change, plus a
   **content-addressed media cache** so identical (model, prompt, seed) requests replay for free.
-- **MCP server** (`server/mcp_server.py`) and the **Qwen tool surface** (`server/qwen_tools.py`,
-  `server/mcp_agent.py`) expose the same `run_shot_tests` engine (deterministic Tier-A only) to
-  external agents — the productization surface, runnable rather than asserted.
+- **Reuse surface** (`server/qwen_tools.py`, `server/mcp_server.py`, `server/mcp_agent.py`)
+  exposes the same deterministic `run_shot_tests` engine to a Qwen model **three ways**: a native
+  **function-calling tool**, a **Qwen-Agent custom skill** (`@register_tool`), and an **MCP server**
+  — the *producer*. Our own **Qwen-Agent MCP client** is the *consumer* that closes the loop (both
+  ends ours), while any external MCP host can consume the same server. Runnable, not asserted; the
+  full API-to-rubric map is in [qwen-usage.md](qwen-usage.md).
 
 ## Deployment topology (Alibaba Cloud SAS)
 
