@@ -32,6 +32,7 @@ export function WalletMeter({ w, judge }: { w: Wallet; judge?: { judge_mode: boo
     <Stack direction="row" spacing={1.75} data-testid="wallet" sx={{ alignItems: "center", flexWrap: "wrap" }}>
       <Cell v={w.draft_clips} k="drafts" />
       <Cell v={w.final_clips} k="finals" />
+      {w.patch_clips > 0 && <Cell v={w.patch_clips} k="patches" />}
       <Cell v={w.images} k="stills" />
       <Cell v={(w.tokens_in + w.tokens_out).toLocaleString()} k="tokens" />
       <Cell v={`$${w.est_usd.toFixed(2)}`} k="est. cost" />
@@ -333,17 +334,34 @@ const badgeSx = (badge: string) => {
   return { bgcolor: alpha(c, 0.16), color: c, border: 1, borderColor: alpha(c, 0.4), fontSize: 11 };
 };
 
-export function ShotCard({ shot, onVerdict }: {
+// Mirrors ANCHOR_LEAD_S in server/patch.py: the button names the second the server
+// will actually anchor at, so the label is a promise rather than an approximation.
+const ANCHOR_LEAD_S = 0.2;
+
+export function ShotCard({ shot, onVerdict, onPatch }: {
   shot: ShotState;
   onVerdict: (shotIndex: number, type: string, verdict: string) => void;
+  onPatch?: (shotIndex: number) => Promise<void>;
 }) {
   const takes = shot.takes;
   const [sel, setSel] = useState<number>(-1);
+  const [patching, setPatching] = useState(false);
   const activeIdx = sel < 0 ? takes.length - 1 : sel;
   const take: Take | undefined = takes.length ? takes[activeIdx] : undefined;
   const results = take ? take.results : shot.tier0_results;
   const thumb = take?.results.find((r) => r.evidence.length)?.evidence[0] ?? shot.still_path;
   const badge = shot.certified ? "certified" : shot.status === "failed" ? "failed" : "working";
+
+  // Patching always acts on the LATEST take, so the offer is keyed to that one — not
+  // to whichever take the user happens to be inspecting.
+  const latest = takes.length ? takes[takes.length - 1] : undefined;
+  const target = latest?.results.find((r) => !r.advisory && r.status === "fail" && failWindow(r));
+  const anchorS = target ? Math.max(0, failWindow(target)![0] - ANCHOR_LEAD_S) : 0;
+
+  const doPatch = async () => {
+    setPatching(true);
+    try { await onPatch!(shot.spec.index); } finally { setPatching(false); }
+  };
 
   return (
     <Paper data-testid="shot" sx={{ overflow: "hidden", display: "flex", flexDirection: "column" }}>
@@ -393,21 +411,42 @@ export function ShotCard({ shot, onVerdict }: {
             <Check key={i} r={r} onVerdict={(v) => onVerdict(shot.spec.index, r.type, v)} />
           ))}
         </Stack>
+
+        {target && onPatch && (
+          <Box sx={{
+            mt: 0.25, pt: 1.25, borderTop: 1, borderColor: "divider",
+            display: "flex", alignItems: "center", gap: 1.25, flexWrap: "wrap",
+          }}>
+            <Button size="small" variant="outlined" color="inherit" data-testid="patch"
+              disabled={patching} onClick={doPatch}
+              sx={{ fontFamily: mono, fontSize: 10.5, py: 0.3, px: 1.2, flexShrink: 0 }}>
+              {patching ? "patching…" : `patch from ${anchorS.toFixed(1)}s`}
+            </Button>
+            <Typography sx={{ fontFamily: mono, fontSize: 10.5, color: "text.secondary" }}>
+              {patching
+                ? "re-rendering from the last good frame, then re-verifying"
+                : `re-render this shot only — ${target.type} is the blocker`}
+            </Typography>
+          </Box>
+        )}
       </Box>
     </Paper>
   );
 }
 
-export function ConformanceBoard({ project, onVerdict }: {
+export function ConformanceBoard({ project, onVerdict, onPatch }: {
   project: Project;
   onVerdict: (shotIndex: number, type: string, verdict: string) => void;
+  onPatch?: (shotIndex: number) => Promise<void>;
 }) {
   return (
     <Panel>
       <Typography variant="h2" gutterBottom>Conformance board</Typography>
       <Box data-testid="board" sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 2 }}>
         {project.shots.length === 0 && <Typography color="text.secondary">Waiting for the script agent…</Typography>}
-        {project.shots.map((s) => <ShotCard key={s.spec.index} shot={s} onVerdict={onVerdict} />)}
+        {project.shots.map((s) => (
+          <ShotCard key={s.spec.index} shot={s} onVerdict={onVerdict} onPatch={onPatch} />
+        ))}
       </Box>
     </Panel>
   );

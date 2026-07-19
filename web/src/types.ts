@@ -34,6 +34,7 @@ export interface ShotState {
 export interface Wallet {
   draft_clips: number;
   final_clips: number;
+  patch_clips: number;   // i2v/kf2v targeted repairs — a separate free-tier pool
   images: number;
   tokens_in: number;
   tokens_out: number;

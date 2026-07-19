@@ -20,6 +20,12 @@ export const sendVerdict = (id: string, shot_index: number, assertion_type: stri
   fetch(`/api/projects/${id}/verdict`, { ...JSON_POST, body: JSON.stringify({ shot_index, assertion_type, verdict }) })
     .then(j<{ ok: boolean }>);
 
+/** Re-render one shot from its last good frame and re-verify it. Slow (a real
+ *  generation), so callers should await it rather than relying on the poll loop. */
+export const patchShot = (id: string, shotIndex: number) =>
+  fetch(`/api/projects/${id}/shots/${shotIndex}/patch`, { method: "POST" })
+    .then(j<{ ok: boolean; reason: string; anchor_s: number | null; certified: boolean }>);
+
 export const getPacks = () => fetch("/api/packs").then(j<{ packs: Pack[] }>);
 
 // The stored path IS the contract: pass it verbatim and let the media route

@@ -8,7 +8,7 @@ import Stack from "@mui/material/Stack";
 import Toolbar from "@mui/material/Toolbar";
 import Typography from "@mui/material/Typography";
 import { alpha } from "@mui/material/styles";
-import { createProject, getPacks, getProject, review, sendVerdict } from "./api";
+import { createProject, getPacks, getProject, patchShot, review, sendVerdict } from "./api";
 import { ChartsPanel } from "./charts";
 import { ConformanceBoard, FinalCut, NewProject, Pipeline, ReviewBar, WalletMeter } from "./components";
 import { mono, tokens } from "./theme";
@@ -63,6 +63,17 @@ export default function App() {
   };
 
   const onApprove = async () => { if (projectId) { await review(projectId); poll(projectId); } };
+  const onPatch = async (shotIndex: number) => {
+    if (!projectId) return;
+    setErr(null);
+    // A patch is a real generation, so surface why it was refused or why it still
+    // fails — silently re-polling would read as "the button did nothing".
+    try {
+      const r = await patchShot(projectId, shotIndex);
+      if (!r.ok) setErr(`Shot ${shotIndex}: ${r.reason}`);
+    } catch (e) { setErr(String(e)); }
+    poll(projectId);
+  };
   const onVerdict = async (shotIndex: number, type: string, verdict: string) => {
     if (projectId) { await sendVerdict(projectId, shotIndex, type, verdict); poll(projectId); }
   };
@@ -99,7 +110,7 @@ export default function App() {
             {project.status === "awaiting_review" && <ReviewBar onApprove={onApprove} shots={project.shots} />}
             {project.error && <Paper sx={{ p: 2, mb: 2.5, borderColor: "error.main" }}>{project.error}</Paper>}
             <ChartsPanel m={project.metrics} />
-            <ConformanceBoard project={project} onVerdict={onVerdict} />
+            <ConformanceBoard project={project} onVerdict={onVerdict} onPatch={onPatch} />
             <FinalCut project={project} />
             <Box sx={{ mt: 2.5 }}>
               <Button variant="outlined" color="inherit" data-testid="newrun" onClick={onReset}>New run</Button>
