@@ -36,3 +36,12 @@ references/
 
 # playwright-mcp session artifacts (screenshots, flow recordings)
 .playwright-mcp/
+
+# Private keys — never in the tree. The CI keypair belongs in ~/.ssh (docs/deploy.md
+# step 2); this is the backstop for anyone who runs ssh-keygen from the repo root.
+*.pem
+*_ed25519
+*_rsa
+dailies_ci
+id_*
+!id_*.md

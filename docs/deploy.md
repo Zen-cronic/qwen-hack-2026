@@ -83,16 +83,22 @@ secret in GitHub is the deploy SSH key; `QWEN_API_KEY` never leaves the box.
 2. **CI credential — pick one.** SAS instances are provisioned with a **root password** and
    password login enabled, so both paths work out of the box.
 
-   *Preferred — dedicated CI key.* One extra command, and it gives CI a credential that is
-   scoped to this pipeline, revocable by deleting one line on the box, and useless to anyone
-   who can't also present the private half:
+   *Preferred — dedicated CI key.* Gives CI a credential scoped to this pipeline, revocable by
+   deleting one line on the box, and useless to anyone who can't also present the private half.
+   **Run these on your own machine, not on the SAS box** — the box only ever receives the
+   *public* half, and the private half goes to GitHub:
    ```bash
-   ssh-keygen -t ed25519 -C "dailies-ci" -f ./dailies_ci -N ""
-   ssh-copy-id -i ./dailies_ci.pub <user>@<sas-public-ip>   # appends to ~/.ssh/authorized_keys
+   ssh-keygen -t ed25519 -C "dailies-ci" -f ~/.ssh/dailies_ci -N ""
+   ssh-copy-id -i ~/.ssh/dailies_ci.pub <user>@<sas-public-ip>   # prompts for the SAS password
+   ssh -i ~/.ssh/dailies_ci <user>@<sas-public-ip> 'echo key-auth-ok'   # prove it before CI uses it
    ```
-   `ssh-copy-id` authenticates with the SAS password you already have, so this needs no sshd
-   change — `PubkeyAuthentication` is on by default. Keep the **private** key (`dailies_ci`)
-   for the GitHub secret; the public key stays on the box.
+   Write the key to `~/.ssh/`, **not** into this repo — an untracked private key in the working
+   tree is one `git add -A` away from a public repository.
+
+   `ssh-copy-id` authenticates with the SAS password you already have and appends the public key
+   to the box's `~/.ssh/authorized_keys`, so this needs no sshd change — `PubkeyAuthentication`
+   is on by default. The third command is the one that matters: it proves key auth works while
+   the failure is still one line of shell to diagnose, rather than a red CI run.
 
    *Fallback — the SAS password.* Zero setup, but the same secret that deploys also grants
    full interactive login from anywhere, it can't be scoped to CI, and rotating it means
