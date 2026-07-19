@@ -33,3 +33,6 @@ web/playwright-report/
 !.claude/skills/frontend-design/
 
 references/
+
+# playwright-mcp session artifacts (screenshots, flow recordings)
+.playwright-mcp/
