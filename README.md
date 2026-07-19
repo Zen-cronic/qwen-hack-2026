@@ -19,6 +19,10 @@ server a Qwen agent consumes** — so any pipeline or agent can gate generated v
 gates code. The full surface, mapped to the judging rubric, is in
 [docs/qwen-usage.md](docs/qwen-usage.md).
 
+![A Qwen agent calling Dailies' run_shot_tests conformance tool through the Model Context Protocol — client and server both ours. The agent issues an MCP CallTool, Dailies' server runs the deterministic Tier-A check and returns a real FAIL (camera static, |v|=0.00), and the agent explains it.](docs/mcp-loop.png)
+
+<sub>A real, unedited capture of `scripts/mcp_agent_demo.py`: a Qwen agent gates a clip through Dailies' **own** MCP server — issues an MCP `CallTool`, gets back a deterministic Tier-A verdict, and explains the failure. Chat tokens only, zero video quota.</sub>
+
 ## The idea (improvement statement)
 
 AI video fails *in motion*, after you've already paid for it — a gorgeous keyframe

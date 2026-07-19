@@ -75,6 +75,8 @@ where **both ends are ours**. This is the beat the rest of Track 2 can't show: t
 which is exactly the "MCP integration" the rubric names. How every Qwen surface maps to each
 rubric line: [qwen-usage.md](qwen-usage.md).
 
+![The Act 3 round-trip, captured: a Qwen agent calls run_shot_tests through Dailies' own MCP server (client + server both ours) and reports the deterministic Tier-A verdict.](mcp-loop.png)
+
 ## Rubric coverage in one run
 
 | Category | Demo beat |
