@@ -55,18 +55,18 @@ const SAMPLE_PREMISES = [
 // possible for a product that has a grammar. Decorative: hidden from the a11y tree,
 // never intercepts clicks, static.
 const AMBIENT_VOCAB: { t: string; sx: object }[] = [
-  { t: "duration_between: [4.0, 6.0]", sx: { top: "7%", left: "2%", transform: "rotate(-7deg)" } },
-  { t: "brightness_range: [25, 235]", sx: { top: "24%", left: "5%", transform: "rotate(4deg)" } },
-  { t: "flicker_below: 22.0", sx: { top: "41%", left: "1%", transform: "rotate(-4deg)" } },
-  { t: "scene_cuts: ≤ 1", sx: { top: "57%", left: "6%", transform: "rotate(6deg)" } },
-  { t: "camera_motion: right", sx: { top: "72%", left: "2%", transform: "rotate(-6deg)" } },
-  { t: "palette_deltae: mean ΔE*76 ≤ 30", sx: { bottom: "5%", left: "8%", transform: "rotate(3deg)" } },
-  { t: "subject_present: the keeper", sx: { top: "9%", right: "3%", transform: "rotate(5deg)" } },
-  { t: "identity_consistent", sx: { top: "26%", right: "7%", transform: "rotate(-5deg)" } },
-  { t: "action_completed", sx: { top: "43%", right: "2%", transform: "rotate(4deg)" } },
-  { t: "title_card_present", sx: { top: "59%", right: "6%", transform: "rotate(-3deg)" } },
-  { t: "tier-A · zero tokens", sx: { top: "75%", right: "3%", transform: "rotate(6deg)" } },
-  { t: "reject before spend", sx: { bottom: "6%", right: "9%", transform: "rotate(-5deg)" } },
+  { t: "Runs 4–6 seconds", sx: { top: "7%", left: "2%", transform: "rotate(-7deg)" } },
+  { t: "Neither too dark nor blown out", sx: { top: "24%", left: "5%", transform: "rotate(4deg)" } },
+  { t: "Brightness holds steady", sx: { top: "41%", left: "1%", transform: "rotate(-4deg)" } },
+  { t: "One continuous take", sx: { top: "57%", left: "6%", transform: "rotate(6deg)" } },
+  { t: "Camera pans right", sx: { top: "72%", left: "2%", transform: "rotate(-6deg)" } },
+  { t: "Stays on the brand palette", sx: { bottom: "5%", left: "8%", transform: "rotate(3deg)" } },
+  { t: "The keeper is in frame", sx: { top: "9%", right: "3%", transform: "rotate(5deg)" } },
+  { t: "Same subject throughout", sx: { top: "26%", right: "7%", transform: "rotate(-5deg)" } },
+  { t: "The action completes", sx: { top: "43%", right: "2%", transform: "rotate(4deg)" } },
+  { t: "A title card is visible", sx: { top: "59%", right: "6%", transform: "rotate(-3deg)" } },
+  { t: "Checked before it ships", sx: { top: "75%", right: "3%", transform: "rotate(6deg)" } },
+  { t: "Rejected before it costs", sx: { bottom: "6%", right: "9%", transform: "rotate(-5deg)" } },
 ];
 
 function AmbientVocab() {
@@ -308,13 +308,13 @@ function Check({ r, onVerdict }: { r: AssertionResult; onVerdict?: (v: string) =
       <Box sx={{ width: 9, height: 9, borderRadius: "50%", mt: "4px", flex: "none", bgcolor: statusColor(r.status) }} />
       <Box sx={{ minWidth: 0 }}>
         <Box>
-          <Typography component="span" sx={{ fontSize: 12.5, fontWeight: 600 }}>{checkLabel(r)}</Typography>
-          {/* The machine name stays visible: it is the closed-vocabulary receipt, and
-              the reason this check is reproducible rather than an opinion. */}
-          <Box component="span" sx={{ fontFamily: mono, fontSize: 10, color: "text.secondary", opacity: 0.7, ml: 0.75 }}>{r.type}</Box>
-          {r.advisory && (
-            <Box component="span" sx={{ fontSize: 9, color: "text.secondary", border: 1, borderColor: "divider", borderRadius: "4px", px: 0.5, ml: 0.5 }}>advisory</Box>
-          )}
+          {/* The machine name is the reproducibility receipt, but it is not display copy —
+              it rides on `title` for anyone who goes looking, and the visible badge says
+              the thing a person actually needs: was this measured, or judged? */}
+          <Typography component="span" title={r.type} sx={{ fontSize: 12.5, fontWeight: 600 }}>{checkLabel(r)}</Typography>
+          <Box component="span" sx={{ fontSize: 9, color: "text.secondary", border: 1, borderColor: "divider", borderRadius: "4px", px: 0.5, ml: 0.75 }}>
+            {r.advisory ? "advisory" : "measured"}
+          </Box>
         </Box>
         {r.detail && <Typography sx={{ fontFamily: mono, fontSize: 11.5, color: "text.secondary" }}>{r.detail}</Typography>}
         {win && (
