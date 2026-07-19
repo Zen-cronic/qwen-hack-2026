@@ -80,16 +80,30 @@ secret in GitHub is the deploy SSH key; `QWEN_API_KEY` never leaves the box.
    Open **port 80** (and **22** for SSH) in the SAS firewall / security group. If you deploy as
    a non-root user, add it to the `docker` group (`sudo usermod -aG docker $USER`, re-login).
 
-2. **Dedicated CI SSH key.** Generate a keypair used only by the pipeline and authorize it on the box:
+2. **CI credential — pick one.** SAS instances are provisioned with a **root password** and
+   password login enabled, so both paths work out of the box.
+
+   *Preferred — dedicated CI key.* One extra command, and it gives CI a credential that is
+   scoped to this pipeline, revocable by deleting one line on the box, and useless to anyone
+   who can't also present the private half:
    ```bash
    ssh-keygen -t ed25519 -C "dailies-ci" -f ./dailies_ci -N ""
    ssh-copy-id -i ./dailies_ci.pub <user>@<sas-public-ip>   # appends to ~/.ssh/authorized_keys
    ```
-   Keep the **private** key (`dailies_ci`) for the GitHub secret; the public key stays on the box.
+   `ssh-copy-id` authenticates with the SAS password you already have, so this needs no sshd
+   change — `PubkeyAuthentication` is on by default. Keep the **private** key (`dailies_ci`)
+   for the GitHub secret; the public key stays on the box.
+
+   *Fallback — the SAS password.* Zero setup, but the same secret that deploys also grants
+   full interactive login from anywhere, it can't be scoped to CI, and rotating it means
+   changing the box's actual login. Use it if the key path is blocked; prefer the key.
 
 3. **GitHub → Settings → Secrets and variables → Actions.**
    - Secrets: `SERVER_HOST` = SAS **public IP**, `SERVER_USER` = the SSH user (`root` or your deploy
-     user), `SERVER_SSH_KEY` = the **private** key from step 2 (full PEM, including the header/footer lines).
+     user), plus **exactly one** credential from step 2 — either `SERVER_SSH_KEY` = the **private**
+     key (full PEM, including the header/footer lines) **or** `SERVER_PASSWORD` = the SAS login
+     password. The workflow passes both to the SSH action; whichever is unset interpolates to an
+     empty string and is ignored. Don't set both — the action documents no precedence.
    - Variables: `ENV_NAME` = `prod`. (This is the hook for future `dev`/`staging` — copy the workflow,
      point it at another box, change `ENV_NAME`.)
    - Optional gate: **Settings → Environments → production → Required reviewers** turns each deploy into
@@ -139,11 +153,16 @@ cd ~/dailies && git reset --hard <good-sha> && ./deploy/deploy-prod.sh
 ### Failure signatures
 
 - **Run fails in <10 s, log ends `Error: missing server host`** — step 3 was never done: the
-  `SERVER_HOST`/`SERVER_USER`/`SERVER_SSH_KEY` secrets are absent (`gh secret list` returns
-  nothing), so the SSH action aborts before opening a connection. This is exactly what a run
-  failing in seconds means — auth failures take ~30 s of retries, script failures take minutes;
+  `SERVER_HOST`/`SERVER_USER` secrets and the step-2 credential are absent (`gh secret list`
+  returns nothing), so the SSH action aborts before opening a connection. This is exactly what a
+  run failing in seconds means — auth failures take ~30 s of retries, script failures take minutes;
   a near-instant death is always missing configuration, and no amount of workflow-file editing
   fixes it.
+- **Run fails in ~30 s on `ssh: handshake failed` / `unable to authenticate`** — the credential
+  is the wrong *kind* for the box, not merely wrong. A `SERVER_SSH_KEY` whose public half was
+  never appended to the box's `~/.ssh/authorized_keys` fails here, as does a `SERVER_PASSWORD`
+  against an instance with `PasswordAuthentication no`. Confirm which the box accepts by running
+  the same auth from your laptop before touching the secrets.
 - **Run fails after minutes at the health gate** — the build broke or the app container never
   reported `healthy`; the Action prints `docker compose logs` for exactly this case.
 
