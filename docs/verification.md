@@ -155,6 +155,44 @@ predate localization entirely — the patch works because `patch_shot` re-measur
 source clip rather than trusting what was recorded beside it, which is free (deterministic
 CV on a file already on disk) and is what lets a repair act on a run older than the feature.
 
+## 3d. Narration — the episode gets a voice (Jul 19)
+
+Wan's t2v/i2v models return silent clips, so a certified episode was silent too.
+`GET {QWEN_BASE_URL}/models` with this key lists **149 models**, including the
+`qwen3-tts-*` family — the video models are absent from that list because they live on
+the async task API, not the OpenAI-compatible route.
+
+**Contract (verified live):**
+
+```
+POST {DASHSCOPE}/api/v1/services/aigc/multimodal-generation/generation
+  headers: Authorization, Content-Type   (NO X-DashScope-Async — this route is sync)
+  body:    {"model": "qwen3-tts-flash", "input": {"text": "...", "voice": "Cherry"}}
+  -> 200 {"output": {"audio": {"url": "...wav", "expires_at": ..., "id": ...}}}
+```
+
+- `input.voice` is **required** — omitting it is `400 InvalidParameter: The voice
+  property is required.` The `input.messages` shape used by `qwen-image-edit` is rejected
+  here; TTS takes flat `input.text`.
+- Measured: a 107-character line synthesized in **2.4 s**.
+- The URL is a signed OSS link with `expires_at` — downloaded immediately, like video.
+
+**The gotcha worth writing down.** The returned WAV is *streamed*, so its header declares
+an effectively infinite length: a ~7 s clip reports **44,739 s** to `wave` and to ffprobe.
+Anything that trusts that header to size the output produces a twelve-hour episode. The
+assembler is safe because `-shortest` bounds each segment by its VIDEO, and the paired
+`apad` stops a *short* line from doing the reverse — truncating the video down to the
+narration. Verified: a 5.00 s clip muxed with that 44,739 s-declaring wav yields exactly
+5.00 s.
+
+Because audio is truncated at the clip length, an over-long line is not harmless extra —
+it is a sentence cut off mid-word. `narration_for` budgets ~2.6 words/second against the
+shot's own duration.
+
+Narration is cached by `sha1(model|voice|text)`, so a judge-mode replay re-narrates for
+free, and a failed voice call degrades that shot to silence rather than failing a
+certified run.
+
 ## 4. First real end-to-end run (Jul 15) — what the synthetic clips hid
 
 Sections 1–3b verify the API in isolation, and spend almost nothing doing it — which is

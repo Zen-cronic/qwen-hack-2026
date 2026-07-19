@@ -181,6 +181,7 @@ def build_runtime() -> Runtime:
     from server.tier_a import run_tier_a
     from server.tier_b import TierBVerifier
     from server.tier0 import Tier0Verifier
+    from server.tts import TTSClient
     from server.wan import WanClient
 
     api_key = settings.QWEN_API_KEY
@@ -189,6 +190,7 @@ def build_runtime() -> Runtime:
 
     llm = OpenAI(api_key=api_key, base_url=settings.QWEN_BASE_URL)
     wan = WanClient(api_key, cache_dir=str(DATA_ROOT / "cache"))
+    tts = TTSClient(api_key, cache_dir=str(DATA_ROOT / "cache"))
     governor = BudgetGovernor()
     ledger = LedgerWriter(DATA_ROOT / "ledger.jsonl")
     cfg = Config(chat_model=chat_model, vl_model=vl_model, data_dir=str(DATA_ROOT / "projects"))
@@ -212,6 +214,9 @@ def build_runtime() -> Runtime:
         # a frame-anchored repair spends a different one (docs/verification.md section 3c).
         patch_video_fn=lambda prompt, model, frame: wan.generate_video_from_frame(
             prompt, frame, model=model),
+        # Narration is a finish, not a contract: a failed voice call yields silence
+        # for that shot and the certified episode still ships (Pipeline._narrate).
+        narrate_fn=tts.synthesize,
     )
     return Runtime(store=Store(str(DATA_ROOT / "projects")), deps=deps, cfg=cfg, governor=governor)
 

@@ -151,6 +151,7 @@ class ShotSpec(BaseModel):
     negative_prompt: str | None = None
     duration_s: int = 5  # fixed for wan2.1/2.2
     subject: str | None = None  # optional identity anchor for tier_b
+    narration: str | None = None  # optional spoken line; falls back to the shot description
     assertions: list[Assertion] = Field(default_factory=list)
 
     @field_validator("prompt")

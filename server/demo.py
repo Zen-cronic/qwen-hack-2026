@@ -14,6 +14,7 @@ Enable with DAILIES_DEMO=1 (see server.app.create_production_app).
 from __future__ import annotations
 
 import hashlib
+import wave
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -153,6 +154,31 @@ class _DemoGen:
                          from_cache=cached, seconds=0 if cached else 5,
                          cached_seconds=5 if cached else 0, latency_ms=90)
 
+    def narrate(self, text: str) -> SimpleNamespace:
+        """Offline narration: a short, quiet tone standing in for a spoken line.
+
+        Real audio, not a stub — the episode genuinely carries a track, so the assembler's
+        mux/concat path is exercised by the e2e at zero quota. Pitch varies with the text
+        so consecutive shots are audibly distinct.
+        """
+        key = self._key(f"{text}|narration", "tts")
+        path = self.cache_dir / f"{key}.wav"
+        cached = path.exists()
+        if not cached:
+            rate, seconds = 44100, 1.2
+            hz = 220 + (int(hashlib.sha1(text.encode()).hexdigest()[:4], 16) % 6) * 55
+            t = np.linspace(0.0, seconds, int(rate * seconds), endpoint=False)
+            # Quiet on purpose: this plays under review screenshots and the demo video.
+            envelope = np.minimum(1.0, np.minimum(t * 8, (seconds - t) * 8))
+            samples = (0.08 * envelope * np.sin(2 * np.pi * hz * t) * 32767).astype("<i2")
+            with wave.open(str(path), "wb") as w:
+                w.setnchannels(1)
+                w.setsampwidth(2)
+                w.setframerate(rate)
+                w.writeframes(samples.tobytes())
+        return SimpleNamespace(status="SUCCEEDED", ok=True, local_path=str(path),
+                               from_cache=cached, latency_ms=5, chars=len(text))
+
     def gen_image(self, prompt: str) -> WanResult:
         key = self._key(prompt, "t2i")
         path = self.cache_dir / f"{key}.png"
@@ -246,5 +272,6 @@ def build_demo_runtime(data_dir: str | None = None) -> "object":
         ledger=LedgerWriter(root / "ledger.jsonl"),
         custom_rule_fn=_demo_custom_rules,
         patch_video_fn=gen.gen_patch,
+        narrate_fn=gen.narrate,
     )
     return Runtime(store=Store(str(root / "projects")), deps=deps, cfg=cfg, governor=None)

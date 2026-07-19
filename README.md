@@ -67,7 +67,7 @@ premise → script + specs (qwen-plus) → compiled assertion checklist
           + Tier-B VLM verdicts (qwen-vl, advisory)
         → bounded prompt-repair + retake
         → promote passing shots (wan2.2-t2v-plus)
-        → ffmpeg assembly → certified episode
+        → narration (qwen3-tts-flash) → ffmpeg assembly → certified episode, with sound
 
         …and afterwards, per shot, without re-running any of the above:
         → targeted patch (wan2.2-i2v-flash / wan2.1-kf2v-plus)

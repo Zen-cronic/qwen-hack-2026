@@ -1,6 +1,8 @@
 """Repair agent (fake LLM) + ffmpeg assembly (real, tiny synthetic clips)."""
 
+import json
 import shutil
+import subprocess
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -8,7 +10,7 @@ import cv2
 import numpy as np
 import pytest
 
-from server.assemble import AssembleError, assemble
+from server.assemble import AssembleError, assemble, mux_narration
 from server.repair import RepairAgent
 from server.specs import AssertionResult, AssertionType, ShotSpec, Status, Tier
 
@@ -81,3 +83,60 @@ def test_assemble_concats_two_clips(tmp_path):
 def test_assemble_empty_raises():
     with pytest.raises(AssembleError):
         assemble([], "out.mp4")
+
+
+def _probe(path: str) -> dict:
+    """ffprobe stream summary — the only way to prove an audio track really exists."""
+    ffprobe = shutil.which("ffprobe")
+    if ffprobe is None:
+        pytest.skip("no ffprobe")
+    out = subprocess.run(
+        [ffprobe, "-v", "error", "-show_entries", "stream=codec_type,duration",
+         "-of", "json", path], capture_output=True, text=True)
+    return json.loads(out.stdout or "{}")
+
+
+def _tone(path: Path, seconds: float) -> bool:
+    ffmpeg = shutil.which("ffmpeg")
+    if ffmpeg is None:
+        return False
+    r = subprocess.run([ffmpeg, "-y", "-f", "lavfi", "-i", f"sine=frequency=440:duration={seconds}",
+                        str(path)], capture_output=True)
+    return r.returncode == 0 and path.exists()
+
+
+def test_assemble_with_narration_produces_an_audio_track(tmp_path):
+    if shutil.which("ffmpeg") is None:
+        pytest.skip("no ffmpeg")
+    c1, c2 = tmp_path / "c1.mp4", tmp_path / "c2.mp4"
+    if not _write_clip(c1, (0, 0, 255)) or not _write_clip(c2, (255, 0, 0)):
+        pytest.skip("no mp4 writer backend")
+    wav = tmp_path / "vo.wav"
+    if not _tone(wav, 0.4):
+        pytest.skip("no lavfi audio")
+
+    # Second shot has no narration: mixing sounded and silent segments is the case that
+    # breaks a naive concat graph, so it is the one worth pinning.
+    out = assemble([str(c1), str(c2)], str(tmp_path / "ep.mp4"), audio_paths=[str(wav), None])
+
+    types = [s["codec_type"] for s in _probe(out).get("streams", [])]
+    assert "video" in types and "audio" in types, f"expected both streams, got {types}"
+
+
+def test_narration_shorter_than_the_clip_does_not_shorten_it(tmp_path):
+    # Regression guard for -shortest without apad: a 0.2s line over a 2s shot would cut
+    # the VIDEO to 0.2s, silently breaking the shot's duration contract.
+    if shutil.which("ffmpeg") is None:
+        pytest.skip("no ffmpeg")
+    clip = tmp_path / "c.mp4"
+    if not _write_clip(clip, (0, 255, 0), n=20, fps=10):  # 2.0s
+        pytest.skip("no mp4 writer backend")
+    wav = tmp_path / "short.wav"
+    if not _tone(wav, 0.2):
+        pytest.skip("no lavfi audio")
+
+    out = mux_narration(str(clip), str(wav), str(tmp_path / "muxed.mp4"))
+    cap = cv2.VideoCapture(out)
+    frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    cap.release()
+    assert frames >= 15, f"video was truncated to the narration length ({frames} frames)"

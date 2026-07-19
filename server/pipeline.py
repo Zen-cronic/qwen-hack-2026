@@ -22,6 +22,7 @@ from typing import Callable
 from server.compiler import compile_shots, load_pack
 from server.metrics import LedgerWriter, ResourceKind
 from server.specs import Assertion, AssertionResult, ShotSpec, Status, parse_assertions
+from server.tts import narration_for
 from server.store import (
     ProjectState,
     ProjectStatus,
@@ -42,6 +43,7 @@ TierAFn = Callable[[str, ShotSpec, str], list[AssertionResult]]          # (vide
 TierBFn = Callable[[str, ShotSpec], list[AssertionResult]]               # (video_path, spec) -> results
 RepairFn = Callable[[ShotSpec, list[AssertionResult]], tuple[str, object]]  # (spec, failures) -> (new_prompt, usage)
 PatchVideoFn = Callable[[str, str, str], object]                          # (prompt, model, frame_path) -> WanResult-like
+NarrateFn = Callable[[str], object]                                       # (text) -> TTSResult-like
 AssembleFn = Callable[[list[str], str], str]                             # (clip_paths, out_path) -> episode_path
 
 
@@ -58,6 +60,7 @@ class Deps:
     ledger: LedgerWriter
     custom_rule_fn: CustomRuleFn | None = None  # optional: compile user-authored checks
     patch_video_fn: PatchVideoFn | None = None  # optional: frame-anchored targeted repair
+    narrate_fn: NarrateFn | None = None         # optional: narration track for the episode
 
 
 @dataclass
@@ -71,6 +74,7 @@ class Config:
     # repair wants — kf2v interpolates between two keyframes, so pinning the last one
     # would re-impose the very end state the patch is trying to fix.
     patch_model: str = "wan2.2-i2v-flash"
+    tts_model: str = "qwen3-tts-flash"
     max_retakes: int = 1
     final_cap: int = 4
     packs_dir: str | None = None
@@ -326,14 +330,42 @@ class Pipeline:
     def _assemble(self) -> None:
         self._status(ProjectStatus.ASSEMBLING)
         p = self.store.get(self.pid)
-        paths = [s.final_path for s in p.shots if s.certified and s.final_path]
+        shipped = [s for s in p.shots if s.certified and s.final_path]
+        paths = [s.final_path for s in shipped]
         if not paths:
             self._set(lambda p: setattr_many(p, status=ProjectStatus.FAILED,
                                              error="no certified shots to assemble"))
             return
         out = str(Path(self.cfg.data_dir) / self.pid / "episode.mp4")
-        episode = self.deps.assemble_fn(paths, out)
+        audio = self._narrate(shipped)
+        episode = (self.deps.assemble_fn(paths, out, audio_paths=audio) if audio
+                   else self.deps.assemble_fn(paths, out))
         self._set(lambda p: setattr_many(p, status=ProjectStatus.DONE, episode_path=episode))
+
+    def _narrate(self, shipped: list[ShotState]) -> list[str | None] | None:
+        """A narration track per shipped shot, or None if this runtime has no voice.
+
+        Never fatal: a shot whose line fails to synthesize gets silence, and the episode
+        still ships. Sound is a finish on the deliverable, not part of the contract —
+        failing a certified run over a voice call would invert what this system is for.
+        """
+        if self.deps.narrate_fn is None:
+            return None
+        out: list[str | None] = []
+        for s in shipped:
+            text = narration_for(s.spec)
+            if not text:
+                out.append(None)
+                continue
+            res = self.deps.narrate_fn(text)
+            ok = bool(getattr(res, "ok", False))
+            self._spend(kind=ResourceKind.AUDIO, model=self.cfg.tts_model, stage="assembling",
+                        shot_index=s.spec.index, latency_ms=getattr(res, "latency_ms", 0),
+                        note=("cache" if getattr(res, "from_cache", False)
+                              else f"{getattr(res, 'chars', 0)} chars" if ok
+                              else f"FAILED {getattr(res, 'message', '')}"[:180]))
+            out.append(getattr(res, "local_path", None) if ok else None)
+        return out if any(out) else None
 
     def _append_take(self, idx: int, take: Take) -> None:
         self._set(lambda p: p.shots[idx].takes.append(take))

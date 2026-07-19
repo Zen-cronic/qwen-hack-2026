@@ -34,6 +34,7 @@ class ResourceKind(str, Enum):
     VIDEO_DRAFT = "video_draft"   # wan2.1-t2v-turbo
     VIDEO_FINAL = "video_final"   # wan2.2-t2v-plus
     VIDEO_PATCH = "video_patch"   # wan i2v/kf2v targeted repair — its own free-tier pool
+    AUDIO = "audio"          # qwen3-tts narration for the episode
 
 
 # Nominal $/unit (list-price estimates, NOT free-tier cost). Tune freely.

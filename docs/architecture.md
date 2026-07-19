@@ -80,7 +80,8 @@ flowchart TB
             hardfail["blocking Tier-A FAIL"]:::reject
             repair["bounded auto-repair<br/><i>qwen-plus</i>"]:::stage
             promote["promote<br/><i>wan2.2-t2v-plus</i>"]:::stage
-            assemble["assembly<br/><i>ffmpeg</i>"]:::stage
+            narrate["narration<br/><i>qwen3-tts-flash</i>"]:::stage
+            assemble["assembly + mux<br/><i>ffmpeg</i>"]:::stage
 
             script --> compile
             compile -->|"invalid sentence"| reject
@@ -93,7 +94,8 @@ flowchart TB
             hardfail -->|"retake, bounded"| repair
             repair --> draft
             tierA -->|"pass"| promote
-            promote --> assemble
+            promote --> narrate
+            narrate --> assemble
         end
 
         subgraph patchsub["Targeted repair — post-run, one shot, no pipeline re-entry"]
@@ -116,7 +118,7 @@ flowchart TB
         tool["Qwen tool surface<br/><i>qwen_tools.py / mcp_agent.py</i><br/>run_shot_tests as function-calling +<br/>Qwen-Agent tool; also an MCP client"]:::container
     end
 
-    qwen["Qwen Cloud<br/><i>External System</i><br/>qwen-plus · qwen-vl-plus ·<br/>wan2.1-t2v-turbo / wan2.2-t2v-plus / wan2.1-t2i-plus"]:::external
+    qwen["Qwen Cloud<br/><i>External System</i><br/>qwen-plus · qwen-vl-plus · qwen3-tts-flash ·<br/>wan2.1-t2v-turbo / wan2.2-t2v-plus / wan2.1-t2i-plus"]:::external
     mcphost["MCP client host<br/><i>External System</i><br/>A Qwen agent / Claude"]:::external
     disk["Storage volume<br/><i>local /data, bind-mounted</i><br/>state.json · ledger.jsonl · cache/sha1.mp4 or .png"]:::external
 
@@ -135,6 +137,7 @@ flowchart TB
     tierB -->|"VLM verdict"| qwen
     repair -->|"repair prompt"| qwen
     promote -->|"t2v final"| qwen
+    narrate -->|"text-to-speech"| qwen
 
     pipe -->|"records every call"| ledger
     pipe -->|"mutates state, atomic snapshot"| store
