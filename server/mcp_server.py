@@ -64,6 +64,71 @@ def run_shot_tests(
     }
 
 
+def patch_clip(
+    video_path: str,
+    assertions: list[dict[str, Any]] | None = None,
+    pack_name: str | None = None,
+    model: str | None = None,
+    instruction: str | None = None,
+) -> dict[str, Any]:
+    """Repair a clip in place: re-render it from its last good frame, then re-verify.
+
+    Where `run_shot_tests` reports, this acts. Tier-A locates the first blocking failure
+    in time, the frame just before that window becomes an anchor, and a frame-anchored
+    Wan model regenerates from there — so an agent can fix one clip without re-running
+    whatever pipeline produced it.
+
+    Unlike `run_shot_tests` this SPENDS quota (one 5s i2v/kf2v generation) and needs
+    QWEN_API_KEY. The patch is only reported as applied if it passes re-verification;
+    a patch that still fails returns the evidence and leaves the original untouched.
+    """
+    from pathlib import Path
+    from tempfile import mkdtemp
+
+    from server.config import settings
+    from server.patch import anchor_second, extract_frame, localized_failure
+    from server.wan import WanClient
+
+    before = run_shot_tests(video_path, assertions, pack_name)
+    checked = parse_assertions(list(assertions or []))
+    if pack_name:
+        checked = merge_assertions(load_pack(pack_name).defaults, checked)
+    spec = ShotSpec(index=0, prompt=instruction or "(external clip)", assertions=checked)
+
+    work = Path(mkdtemp(prefix="dailies-patch-"))
+    results = run_tier_a(video_path, spec, str(work))
+    failure = localized_failure(results)
+    if failure is None:
+        return {**before, "patched": False,
+                "reason": "no blocking failure with a located window"}
+
+    at = anchor_second(failure)
+    anchor = extract_frame(video_path, at, work / "anchor.png")
+    if anchor is None:
+        return {**before, "patched": False, "reason": f"could not read a frame at {at:.2f}s"}
+
+    if not settings.QWEN_API_KEY:
+        return {**before, "patched": False, "reason": "QWEN_API_KEY not set"}
+    wan = WanClient(settings.QWEN_API_KEY, cache_dir=str(Path(settings.DATA_DIR) / "cache"))
+    prompt = instruction or f"{spec.prompt} — fix: {failure.detail}"
+    res = wan.generate_video_from_frame(prompt, anchor, model=model or "wan2.2-i2v-flash")
+    if not res.ok:
+        return {**before, "patched": False,
+                "reason": f"generation failed: {res.code}: {res.message}"}
+
+    after = run_shot_tests(res.local_path, assertions, pack_name)
+    return {
+        "patched": bool(after["passed"]),
+        "reason": "patched and re-verified" if after["passed"] else "patch still fails its contract",
+        "anchor_seconds": round(at, 2),
+        "located_failure": failure.type.value,
+        "original": {"video_path": video_path, "passed": before["passed"]},
+        "patched_clip": {"video_path": res.local_path, "passed": after["passed"]},
+        "before": before["checks"],
+        "after": after["checks"],
+    }
+
+
 def _build_server():
     """Construct the FastMCP server. Imported lazily so the core stays MCP-free."""
     from mcp.server.fastmcp import FastMCP
@@ -81,6 +146,22 @@ def _build_server():
         video_path: path to an mp4. assertions: list of {type, params}. pack_name:
         optional baseline pack (e.g. "brand_rules"). Returns a conformance report."""
         return run_shot_tests(video_path, assertions, pack_name)
+
+    @server.tool()
+    def patch_clip_tool(
+        video_path: str,
+        assertions: list[dict[str, Any]] | None = None,
+        pack_name: str | None = None,
+        model: str | None = None,
+        instruction: str | None = None,
+    ) -> dict[str, Any]:
+        """Repair a clip by re-rendering it from its last good frame, then re-verifying.
+
+        Tier-A locates the first blocking failure in time and anchors the regeneration
+        just before it, so one clip is fixed without re-running the pipeline that made
+        it. SPENDS one 5s i2v/kf2v generation and needs QWEN_API_KEY — unlike
+        run_shot_tests, which is free. Reports patched=false if the result still fails."""
+        return patch_clip(video_path, assertions, pack_name, model, instruction)
 
     return server
 

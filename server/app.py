@@ -20,6 +20,7 @@ from pydantic import BaseModel, Field
 from server.compiler import available_packs, load_pack
 from server.config import settings
 from server.metrics import LedgerWriter
+from server.patch import patch_shot
 from server.pipeline import Config, Deps, Pipeline
 from server.report import build_report_metrics
 from server.specs import AssertionType, Status
@@ -109,6 +110,17 @@ def create_app(runtime: Runtime) -> FastAPI:
         rt().store.update(pid, mut)
         return {"ok": True}
 
+    @app.post("/api/projects/{pid}/shots/{shot_index}/patch")
+    def patch(pid: str, shot_index: int):
+        # Edit one shot without re-running the pipeline: anchor to the last good frame
+        # before the located failure, regenerate, re-verify Tier-A, re-concat for free.
+        _require(pid)
+        out = patch_shot(rt().store, pid, shot_index, rt().deps, rt().cfg,
+                         model=rt().cfg.patch_model)
+        if not out.ok and out.video_path is None and out.anchor_frame is None:
+            raise HTTPException(400, out.reason)  # nothing to patch — a client error
+        return out.as_dict()
+
     @app.post("/api/projects/{pid}/assemble")
     def reassemble(pid: str):
         p = _require(pid)
@@ -196,6 +208,10 @@ def build_runtime() -> Runtime:
         assemble_fn=assemble,
         ledger=ledger,
         custom_rule_fn=lambda rules: compile_custom_rules(rules, client=llm, model=chat_model),
+        # Ungoverned on purpose: the judge-mode cap rations the t2v draft/final pool, and
+        # a frame-anchored repair spends a different one (docs/verification.md section 3c).
+        patch_video_fn=lambda prompt, model, frame: wan.generate_video_from_frame(
+            prompt, frame, model=model),
     )
     return Runtime(store=Store(str(DATA_ROOT / "projects")), deps=deps, cfg=cfg, governor=governor)
 
