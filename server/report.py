@@ -32,6 +32,14 @@ def _drafts(s: ShotState) -> list[Take]:
     return [t for t in s.takes if t.tier == "draft"]
 
 
+def _repair_attempts(s: ShotState) -> list[Take]:
+    """Every attempt the system made AFTER the first draft to satisfy the contract:
+    extra drafts from the retake loop, plus targeted patches. Both are the same act —
+    answering a measured failure with another render — so counting only retakes would
+    under-report a shot that was fixed by a patch instead."""
+    return _drafts(s)[1:] + [t for t in s.takes if t.tier == "patch"]
+
+
 def _first_draft_passed(s: ShotState) -> bool:
     d = _drafts(s)
     return bool(d) and d[0].passed is True
@@ -94,8 +102,8 @@ def build_report_metrics(p: ProjectState) -> dict:
         "quality": _quality(t),
     } for s in shots for t in s.takes]
 
-    repaired = [s for s in shots if len(_drafts(s)) > 1]
-    retakes_total = sum(max(0, len(_drafts(s)) - 1) for s in shots)
+    repaired = [s for s in shots if _repair_attempts(s)]
+    retakes_total = sum(len(_repair_attempts(s)) for s in shots)
 
     passing_seconds = certified * 5
     with_still = [s for s in shots if s.still_path]
