@@ -45,7 +45,12 @@ docker compose ps                     # app should show (healthy)
 ## Modes
 
 - **Real mode (default), `JUDGE_MODE=1`:** judges may trigger real generation up to the
-  fresh-clip cap per session; cached replays are free. Watch the judge-reserve quota.
+  fresh-clip cap per session — 2 drafts and 2 premium promotions (`server/budget.py`);
+  cached replays are free and uncapped. Past the cap the run still completes: the passing
+  draft is certified in place of the premium final. Watch the judge-reserve quota.
+  Pay-as-you-go must stay enabled in the Model Studio console ("Stop When Free Quota Is
+  Used Up" **off**), or voucher credit can't be spent and billable calls hard-fail once
+  the per-model free grant runs out.
 - **Demo mode, `DAILIES_DEMO=1`:** the whole pipeline runs on synthetic clips — real Tier-A
   CV + real assembly, **zero video quota**. Safest for a public URL that must survive the
   Jul 10–31 judging window. Set it in `.env` or the compose environment.

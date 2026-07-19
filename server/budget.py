@@ -16,8 +16,15 @@ from server.wan import WanClient, WanResult, video_size_for
 
 
 class BudgetGovernor:
+    # The final cap was 0 while the premium pool was free-tier-only: with no financial
+    # buffer, the correct number of billable promotions a stranger could trigger was none.
+    # It is 2 now that pay-as-you-go is on with voucher credit behind it — promotion plus
+    # the Tier-A re-verify that follows it is the run's most instructive moment, and a
+    # judge on a novel premise should get to see it. Exhausting the cap is not a failure
+    # path: Pipeline._promote certifies the passing draft instead (same branch as a
+    # refused API call or a final that regresses on Tier-A).
     def __init__(self, *, judge_mode: bool | None = None,
-                 fresh_draft_cap: int = 2, fresh_final_cap: int = 0):
+                 fresh_draft_cap: int = 2, fresh_final_cap: int = 2):
         self.judge_mode = settings.JUDGE_MODE if judge_mode is None else judge_mode
         self.fresh_draft_cap = fresh_draft_cap
         self.fresh_final_cap = fresh_final_cap
