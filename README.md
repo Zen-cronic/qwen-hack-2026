@@ -10,6 +10,15 @@ Dailies takes a premise, writes a shot list, and — before any clip ships — r
 generated shot through a **cost-tiered conformance cascade**. A shot that violates its
 contract never costs premium tokens and never reaches your channel.
 
+**Built on Qwen Cloud, end to end.** A `qwen-plus` agent authors each run by function-calling
+`build_pipeline_graph`; **Wan** generates every shot and, when one breaks its contract, a
+frame-anchored **Wan i2v** retake repairs it; **Qwen-VL** grades both the pre-render still and
+the finished motion; **Qwen-TTS** narrates the certified cut. The verification half is then
+re-exposed three ways — a native function-calling tool, a Qwen-Agent custom skill, and **an MCP
+server a Qwen agent consumes** — so any pipeline or agent can gate generated video the way it
+gates code. The full surface, mapped to the judging rubric, is in
+[docs/qwen-usage.md](docs/qwen-usage.md).
+
 ## The idea (improvement statement)
 
 AI video fails *in motion*, after you've already paid for it — a gorgeous keyframe

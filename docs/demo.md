@@ -70,7 +70,10 @@ python scripts/mcp_agent_demo.py
 
 *Narrate:* a Qwen agent (MCP client) launches Dailies' `run_shot_tests` MCP server, issues
 `ListTools` + `CallTool`, and reports the verdict — a complete Model Context Protocol round-trip
-where **both ends are ours**.
+where **both ends are ours**. This is the beat the rest of Track 2 can't show: the field
+*generates* video; Dailies exposes its **verification gate** as an MCP tool any agent can call,
+which is exactly the "MCP integration" the rubric names. How every Qwen surface maps to each
+rubric line: [qwen-usage.md](qwen-usage.md).
 
 ## Rubric coverage in one run
 
