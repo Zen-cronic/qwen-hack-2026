@@ -85,10 +85,10 @@ server-side validation, so routing is proven without generating anything.
 
 | Model | Endpoint (on `dashscope-intl.aliyuncs.com`) | Verdict |
 |---|---|---|
-| `qwen-image-edit`, `-plus` | `/api/v1/services/aigc/image2image/image-synthesis` | reachable |
+| `qwen-image-edit`, `-plus` | `/api/v1/services/aigc/multimodal-generation/generation` (**sync**) | **round-trip SUCCEEDED** |
 | `wan2.1-kf2v-plus` | `/api/v1/services/aigc/image2video/video-synthesis` | **round-trip SUCCEEDED** |
 | `wan2.2-i2v-flash` | `/api/v1/services/aigc/video-generation/video-synthesis` | reachable |
-| `wanx2.1-imageedit` | — | `Model not exist` — not on this account |
+| `wanx2.1-imageedit` | — | `Model not exist` — China-mainland only |
 
 Findings that shape the client:
 
@@ -100,18 +100,33 @@ Findings that shape the client:
    240` — a *decode* error, so the image was read. This is the finding the whole feature
    depends on: frames extracted on a `127.0.0.1` box have no public URL, and no OSS
    upload step is needed.
-3. **`qwen-image-edit` does NOT accept a data URI** — `url error, please check url` for
-   `base_image_url`, `image_url`, and `images[]` alike. It needs a real HTTP(S) URL, so
-   the frame-editing half of the loop is still blocked on hosting the frame somewhere
-   reachable. `kf2v` alone does not need it.
-4. **`wan2.1-kf2v-plus` confirmed end to end, at a cost of 5 s** (1 of 40 cycles): fields
+3. **`qwen-image-edit` takes a chat-shaped body on a SYNCHRONOUS endpoint** — not the
+   image-synthesis shape the other Wan models use. The first probe tested
+   `image2image/image-synthesis` with `base_image_url` / `image_url` / `images[]` under
+   `X-DashScope-Async`, got `url error, please check url`, and wrongly concluded data
+   URIs were unsupported. Corrected: **no async header** (sending one to the right path
+   returns `403 AccessDenied: current user api does not support asynchronous calls` —
+   which the first pass misread as an auth failure), and the body is
+   `{"model": ..., "input": {"messages": [{"role": "user", "content": [{"image": <data
+   URI>}, {"text": <instruction>}]}]}}` → `HTTP 200`, result under `output.choices`.
+   **Base64 data URIs are accepted here too**, so neither half of the loop needs a
+   public URL. Verified live at a cost of 1 of 100 free image edits.
+4. **Editing is instruction-only — no mask, no bounding box.** `qwen-image-edit` exposes
+   no region parameter, and the one DashScope model that does (`wanx2.1-imageedit`, with
+   `function: description_edit_with_mask`) is China-Beijing-only, which is exactly why it
+   answered `Model not exist` here. Region-locked repair in the Ideogram sense is not
+   available on the international endpoint; instruction-scoped repair is.
+5. **`wan2.1-kf2v-plus` confirmed end to end, at a cost of 5 s** (1 of 40 cycles): fields
    `input.first_frame_url` + `input.last_frame_url`, async submit, `output.video_url` on
    completion. Unlike i2v it enforces no 240 px minimum, so the guard intended to keep
    the probe free did not hold — it accepted and generated. Cancel is `PENDING`-only
    (section 3, finding 4) and the task was already `RUNNING`.
 
-Net: local frame → data URI → `kf2v` → `video_url` is a verified path, on quota that is
-entirely separate from the t2v draft/final reserve.
+Net: local frame → data URI → (optional `qwen-image-edit`) → `i2v`/`kf2v` → `video_url`
+is a verified path end to end, on quota entirely separate from the t2v draft/final
+reserve. `server/patch.py` implements the video half; the edit half is wired but the
+default repair path does not use it, because an instruction-only edit of a whole frame
+is a blunter tool than a corrected prompt on a good anchor.
 
 ## 4. First real end-to-end run (Jul 15) — what the synthetic clips hid
 
