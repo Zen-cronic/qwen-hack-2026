@@ -78,7 +78,7 @@ test("premise → review gate → certified episode, with live charts", async ({
       const v = document.querySelector("video");
       return v !== null && !v.seeking && v.readyState >= 2;
     });
-    await page.waitForTimeout(500); // let Chrome's seek-spinner overlay fade out
+    await page.waitForTimeout(1000); // let Chrome's seek-spinner overlay fade out fully
     await page.screenshot({ path: "../dailies-done.png", fullPage: true });
   }
 
