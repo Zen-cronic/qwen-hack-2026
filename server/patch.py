@@ -114,18 +114,18 @@ def patch_shot(store: Store, pid: str, shot_index: int, deps, cfg, *, model: str
     """Re-render one shot from its last good frame and re-verify. See module docstring."""
     p = store.get(pid)
     if p is None:
-        return PatchOutcome(False, "no such project", shot_index)
+        return PatchOutcome(False, "That run no longer exists.", shot_index)
     if not 0 <= shot_index < len(p.shots):
-        return PatchOutcome(False, f"no shot {shot_index}", shot_index)
+        return PatchOutcome(False, f"This run has no shot {shot_index}.", shot_index)
     if deps.patch_video_fn is None:
-        return PatchOutcome(False, "this runtime has no frame-anchored generator", shot_index)
+        return PatchOutcome(False, "Patching is not available in this mode.", shot_index)
 
     st = p.shots[shot_index]
     spec: ShotSpec = st.spec
     take = st.latest_take
     source = (take.video_path if take else None) or st.final_path
     if not source or not Path(source).exists():
-        return PatchOutcome(False, "shot has no rendered clip to patch", shot_index)
+        return PatchOutcome(False, "This shot has not been rendered yet — there is nothing to patch.", shot_index)
 
     patch_no = len(st.takes)
     ev_dir = Path(cfg.data_dir) / pid / "evidence" / f"shot{shot_index}" / f"patch{patch_no}"
@@ -142,12 +142,12 @@ def patch_shot(store: Store, pid: str, shot_index: int, deps, cfg, *, model: str
     # returned nothing at all — an unreadable clip, or a spec with no Tier-A assertions.
     failure = localized_failure(fresh) if fresh else localized_failure(take.results if take else [])
     if failure is None:
-        return PatchOutcome(False, "no blocking failure with a located window", shot_index)
+        return PatchOutcome(False, "Nothing to patch — every blocking check on this shot passes.", shot_index)
 
     at = anchor_second(failure)
     anchor = extract_frame(source, at, ev_dir / "anchor.png")
     if anchor is None:
-        return PatchOutcome(False, f"could not read a frame at {at:.2f}s", shot_index, at)
+        return PatchOutcome(False, f"Could not read a frame at {at:.2f}s to anchor the re-render.", shot_index, at)
 
     # Reuse the repair agent: it already phrases the locus and holds creative intent fixed.
     prompt, usage = deps.repair_fn(spec, [failure])
@@ -169,7 +169,7 @@ def patch_shot(store: Store, pid: str, shot_index: int, deps, cfg, *, model: str
               video_path=res.local_path if res.ok else None)
     if not res.ok:
         store.update(pid, lambda pr: pr.shots[shot_index].takes.append(tk))
-        return PatchOutcome(False, f"generation failed: {getattr(res, 'message', '')}",
+        return PatchOutcome(False, f"The re-render did not complete: {getattr(res, 'message', '') or res.status}",
                             shot_index, at, anchor, billed_seconds=billed)
 
     results = list(deps.tier_a_fn(res.local_path, spec, str(ev_dir)))
@@ -196,7 +196,8 @@ def patch_shot(store: Store, pid: str, shot_index: int, deps, cfg, *, model: str
 
     return PatchOutcome(
         ok=bool(tk.passed),
-        reason="patched and re-verified" if tk.passed else "patch still fails its contract",
+        reason="Patched, re-verified, and back under contract." if tk.passed
+               else "The re-render still does not pass — the original clip was kept.",
         shot_index=shot_index, anchor_s=round(at, 2), anchor_frame=anchor,
         video_path=tk.video_path, certified=bool(tk.passed),
         billed_seconds=billed, results=results)

@@ -159,7 +159,7 @@ def test_a_patch_that_still_fails_does_not_replace_the_original(tmp_path):
 
     out = patch_shot(store, pid, 0, deps, cfg, model="wan2.2-i2v-flash")
 
-    assert not out.ok and "still fails" in out.reason
+    assert not out.ok and "still does not pass" in out.reason
     st = store.get(pid).shots[0]
     assert not st.certified and st.final_path is None
     assert len(st.takes) == 2, "the failed attempt is still recorded"
@@ -185,4 +185,4 @@ def test_patch_refuses_cleanly_when_there_is_nothing_to_anchor_to(tmp_path):
     _write_clip(good, "right")
     store.update(pid, lambda p: setattr(p.shots[0].takes[0], "video_path", str(good)))
     out = patch_shot(store, pid, 0, deps, cfg, model="wan2.2-i2v-flash")
-    assert not out.ok and "located" in out.reason
+    assert not out.ok and "Nothing to patch" in out.reason
