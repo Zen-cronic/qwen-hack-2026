@@ -53,3 +53,15 @@ def test_fixture_shots_are_deep_copies():
 def test_max_shots_truncates():
     assert len(fixture_shots(1)) == 1
     assert len(fixture_shots(3)) == 3
+
+
+def test_fixture_runtime_wires_real_narration(tmp_path):
+    """Wan clips are silent, so the episode's sound is a real qwen-tts slate per shot. A
+    refactor that drops narrate_fn would ship a silent demo — pin that it stays wired.
+    Construction is offline (no model call until synthesize runs)."""
+    from server.fixtures import build_fixture_runtime
+    from server.tts import TTSClient
+
+    rt = build_fixture_runtime(data_dir=str(tmp_path))
+    assert rt.deps.narrate_fn is not None
+    assert getattr(rt.deps.narrate_fn, "__self__", None).__class__ is TTSClient

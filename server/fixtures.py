@@ -16,6 +16,10 @@ catches it for zero tokens, the repaired prompt actually pans (|v|=1.47, detecte
 "right"), and the retake certifies. A human skimming that first clip would have shipped
 it; that is the product's thesis, executed on real generated video.
 
+Audio: Wan clips are silent, so the episode's sound is a real qwen-tts (CosyVoice) slate
+per shot (server/tts.py), synthesized during the warm and replayed from cache afterwards —
+so the certified episode carries a real voice, not a placeholder tone.
+
 Warm the cache once (fresh quota, ~100s per clip):
     python scripts/warm_fixtures.py
 Then run free, replaying real video:
@@ -116,10 +120,12 @@ def build_fixture_runtime(data_dir: str | None = None):
     from server.config import settings
     from server.tier_b import TierBVerifier
     from server.tier0 import Tier0Verifier
+    from server.tts import TTSClient
 
     api_key = settings.QWEN_API_KEY
     root = Path(data_dir) if data_dir is not None else Path(settings.DATA_DIR)
     wan = WanClient(api_key, cache_dir=str(root / "cache"))
+    tts = TTSClient(api_key, cache_dir=str(root / "cache"))
     llm = OpenAI(api_key=api_key, base_url=settings.QWEN_BASE_URL)
     cfg = Config(chat_model=settings.QWEN_CHAT_MODEL, vl_model=settings.VL_MODEL,
                  data_dir=str(root / "projects"))
@@ -136,5 +142,8 @@ def build_fixture_runtime(data_dir: str | None = None):
         repair_fn=_fixture_repair,
         assemble_fn=assemble,               # REAL ffmpeg
         ledger=LedgerWriter(root / "ledger.jsonl"),
+        # REAL qwen-tts (CosyVoice) narration; silent Wan clips get a spoken slate per
+        # shot, synthesized once during the warm and cached like the clips.
+        narrate_fn=tts.synthesize,
     )
     return Runtime(store=Store(str(root / "projects")), deps=deps, cfg=cfg, governor=None)
