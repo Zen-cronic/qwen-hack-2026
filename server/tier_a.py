@@ -35,10 +35,24 @@ class Clip:
     duration_s: float
     width: int
     height: int
+    step: int = 1  # source frames per sampled frame — the sampled-index -> seconds bridge
 
     @property
     def n(self) -> int:
         return len(self.frames_gray)
+
+    def t(self, i: int) -> float:
+        """Seconds into the clip for sampled frame `i`.
+
+        Frames are decimated by `step`, so a sampled index is not a source index.
+        When the container reports no fps, the decimated grid is the only clock we
+        have — TARGET_FPS is then the honest approximation rather than a fabrication.
+        """
+        return i * self.step / self.fps if self.fps > 0 else i / float(TARGET_FPS)
+
+    def window(self, lo: int, hi: int) -> list[float]:
+        """The [start, end] second-window spanned by sampled frames lo..hi."""
+        return [round(self.t(lo), 2), round(self.t(hi), 2)]
 
 
 def extract_clip(path: str, target_fps: int = TARGET_FPS, width: int = FRAME_WIDTH) -> Clip:
@@ -66,11 +80,34 @@ def extract_clip(path: str, target_fps: int = TARGET_FPS, width: int = FRAME_WID
     if duration <= 0 and decoded > 0 and src_fps > 0:
         duration = decoded / src_fps
     height = bgr[0].shape[0] if bgr else 0
-    return Clip(bgr, gray, src_fps, duration, width, height)
+    return Clip(bgr, gray, src_fps, duration, width, height, step)
 
 
 def _luma_per_frame(clip: Clip) -> list[float]:
     return [float(g.mean()) for g in clip.frames_gray]
+
+
+def _longest_run(bad: list[bool]) -> tuple[int, int] | None:
+    """Longest contiguous True run in `bad`, as inclusive (start, end) indices.
+
+    A defect's locus is a stretch, not a point: one stray frame is measurement noise,
+    but eight consecutive bad ones are the thing a repair prompt should name.
+    """
+    best: tuple[int, int] | None = None
+    cur: tuple[int, int] | None = None
+    for i, b in enumerate(bad):
+        if not b:
+            cur = None
+            continue
+        cur = (cur[0], i) if cur else (i, i)
+        if best is None or (cur[1] - cur[0]) > (best[1] - best[0]):
+            best = cur
+    return best
+
+
+def _band_excess(v: float, lo: float, hi: float) -> float:
+    """How far `v` falls outside [lo, hi]; 0.0 when inside."""
+    return max(lo - v, v - hi, 0.0)
 
 
 def check_duration(clip: Clip, p: dict):
@@ -89,18 +126,38 @@ def check_duration(clip: Clip, p: dict):
 def check_brightness(clip: Clip, p: dict):
     if clip.n == 0:
         return Status.INCONCLUSIVE, {}, "no frames"
-    m = float(np.mean(_luma_per_frame(clip)))
+    lum = _luma_per_frame(clip)
+    m = float(np.mean(lum))
     ok = p["min"] <= m <= p["max"]
-    return (Status.PASS if ok else Status.FAIL, {"mean_brightness": round(m, 1)},
+    measured = {"mean_brightness": round(m, 1)}
+    if not ok:
+        # The clip mean broke the contract; name the stretch that dragged it out of band.
+        run = _longest_run([_band_excess(v, p["min"], p["max"]) > 0 for v in lum])
+        if run:
+            lo, hi = run
+            measured["fail_window_s"] = clip.window(lo, hi)
+            excess = [_band_excess(v, p["min"], p["max"]) for v in lum[lo:hi + 1]]
+            measured["worst_frame"] = lo + int(np.argmax(excess))
+    return (Status.PASS if ok else Status.FAIL, measured,
             f"mean luma {m:.1f} vs [{p['min']}, {p['max']}]")
 
 
 def check_flicker(clip: Clip, p: dict):
     if clip.n < 2:
         return Status.INCONCLUSIVE, {}, "need >= 2 frames"
-    s = float(np.std(_luma_per_frame(clip)))
+    lum = _luma_per_frame(clip)
+    s = float(np.std(lum))
     ok = s <= p["max_std"]
-    return (Status.PASS if ok else Status.FAIL, {"flicker_std": round(s, 2)},
+    measured = {"flicker_std": round(s, 2)}
+    if not ok:
+        # Flicker is an ADJACENT-frame property, so the locus is the biggest luma jump —
+        # the frame the flash lands on, not the frame furthest from the clip average.
+        jumps = np.abs(np.diff(lum))
+        i = int(np.argmax(jumps))
+        measured["fail_window_s"] = clip.window(i, i + 1)
+        measured["worst_frame"] = i + 1
+        measured["max_jump"] = round(float(jumps[i]), 1)
+    return (Status.PASS if ok else Status.FAIL, measured,
             f"luma std {s:.2f} vs <= {p['max_std']}")
 
 
@@ -115,48 +172,89 @@ def check_scene_cuts(clip: Clip, p: dict):
     if clip.n < 2:
         return Status.INCONCLUSIVE, {}, "need >= 2 frames"
     hists = [_hsv_hist(b) for b in clip.frames_bgr]
-    cuts = sum(1 for a, b in zip(hists, hists[1:])
-               if cv2.compareHist(a, b, cv2.HISTCMP_CORREL) < SCENE_CUT_CORR)
+    # A cut inherently HAS a position — keep the frame it lands on rather than
+    # collapsing straight to a count, so a failure can say when instead of only how many.
+    cut_frames = [i + 1 for i, (a, b) in enumerate(zip(hists, hists[1:]))
+                  if cv2.compareHist(a, b, cv2.HISTCMP_CORREL) < SCENE_CUT_CORR]
+    cuts = len(cut_frames)
     ok = cuts <= p["max"]
-    return (Status.PASS if ok else Status.FAIL, {"scene_cuts": cuts},
+    measured = {"scene_cuts": cuts}
+    if not ok:
+        measured["cut_times_s"] = [round(clip.t(i), 2) for i in cut_frames]
+        # The first cut over budget is the one to repair; earlier ones are within contract.
+        first_over = cut_frames[min(p["max"], cuts - 1)]
+        measured["fail_window_s"] = clip.window(first_over - 1, first_over)
+        measured["worst_frame"] = first_over
+    return (Status.PASS if ok else Status.FAIL, measured,
             f"{cuts} cut(s) vs <= {p['max']}")
 
 
-def _mean_content_flow(clip: Clip) -> tuple[float, float]:
+def _content_flow_series(clip: Clip) -> tuple[list[float], list[float]]:
+    """Per-adjacent-pair mean content flow — the series the clip aggregate is built from.
+
+    Kept rather than reduced in place: a camera that pans correctly for three seconds
+    and then stalls averages out to a weak pan, and only the series says which half
+    is the defect. Pair `i` spans sampled frames i..i+1.
+    """
     dxs, dys = [], []
     for a, b in zip(clip.frames_gray, clip.frames_gray[1:]):
         flow = cv2.calcOpticalFlowFarneback(a, b, None, 0.5, 3, 15, 3, 5, 1.2, 0)
         dxs.append(float(flow[..., 0].mean()))
         dys.append(float(flow[..., 1].mean()))
+    return dxs, dys
+
+
+def _mean_content_flow(clip: Clip) -> tuple[float, float]:
+    dxs, dys = _content_flow_series(clip)
     if not dxs:
         return 0.0, 0.0
     return float(np.mean(dxs)), float(np.mean(dys))
 
 
+def _classify(cdx: float, cdy: float) -> tuple[str, float]:
+    """Camera vector -> (direction, magnitude). Content moves opposite to the camera."""
+    mag = math.hypot(cdx, cdy)
+    if mag < STATIC_FLOW_THRESH:
+        return "static", mag
+    if abs(cdx) >= abs(cdy):
+        return ("right" if cdx > 0 else "left"), mag
+    return ("down" if cdy > 0 else "up"), mag  # image y grows downward
+
+
 def detect_camera_direction(clip: Clip) -> tuple[str, float, float, float]:
     mdx, mdy = _mean_content_flow(clip)
     cdx, cdy = -mdx, -mdy  # camera moves opposite to content
-    mag = math.hypot(cdx, cdy)
-    if mag < STATIC_FLOW_THRESH:
-        return "static", cdx, cdy, mag
-    if abs(cdx) >= abs(cdy):
-        return ("right" if cdx > 0 else "left"), cdx, cdy, mag
-    return ("down" if cdy > 0 else "up"), cdx, cdy, mag  # image y grows downward
+    detected, mag = _classify(cdx, cdy)
+    return detected, cdx, cdy, mag
+
+
+def _motion_satisfies(detected: str, want: str) -> bool:
+    if want == "any":
+        return detected != "static"
+    if want == "static":
+        return detected == "static"
+    return detected == want
 
 
 def check_camera_motion(clip: Clip, p: dict):
     if clip.n < 2:
         return Status.INCONCLUSIVE, {}, "need >= 2 frames"
     want = p["direction"]
-    detected, cdx, cdy, mag = detect_camera_direction(clip)
+    dxs, dys = _content_flow_series(clip)          # one Farneback pass, reused below
+    cdx, cdy = -float(np.mean(dxs)), -float(np.mean(dys))
+    detected, mag = _classify(cdx, cdy)
     measured = {"detected": detected, "camera_dx": round(cdx, 3),
                 "camera_dy": round(cdy, 3), "magnitude": round(mag, 3)}
-    if want == "any":
-        ok = detected != "static"
-    elif want == "static":
-        ok = detected == "static"
-    else:
-        ok = detected == want
+    ok = _motion_satisfies(detected, want)
+    if not ok:
+        # Re-run the same verdict per frame-pair and take the longest offending stretch.
+        per = [_classify(-x, -y)[0] for x, y in zip(dxs, dys)]
+        run = _longest_run([not _motion_satisfies(d, want) for d in per])
+        if run:
+            lo, hi = run
+            measured["fail_window_s"] = clip.window(lo, hi + 1)
+            measured["worst_frame"] = (lo + hi) // 2 + 1
+            measured["fail_span_frames"] = hi - lo + 1
     return (Status.PASS if ok else Status.FAIL, measured,
             f"camera {detected} (want {want}), |v|={mag:.2f}")
 
@@ -233,6 +331,18 @@ def run_tier_a(video_path: str, spec: ShotSpec, evidence_dir: str) -> list[Asser
             status, measured, detail = _CHECKS[a.type](clip, a.params)
         except Exception as exc:  # noqa: BLE001 — a bad frame shouldn't crash the run
             status, measured, detail = Status.INCONCLUSIVE, {}, f"check error: {exc}"
+
+        # A failure's own frame leads its evidence; the mid-frame stays as context.
+        # Before this, every result pointed at the midpoint regardless of what broke,
+        # which made the evidence image useless for diagnosing the actual defect.
+        ev = evidence
+        wf = measured.get("worst_frame")
+        if status is Status.FAIL and isinstance(wf, int) and 0 <= wf < clip.n:
+            fp = ev_dir / f"{a.type.value}_f{wf}.png"
+            cv2.imwrite(str(fp), clip.frames_bgr[wf])
+            measured["worst_frame_s"] = round(clip.t(wf), 2)
+            ev = [str(fp), *evidence]
+
         results.append(AssertionResult.for_assertion(a, status, detail=detail,
-                                                     measured=measured, evidence=evidence))
+                                                     measured=measured, evidence=ev))
     return results
