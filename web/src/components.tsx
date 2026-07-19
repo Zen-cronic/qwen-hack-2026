@@ -284,8 +284,18 @@ export function ReviewBar({ onApprove, shots }: { onApprove: () => void; shots?:
   );
 }
 
+/** Where in the clip a check failed, when Tier-A could localize it. `measured` is an
+ *  open bag from the server, so the shape is verified before it's trusted. */
+function failWindow(r: AssertionResult): [number, number] | null {
+  const raw = r.measured?.fail_window_s;
+  if (!Array.isArray(raw) || raw.length !== 2) return null;
+  const [lo, hi] = raw;
+  return typeof lo === "number" && typeof hi === "number" ? [lo, hi] : null;
+}
+
 function Check({ r, onVerdict }: { r: AssertionResult; onVerdict?: (v: string) => void }) {
   const canOverride = r.advisory && onVerdict && (r.status === "inconclusive" || r.status === "fail");
+  const win = failWindow(r);
   return (
     <Stack direction="row" spacing={1.25} sx={{ alignItems: "flex-start" }}>
       <Box sx={{ width: 9, height: 9, borderRadius: "50%", mt: "4px", flex: "none", bgcolor: statusColor(r.status) }} />
@@ -297,6 +307,16 @@ function Check({ r, onVerdict }: { r: AssertionResult; onVerdict?: (v: string) =
           )}
         </Box>
         {r.detail && <Typography sx={{ fontFamily: mono, fontSize: 11.5, color: "text.secondary" }}>{r.detail}</Typography>}
+        {win && (
+          <Box component="span" data-testid="fail-window" sx={{
+            display: "inline-block", mt: 0.35, fontFamily: mono, fontSize: 10.5,
+            color: statusColor(r.status), borderRadius: "4px", px: 0.6, py: 0.15,
+            border: 1, borderColor: alpha(statusColor(r.status), 0.4),
+            bgcolor: alpha(statusColor(r.status), 0.1),
+          }}>
+            fails {win[0].toFixed(1)}s → {win[1].toFixed(1)}s
+          </Box>
+        )}
         {canOverride && (
           <Stack direction="row" spacing={0.75} sx={{ mt: 0.5 }}>
             <Button size="small" variant="outlined" color="inherit" sx={{ fontSize: 10, py: 0.25, px: 1 }} onClick={() => onVerdict!("pass")}>mark pass</Button>
