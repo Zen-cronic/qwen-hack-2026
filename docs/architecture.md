@@ -96,9 +96,23 @@ flowchart TB
             promote --> assemble
         end
 
+        subgraph patchsub["Targeted repair — post-run, one shot, no pipeline re-entry"]
+            direction TB
+            locate["locate failure<br/><i>tier_a.py, re-measured</i><br/>fail_window_s"]:::stage
+            anchor["cut anchor frame<br/><i>patch.py, last good frame</i>"]:::stage
+            regen["re-render from anchor<br/><i>wan2.2-i2v-flash / kf2v</i>"]:::stage
+            reverify["Tier-A re-verify"]:::stage
+            keep["patch rejected —<br/>original clip stays"]:::reject
+
+            locate --> anchor
+            anchor --> regen
+            regen --> reverify
+            reverify -->|"blocking FAIL"| keep
+        end
+
         ledger["Metrics ledger<br/><i>metrics.py + report.py</i><br/>Append-only JSONL; derives the<br/>cost-quality frontier + report metrics"]:::container
         store["Store + snapshots<br/><i>store.py, in-memory + JSON</i><br/>State under RLock; atomic state.json;<br/>content-addressed media cache"]:::container
-        mcp["MCP server<br/><i>FastMCP over stdio, mcp_server.py</i><br/>Exposes run_shot_tests (Tier-A only)"]:::container
+        mcp["MCP server<br/><i>FastMCP over stdio, mcp_server.py</i><br/>run_shot_tests (Tier-A, free) +<br/>patch_clip (acts; spends one generation)"]:::container
         tool["Qwen tool surface<br/><i>qwen_tools.py / mcp_agent.py</i><br/>run_shot_tests as function-calling +<br/>Qwen-Agent tool; also an MCP client"]:::container
     end
 
@@ -107,7 +121,10 @@ flowchart TB
     disk["Storage volume<br/><i>local /data, bind-mounted</i><br/>state.json · ledger.jsonl · cache/sha1.mp4 or .png"]:::external
 
     operator --> spa
-    spa -->|"POST /api/projects, review, verdict;<br/>GET poll 2.5s"| api
+    spa -->|"POST /api/projects, review, verdict;<br/>POST shots/:i/patch; GET poll 2.5s"| api
+    api -->|"patch one shot"| locate
+    reverify -->|"pass — becomes the shot final"| assemble
+    regen -->|"i2v/kf2v, separate quota pool"| qwen
     api -->|"spawns thread"| script
     api -->|"reads state + ledger to build report metrics"| store
     api --> ledger

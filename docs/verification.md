@@ -128,6 +128,33 @@ reserve. `server/patch.py` implements the video half; the edit half is wired but
 default repair path does not use it, because an instruction-only edit of a whole frame
 is a blunter tool than a corrected prompt on a good anchor.
 
+### 3c-i. First live patch (Jul 19) — the premium render, recovered
+
+Run `3e1f628d4acf`, shot 0, contract `camera_motion: static`. The recorded history:
+take 0 (`wan2.1-t2v-turbo`) passed at `|v|=0.30`; take 1 (`wan2.2-t2v-plus`, same prompt)
+came back drifting left at `|v|=0.92` and FAILED, so `_promote` certified the draft and
+the premium render went unused. That is section 4's "verification catches what promotion
+changes", and until now the story ended there.
+
+Patched via `patch_shot(..., model="wan2.2-i2v-flash")`:
+
+| | before (take 1, premium) | after (patch) |
+|---|---|---|
+| `camera_motion` | **FAIL** — camera left, `|v|=0.92` | **PASS** — static, `|v|=0.09` |
+| `flicker_below` | pass, std 2.59 | pass, std 0.29 |
+| `brightness_range` | pass, luma 113.0 | pass, luma 109.4 |
+| duration / scene_cuts | pass | pass |
+
+Tier-A placed the drift at **0.4s–3.6s** (24 of 38 sampled frames, settling in the last
+~1.4s), so the anchor was **0.2s**. Cost: **5 video-seconds** (1 of 10 `i2v-flash` cycles)
+plus one qwen-plus repair call. Shot 0 is now certified with the patched clip.
+
+Two things this establishes beyond the endpoint contract. `wan2.2-i2v-flash` is confirmed
+on its SUCCESS path, not just its validation path. And the stored results of that run
+predate localization entirely — the patch works because `patch_shot` re-measures the
+source clip rather than trusting what was recorded beside it, which is free (deterministic
+CV on a file already on disk) and is what lets a repair act on a run older than the feature.
+
 ## 4. First real end-to-end run (Jul 15) — what the synthetic clips hid
 
 Sections 1–3b verify the API in isolation, and spend almost nothing doing it — which is

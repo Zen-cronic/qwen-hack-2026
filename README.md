@@ -68,6 +68,9 @@ premise → script + specs (qwen-plus) → compiled assertion checklist
         → bounded prompt-repair + retake
         → promote passing shots (wan2.2-t2v-plus)
         → ffmpeg assembly → certified episode
+
+        …and afterwards, per shot, without re-running any of the above:
+        → targeted patch (wan2.2-i2v-flash / wan2.1-kf2v-plus)
 ```
 
 - **A closed assertion DSL — 10 sentence types** across 3 tiers (`server/specs.py`). A spec is a
@@ -76,6 +79,22 @@ premise → script + specs (qwen-plus) → compiled assertion checklist
   the DSL's compile error, and the literal "CI" in "CI for generated video". See [the grammar](#the-assertion-dsl) below.
 - **Tier-A** (`server/tier_a.py`) is deterministic OpenCV — duration, brightness, flicker,
   scene cuts, camera motion (optical flow), palette ΔE. Zero tokens, so it runs on every take.
+  It reports **where** a check fails, not just that it did: the per-frame series behind each
+  measurement is kept, so a failure carries a time window (`fails 2.1s → 3.4s`) and writes the
+  frame it actually indicted.
+- **Targeted repair — edit a shot without re-running the pipeline** (`server/patch.py`). That
+  window gives an anchor: the frame just before the defect. A frame-anchored Wan model
+  re-renders the shot from there on a locus-aware prompt, Tier-A re-verifies, and a passing
+  patch re-cuts the episode for free. No script call, no Tier-0, no review gate, no other shot.
+  A patch has to earn the slot — if it still fails, the original clip stays. Runs on the
+  i2v/kf2v free-tier pool, separate from the t2v draft/final quota.
+
+  > **Live receipt.** On run `3e1f628d4acf`, the premium `wan2.2-t2v-plus` render of shot 0
+  > drifted the camera left (`|v|=0.92`) against a `camera_motion: static` contract, so the gate
+  > rejected it and the pipeline shipped the turbo draft instead. Tier-A placed the drift at
+  > **0.4s–3.6s**; a patch anchored at **0.2s** re-rendered from the premium frame and came back
+  > at **`|v|=0.09`, all five Tier-A checks green**, for 5 billed video-seconds. The premium look,
+  > under contract — recovered by the same gate that rejected it.
 - **Cost-quality frontier** is a first-class, measured feature: every call logs token/quota
   spend to a ledger (`server/metrics.py`); the dashboard charts pass-rate heatmaps, a
   cost-quality scatter, repair convergence, and cost-per-passing-second.
