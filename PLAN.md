@@ -24,7 +24,7 @@ Demo video is a first-class deliverable, not an afterthought.
 
 **Remaining before submit (operator-owned unless noted):**
 - G4 green deploy — root cause diagnosed Jul 18: **zero GitHub secrets exist**; all three failures are
-  `Error: missing server host` at ~5s. Fix = runbook "One-time setup" step 3 (`SERVER_HOST`,
+  `Error: missing server host` at ~5s. Fix = runbook "Setup, in order" step 2 (`SERVER_HOST`,
   `SERVER_USER`, `SERVER_SSH_KEY`), then re-run the workflow. The YAML itself is fine.
 - G1 flip repo public · G2 Workbench screenshot · G3 live URL (G2/G3 follow from a green G4)
 - Demo video (< 3 min, run-of-show in docs/demo.md) — the one mandatory deliverable with no draft

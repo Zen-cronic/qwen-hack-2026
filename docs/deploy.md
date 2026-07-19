@@ -77,29 +77,38 @@ deploy) trigger independently on push to `main`. A red CI does **not** block a d
 deploy job runs no tests — so a green deploy with a red CI is possible and means exactly what
 it says: the box is serving, but the suite is unhappy. Watch both checks.
 
-### Quick sequence (this box, in order)
+### Setup, in order
 
-The exact path this deployment took — CD via GitHub Actions, key-only auth, secrets scoped to
-the `production` environment. The ssh commands assume a `~/.ssh/config` alias `sas-qwen-hack`
-for the box (laptop-only; CI can't read your ssh config, so its secret uses the literal IP).
-Each step's *why* is in "One-time setup" below; this is the command record.
+The one-time wiring, as executed on this box. The ssh lines assume a `~/.ssh/config` alias
+`sas-qwen-hack` for the box (laptop-only — the runner can't read your ssh config, which is why
+its `SERVER_HOST` secret takes the literal IP). Keep that literal IP out of every committed file;
+it lives only in the secret and the `curl` in step 5, since this repo goes public.
 
-**On your machine — mint the CI key and prove it** (never generate on the box: it receives only
-the public half, and GitHub Actions is the SSH *client* that holds the private half):
+**0. Provision the box.** An Alibaba Cloud [Simple Application Server](https://www.alibabacloud.com/help/en/simple-application-server/product-overview/what-is-simple-application-server)
+with Docker + the compose plugin (an app image ships it preinstalled). Open **ports 80 and 22**
+in the SAS firewall / security group. Deploying as a non-root user? Add it to the `docker` group
+(`sudo usermod -aG docker $USER`, then re-login).
+
+**1. Mint the CI key on your machine and prove it.** Never generate on the box: it receives only
+the *public* half, while GitHub Actions — the SSH client here — holds the private half. Write the
+key to `~/.ssh/`, not into this repo, where a stray `git add -A` could publish it.
 ```bash
 ssh-keygen -t ed25519 -C "qwen-hack-2026-ci" -f ~/.ssh/qwen-hack-2026-ci -N ""
 ssh-copy-id -i ~/.ssh/qwen-hack-2026-ci.pub sas-qwen-hack          # authenticates with the SAS password, once
 ssh -i ~/.ssh/qwen-hack-2026-ci -o IdentitiesOnly=yes sas-qwen-hack 'echo key-auth-ok'
 ```
-`IdentitiesOnly=yes` is load-bearing on that last line. Plain `ssh -i <key>` *adds* the named
-key to the identities it offers rather than restricting to it, so an already-authorized
-`~/.ssh/id_ed25519` can answer the challenge and print `key-auth-ok` while the CI key was never
-accepted — a green test hiding a credential CI will be rejected with. The flag forces ssh to
-offer only this one key with no agent, which is exactly the runner's situation, so the test now
+`ssh-copy-id` uses the SAS password you already have and appends the public key to the box's
+`authorized_keys` — no sshd change, since `PubkeyAuthentication` is on by default. The third line
+is the one that matters, and `IdentitiesOnly=yes` is load-bearing: plain `ssh -i` merely *adds*
+the named key to the identities it offers, so an already-authorized `~/.ssh/id_ed25519` can print
+`key-auth-ok` while the CI key was never accepted — a green test masking a credential CI will be
+rejected with. The flag forces one key and no agent, exactly the runner's situation, so the test
 proves what CI will actually experience.
 
-**Register the secrets against the `production` environment** (not the repo — `SERVER_USER` is
-`root`, so only a job declaring `environment: production` should read them):
+**2. Register the secrets against the `production` environment** — not the repo, because
+`SERVER_USER` is `root`, so only a job declaring `environment: production` should read them. Feed
+the key from the file with `<`, never paste it — a mangled newline is the most common handshake
+failure.
 ```bash
 gh secret set SERVER_SSH_KEY --env production --repo Zen-cronic/qwen-hack-2026 < ~/.ssh/qwen-hack-2026-ci
 gh secret set SERVER_HOST    --env production --repo Zen-cronic/qwen-hack-2026 --body "<sas-public-ip>"
@@ -107,106 +116,42 @@ gh secret set SERVER_USER    --env production --repo Zen-cronic/qwen-hack-2026 -
 gh variable set ENV_NAME     --env production --repo Zen-cronic/qwen-hack-2026 --body "prod"   # optional; the script defaults to prod
 gh secret list               --env production --repo Zen-cronic/qwen-hack-2026    # expect SERVER_HOST / SERVER_USER / SERVER_SSH_KEY
 ```
-Feed the key from the file with `<`, never paste it — a mangled newline is the most common
-handshake failure. Keep the literal `<sas-public-ip>` out of every committed file; it lives only
-in the `SERVER_HOST` secret and the `curl` below (this repo goes public).
+`ENV_NAME` is the hook for a future `dev`/`staging` box (copy the workflow, point it at another
+host). For a manual release gate, turn on **Settings → Environments → production → Required
+reviewers**.
 
-**On the box — size it, clone it, seed its secret** (once):
+**3. Clone the repo onto the box and seed its secrets** (once — CD never rewrites `.env`). While
+the repo is private, clone with a fine-grained GitHub **PAT** (Repository access: this repo;
+**Contents: read**, **Metadata: read**); once it flips public an anonymous clone works and future
+`git fetch` needs no token.
 ```bash
-# Small-tier only (<=2 GiB RAM): add swap so the on-box SPA build (npm ci + vite) can't
-# OOM-kill nginx/sshd during a re-deploy, which builds while the old container is resident.
-# NOT needed after the 8 GB plan upgrade (see "After a plan upgrade") -- the build fits in RAM.
-sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile
-echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
-git clone https://oauth2:${GITHUB_TOKEN}@github.com/Zen-cronic/qwen-hack-2026.git ~/dailies   # PAT while private
+git clone https://oauth2:${GITHUB_TOKEN}@github.com/Zen-cronic/qwen-hack-2026.git ~/dailies
 cd ~/dailies && cp .env.example .env    # paste QWEN_API_KEY; set JUDGE_MODE / DAILIES_DEMO as desired
 ```
+(The token in the remote URL persists in `~/dailies/.git/config`; use a git credential helper if
+that matters.)
 
-**Trigger the deploy and watch it** (no commit needed — the workflow has `workflow_dispatch`):
+**4. Deploy and watch** (no commit needed — the workflow has `workflow_dispatch`):
 ```bash
 gh workflow run deploy-prod.yml --repo Zen-cronic/qwen-hack-2026
 gh run watch --repo Zen-cronic/qwen-hack-2026
 ```
+First time only, you can instead run it by hand on the box: `chmod +x deploy/deploy-prod.sh &&
+./deploy/deploy-prod.sh`.
 
-**Confirm it's live, then seed the replay cache** so judge runs replay real footage for free
-instead of spending the nearly-exhausted premium quota:
+**5. Confirm live, then seed the replay cache** so judge runs replay real footage for free
+instead of spending the nearly-exhausted premium quota — `data/` is gitignored, so a fresh clone
+arrives empty.
 ```bash
 curl http://<sas-public-ip>/api/health      # -> {"status":"ok","mode":"real"}
-rsync -avz ./data/cache/ sas-qwen-hack:/root/dailies/data/cache/     # ~81 MB, 33 clips; data/ is gitignored so a clone arrives empty
+rsync -avz ./data/cache/ sas-qwen-hack:/root/dailies/data/cache/     # ~81 MB, 33 clips
 ```
 
-### One-time setup
-
-1. **SAS instance + Docker.** Provision an Alibaba Cloud [Simple Application
-   Server](https://www.alibabacloud.com/help/en/simple-application-server/product-overview/what-is-simple-application-server)
-   (an app image with Docker preinstalled, or install Docker + the compose plugin yourself).
-   Open **port 80** (and **22** for SSH) in the SAS firewall / security group. If you deploy as
-   a non-root user, add it to the `docker` group (`sudo usermod -aG docker $USER`, re-login).
-
-2. **Dedicated CI key.** SAS instances are provisioned with a root password and password login
-   enabled, so the box is reachable before any of this — but the deploy authenticates by key.
-   A key is scoped to this pipeline, revocable by deleting one line on the box, and useless to
-   anyone who can't also present the private half; the login password is none of those things.
-
-   **Run these on your own machine, not on the SAS box** — the box only ever receives the
-   *public* half, and the private half goes to GitHub, because in this topology GitHub Actions
-   is the SSH client:
-   ```bash
-   ssh-keygen -t ed25519 -C "qwen-hack-2026-ci" -f ~/.ssh/qwen-hack-2026-ci -N ""
-   ssh-copy-id -i ~/.ssh/qwen-hack-2026-ci.pub <user>@<sas-public-ip>   # prompts for the SAS password
-   ssh -i ~/.ssh/qwen-hack-2026-ci -o IdentitiesOnly=yes <user>@<sas-public-ip> 'echo key-auth-ok'
-   ```
-   Write the key to `~/.ssh/`, **not** into this repo — an untracked private key in the working
-   tree is one `git add -A` away from a public repository.
-
-   `ssh-copy-id` authenticates with the SAS password you already have and appends the public key
-   to the box's `~/.ssh/authorized_keys`, so this needs no sshd change — `PubkeyAuthentication`
-   is on by default.
-
-   The third command is the one that matters: it proves key auth works while the failure is
-   still one line of shell to diagnose, rather than a red CI run. `IdentitiesOnly=yes` is not
-   optional there — without it `ssh -i` merely *adds* the named key to the identities on offer,
-   so an `id_ed25519` that already happens to be authorized can satisfy the test and hide a CI
-   key the box never accepted. The flag reproduces the runner's conditions: one key, no agent.
-
-3. **GitHub → Settings → Secrets and variables → Actions.**
-   - Secrets: `SERVER_HOST` = SAS **public IP**, `SERVER_USER` = the SSH user (`root` or your deploy
-     user), `SERVER_SSH_KEY` = the **private** key from step 2 (full PEM, header/footer lines
-     included). Set them from the file rather than pasting — `gh secret set SERVER_SSH_KEY
-     --env production < ~/.ssh/qwen-hack-2026-ci` — which sidesteps newline mangling.
-   - Scope them to the **`production` environment**, not the repo, so only a job declaring
-     `environment: production` can read them. `SERVER_USER` is `root`, so this is unrestricted
-     root on the box; narrowing the readership is worth the extra flag.
-   - `SERVER_HOST` takes the **literal IP**. A `~/.ssh/config` alias resolves only on your
-     machine — the runner is a bare container with no config file, no agent, and no known_hosts.
-   - Variables: `ENV_NAME` = `prod`. (This is the hook for future `dev`/`staging` — copy the workflow,
-     point it at another box, change `ENV_NAME`.)
-   - Optional gate: **Settings → Environments → production → Required reviewers** turns each deploy into
-     a one-click manual approval.
-
-4. **Clone the repo onto the box** at `~/dailies`. While the repo is **private** (it stays private
-   until the submission flip), clone with a fine-grained GitHub **PAT** (Repository access: this
-   repo; permissions **Contents: read**, **Metadata: read**) — once it flips public, an anonymous
-   clone works and future `git fetch` needs no token:
-   ```bash
-   git clone https://github.com/Zen-cronic/qwen-hack-2026.git ~/dailies
-   ```
-   PAT-based clone while private:
-   ```bash
-   export GITHUB_TOKEN=<pat>
-   git clone https://oauth2:${GITHUB_TOKEN}@github.com/Zen-cronic/qwen-hack-2026.git ~/dailies
-   ```
-   (Note: embedding the token in the remote URL persists it in `~/dailies/.git/config`. Prefer a git
-   credential helper if that matters.)
-
-5. **Seed secrets on the box** (once — CD never rewrites this file):
-   ```bash
-   cd ~/dailies && cp .env.example .env
-   # edit .env: paste QWEN_API_KEY; set DAILIES_DEMO=1 for a zero-quota public URL, JUDGE_MODE as desired
-   ```
-
-6. **First deploy.** Either push to `main`, hit **Run workflow** (`workflow_dispatch`) in the Actions tab,
-   or run it by hand on the box: `chmod +x deploy/deploy-prod.sh && ./deploy/deploy-prod.sh`.
+> **Small-tier boxes (≤2 GiB RAM) need swap before step 4**, or the on-box SPA build (npm ci +
+> vite) can OOM-kill nginx/sshd during a re-deploy (which builds while the old container is still
+> resident). Not needed after the 8 GB upgrade — see "After a plan upgrade". If you do need it:
+> `sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo
+> swapon /swapfile`, then add `/swapfile none swap sw 0 0` to `/etc/fstab`.
 
 ### Per-deploy behavior & rollback
 
@@ -229,17 +174,18 @@ cd ~/dailies && git reset --hard <good-sha> && ./deploy/deploy-prod.sh
 
 Read the failure by **duration** — it separates the three causes faster than the log text does.
 
-- **Under 10 s, log ends `Error: missing server host`** — step 3 was never done: one or more of
-  `SERVER_HOST`/`SERVER_USER`/`SERVER_SSH_KEY` is absent, so the action aborts before opening a
-  connection. A near-instant death is always missing configuration, and no amount of
-  workflow-file editing fixes it. Check with `gh secret list --env production`; note that a
+- **Under 10 s, log ends `Error: missing server host`** — the secrets were never registered (step
+  2): one or more of `SERVER_HOST`/`SERVER_USER`/`SERVER_SSH_KEY` is absent, so the action aborts
+  before opening a connection. A near-instant death is always missing configuration, and no amount
+  of workflow-file editing fixes it. Check with `gh secret list --env production`; note that a
   secret set at the *repo* level while the job reads the *environment* looks identical to an
   unset one — an unreadable secret interpolates to an empty string rather than erroring.
 - **~30 s, `ssh: handshake failed` / `unable to authenticate`** — reached the box, credential
   rejected. Either the public half was never appended to the box's `~/.ssh/authorized_keys`, or
-  the PEM lost its newlines on the way into the secret. Re-run the step-2 verification command
-  with `IdentitiesOnly=yes`; if that passes from your laptop, the paste is the suspect, so
-  re-set the secret from the file with `gh secret set ... < ~/.ssh/qwen-hack-2026-ci`.
+  the PEM lost its newlines on the way into the secret. Re-run the step-1 key check (`ssh -i
+  ~/.ssh/qwen-hack-2026-ci -o IdentitiesOnly=yes sas-qwen-hack 'echo key-auth-ok'`); if that
+  passes from your laptop, the paste is the suspect, so re-set the secret from the file with
+  `gh secret set ... < ~/.ssh/qwen-hack-2026-ci`.
 - **Minutes, dying at the health gate** — authentication was fine; the build broke or the app
   container never reported `healthy`. The action prints `docker compose logs` for exactly this.
 
