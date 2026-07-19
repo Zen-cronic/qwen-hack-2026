@@ -113,9 +113,9 @@ in the `SERVER_HOST` secret and the `curl` below (this repo goes public).
 
 **On the box — size it, clone it, seed its secret** (once):
 ```bash
-# 1.8 GiB RAM, no swap out of the box. The on-box SPA build (npm ci + vite) is the memory peak,
-# and a RE-deploy builds while the old app container is still resident -- add 2 GiB so a spike
-# kills only the build, never nginx or sshd (which would drop the URL or lock you out).
+# Small-tier only (<=2 GiB RAM): add swap so the on-box SPA build (npm ci + vite) can't
+# OOM-kill nginx/sshd during a re-deploy, which builds while the old container is resident.
+# NOT needed after the 8 GB plan upgrade (see "After a plan upgrade") -- the build fits in RAM.
 sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile
 echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
 git clone https://oauth2:${GITHUB_TOKEN}@github.com/Zen-cronic/qwen-hack-2026.git ~/dailies   # PAT while private
@@ -242,6 +242,55 @@ Read the failure by **duration** — it separates the three causes faster than t
   re-set the secret from the file with `gh secret set ... < ~/.ssh/qwen-hack-2026-ci`.
 - **Minutes, dying at the health gate** — authentication was fine; the build broke or the app
   container never reported `healthy`. The action prints `docker compose logs` for exactly this.
+
+## After a plan upgrade — extend the system disk
+
+A SAS **plan upgrade** (e.g. to 4 vCPU / 8 GB / 70 GB) keeps the instance's IP and expiry
+unchanged — so nothing about the deploy, the `SERVER_HOST` secret, or the judges' link moves.
+RAM and vCPU take effect on the upgrade reboot with no action. The **one manual step** is the
+system disk: the upgrade grows the cloud disk allocation, but the partition and filesystem
+inside the OS were sized for the old disk and don't stretch on their own. Until you extend them,
+`df -h /` still shows the old size while `lsblk` shows the disk itself at the new size.
+
+Order is fixed: **partition first, filesystem second** — a filesystem can't grow past the
+partition containing it, so resizing the filesystem first just no-ops. All of it is **online**:
+no unmount, no downtime, the live URL keeps serving throughout.
+
+1. **Confirm the gap and the filesystem type:**
+   ```bash
+   df -hT /      # TYPE column decides the step-3 tool; note which device is mounted at /
+   lsblk         # the disk (vda) shows the NEW size; its partition still shows the old one
+   ```
+   If the disk itself (`vda`) still shows the old size, reboot once so the kernel re-reads it.
+
+2. **Grow the partition.** The device and partition number are **separate, space-separated**
+   arguments (`/dev/vda` and `1`), not `/dev/vda1` — the #1 growpart mistake. Substitute
+   whatever `lsblk`/`df` showed mounted at `/`:
+   ```bash
+   sudo dnf install -y cloud-utils-growpart    # RHEL-family: dnf. There is no apt-get here.
+   sudo growpart /dev/vda 1
+   ```
+
+3. **Grow the filesystem to fill the partition** — match the TYPE from step 1:
+   ```bash
+   sudo resize2fs /dev/vda1        # ext4 / ext3 (this box) — takes the DEVICE
+   # sudo xfs_growfs /             # XFS instead — takes the MOUNTPOINT, not the device
+   ```
+
+4. **Verify:**
+   ```bash
+   df -h /       # now ~70 GB
+   ```
+
+**Distro note (this box).** `/etc/os-release` reports `ID=alinux`, `ID_LIKE="rhel fedora centos
+anolis"`, `PLATFORM_ID=platform:al8` — **Alibaba Cloud Linux 3, RHEL 8-compatible** (Alibaba's
+downstream of the OpenAnolis community CentOS replacement). It is RPM-based with **no `apt-get`**;
+use `dnf` (`yum` is aliased to it). This is why the install above is `cloud-utils-growpart` via
+`dnf`, not the Debian `cloud-guest-utils`.
+
+The extra space lands where the deploy actually grows: `/var/lib/docker` (image layers, trimmed
+by `docker image prune -f` each deploy but still churning) and `./data` (the replay cache + run
+state) both live on `/`.
 
 ## Eligibility (manual, do on the box)
 
