@@ -192,3 +192,78 @@ stale caches can't serve old clips). Every e2e testid keeps identical semantics;
 custom-checks stays default-expanded (the e2e fills it). Verify per commit: pytest,
 `tsc --noEmit`, `vite build` (+ grep dist CSS for external URLs), Playwright e2e,
 `e2e:shots` + eyeball both PNGs.
+
+## Node-graph pipeline editor — Jul 19 (T-1): agent-authored verification graph
+
+A visual differentiator layered on the shipped chassis: the pipeline becomes a **node graph
+a Qwen agent wires up**, where every node is a real capability we built — a deterministic CV
+check, a VLM verdict, the human review gate, a repair, an assemble. The chat-to-video
+generators in the market survey own "prompt in, clip out"; none exposes a verification/CI
+graph, so this is uncopyable by a pure generator. Maps onto Innovation (30%) +
+Technical-Depth (30%). Feasibility: a React-Flow graph over the *existing* pipeline (reuses
+the whole chassis, no GPU, no new executor).
+
+**Decisions (with operator):**
+1. **Hero canvas, existing panels kept mounted below** — the graph and the e2e-covered flow
+   coexist, so all `data-testid`s and both Playwright tests stay green.
+2. **The agent wires the graph** — a request → Qwen tool-call → the pipeline materializes
+   node-by-node → runs live. This is the headline demo moment.
+
+**Load-bearing principle — the graph drives and visualizes the existing `Pipeline`, it never
+replaces it.** A from-scratch DAG executor would have to re-host what `Pipeline` owns beyond
+the bare stages (ledger/spend accounting, evidence dirs, the review `Event`, the draft→final
+promotion fallback) — and the e2e asserts on that accounting (`wallet`, `metrics.frontier`).
+Two choices keep it safe:
+- **The agent emits run *parameters*, not graph topology.** The tool `build_pipeline_graph`
+  takes only `{premise, pack, max_shots, custom_checks}`; the *server* deterministically
+  expands them into the canonical layout. The model cannot emit a malformed graph because it
+  never emits a graph — the standard "LLM hallucinates the graph" integration risk is gone by
+  construction, while "the agent authored the pipeline" stays fully truthful.
+- **One canonical id scheme** (`script, stills, review, gen-{i}, check-{i}, assemble,
+  episode`) shared by the server expander and the client deriver, so the pre-run canvas (from
+  the plan) and the running canvas (from the 2.5s poll) are the *same nodes* — live status
+  merges in. No SSE on the critical path.
+
+Zero-quota demo preserved: stages already inherit demo-mode + cache via injected `Deps`
+(synthetic gens + real CV + real ffmpeg); the agent planner is stubbed deterministically when
+`DAILIES_DEMO` (real qwen-plus otherwise) — the whole demo, agent authoring included, spends
+no video/image quota.
+
+**Canonical graph:**
+```
+script -> stills -> review -+- gen-0 -> check-0 -+
+                            +- gen-1 -> check-1 -+-> assemble -> episode
+                            +- gen-2 -> check-2 -+
+```
+Node status derives from `Project` (client-side, pure): script done once shots exist · stills
+done once every shot has tier0 results · review active at `awaiting_review` (amber) · gen-{i}
+from shot/take status (model + first-evidence-frame thumb) · check-{i} from take results
+(Tier-A/Tier-B pass/fail/inconclusive chips) · assemble at `assembling` · episode when
+`episode_path` is set.
+
+**Steps — a fallback ladder, each tier independently demoable (Tier 1 alone yields a live
+canvas):**
+- **Tier 1 (live graph view, no backend, e2e-safe — ship first):** add `@xyflow/react`
+  (**commit the lockfile** — Docker `npm ci`); `web/src/graph.ts` (derive nodes/edges from
+  `Project`); `web/src/nodes.tsx` (custom nodes on `theme.ts` tokens); `web/src/
+  PipelineGraph.tsx` (`data-testid="graph"`); mount as hero in `App.tsx`, existing panels
+  kept below unchanged.
+- **Tier 2 (agent authoring — headline):** `server/agent_plan.py` (Pydantic `PipelinePlan` +
+  `expand_plan` + a `build_pipeline_graph` tool-call loop mirroring
+  `qwen_tools.py:call_with_function_calling`, demo-stubbed); `POST /api/agent/plan`;
+  `AgentPrompt.tsx` (node-by-node reveal → existing `onCreate`), kept *above* the existing
+  `NewProject` form so the current e2e path is untouched.
+- **Tier 3 (tangible edit):** per-shot node "re-render" → existing `POST /shots/{i}/patch`;
+  the tool-call transcript shown as judge-facing evidence.
+- **Stretch:** SSE for sub-poll animation; an agent-path e2e test (deterministic via the demo
+  stub); a Remotion `@remotion/player` preview node (free for a solo dev).
+
+**Verify per tier:** pytest (existing 118 + new `agent_plan` units), `tsc --noEmit`, `vite
+build` (+ grep dist CSS for external `url(https:` — React-Flow CSS is self-hosted), Playwright
+e2e (both existing tests green), `e2e:shots` + eyeball. `git check-ignore .env`; a demo run
+bills zero video seconds.
+
+**Risks:** uncommitted lockfile breaking Docker `npm ci` (commit it in Tier 1) · a canvas
+node intercepting clicks the e2e needs (the canvas sits above, not overlaying, the panels) ·
+React-Flow CSS pulling a remote asset (the grep step catches it) · scope overrun (mitigated by
+the tier ladder — Tier 1 alone demos).
