@@ -3,6 +3,7 @@ import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import ButtonBase from "@mui/material/ButtonBase";
 import Chip from "@mui/material/Chip";
+import Collapse from "@mui/material/Collapse";
 import MenuItem from "@mui/material/MenuItem";
 import Paper from "@mui/material/Paper";
 import Stack from "@mui/material/Stack";
@@ -50,6 +51,41 @@ const SAMPLE_PREMISES = [
   "a night-shift robot barista perfects latte art for its last customer",
 ];
 
+// The signature element: the closed assertion vocabulary as faint ambient texture
+// behind the hero. Honest (it is the real grammar from server/specs.py) and only
+// possible for a product that has a grammar. Decorative: hidden from the a11y tree,
+// never intercepts clicks, static.
+const AMBIENT_VOCAB: { t: string; sx: object }[] = [
+  { t: "duration_between: [4.0, 6.0]", sx: { top: "7%", left: "2%", transform: "rotate(-7deg)" } },
+  { t: "brightness_range: [25, 235]", sx: { top: "24%", left: "5%", transform: "rotate(4deg)" } },
+  { t: "flicker_below: 22.0", sx: { top: "41%", left: "1%", transform: "rotate(-4deg)" } },
+  { t: "scene_cuts: ≤ 1", sx: { top: "57%", left: "6%", transform: "rotate(6deg)" } },
+  { t: "camera_motion: right", sx: { top: "72%", left: "2%", transform: "rotate(-6deg)" } },
+  { t: "palette_deltae: mean ΔE*76 ≤ 30", sx: { bottom: "5%", left: "8%", transform: "rotate(3deg)" } },
+  { t: "subject_present: the keeper", sx: { top: "9%", right: "3%", transform: "rotate(5deg)" } },
+  { t: "identity_consistent", sx: { top: "26%", right: "7%", transform: "rotate(-5deg)" } },
+  { t: "action_completed", sx: { top: "43%", right: "2%", transform: "rotate(4deg)" } },
+  { t: "title_card_present", sx: { top: "59%", right: "6%", transform: "rotate(-3deg)" } },
+  { t: "tier-A · zero tokens", sx: { top: "75%", right: "3%", transform: "rotate(6deg)" } },
+  { t: "reject before spend", sx: { bottom: "6%", right: "9%", transform: "rotate(-5deg)" } },
+];
+
+function AmbientVocab() {
+  return (
+    <Box aria-hidden sx={{
+      position: "absolute", inset: 0, overflow: "hidden", zIndex: 0,
+      pointerEvents: "none", userSelect: "none", display: { xs: "none", sm: "block" },
+    }}>
+      {AMBIENT_VOCAB.map((v) => (
+        <Typography key={v.t} component="span" sx={{
+          position: "absolute", fontFamily: mono, fontSize: 12, whiteSpace: "nowrap",
+          color: alpha(tokens.text, 0.09), ...v.sx,
+        }}>{v.t}</Typography>
+      ))}
+    </Box>
+  );
+}
+
 export function NewProject({ packs, busy, onCreate }: {
   packs: Pack[]; busy: boolean;
   onCreate: (premise: string, pack: string, maxShots: number, customChecks: string[]) => void;
@@ -58,55 +94,82 @@ export function NewProject({ packs, busy, onCreate }: {
   const [pack, setPack] = useState("short_drama");
   const [maxShots, setMaxShots] = useState(3);
   const [customChecks, setCustomChecks] = useState("");
+  // Default-open: the checks field is part of the pitch (author your own checks),
+  // not an afterthought behind a disclosure.
+  const [checksOpen, setChecksOpen] = useState(true);
   const submit = () =>
     onCreate(premise, pack, maxShots, customChecks.split("\n").map((s) => s.trim()).filter(Boolean));
   return (
-    <Panel>
-      <Typography variant="h2" gutterBottom>New run</Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 1.75, maxWidth: 720 }}>
-        Type a premise; Dailies writes the shot list and compiles its assertion checklist. Every
-        rendered clip must pass that contract — deterministic CV first, at zero token cost —
-        before it can be promoted into the certified episode.
-      </Typography>
-      <TextField
-        label="Premise" multiline minRows={2} value={premise} onChange={(e) => setPremise(e.target.value)}
-        placeholder="What should this episode be about?"
-        sx={{ width: "100%" }}
-        slotProps={{ htmlInput: { "data-testid": "premise" } }}
-      />
-      <Stack direction="row" spacing={0.75} useFlexGap sx={{ flexWrap: "wrap", mt: 1 }}>
-        {SAMPLE_PREMISES.map((s) => (
-          <Chip key={s} size="small" variant="outlined" label={s} onClick={() => setPremise(s)}
-            sx={{ maxWidth: "100%", height: "auto", py: 0.4, "& .MuiChip-label": { whiteSpace: "normal" } }} />
-        ))}
-      </Stack>
-      <Stack direction="row" spacing={1.5} useFlexGap sx={{ flexWrap: "wrap", alignItems: "flex-end", mt: 1.75 }}>
-        <TextField
-          select label="Assertion pack" size="small" value={pack} onChange={(e) => setPack(e.target.value)}
-          helperText="The spec your shots are tested against"
-          sx={{ minWidth: 190 }}
-          slotProps={{ htmlInput: { "data-testid": "pack" } }}
-        >
-          {packs.map((p) => <MenuItem key={p.name} value={p.name}>{p.name} ({p.defaults})</MenuItem>)}
-        </TextField>
-        <TextField
-          type="number" label="Shots" size="small" value={maxShots}
-          onChange={(e) => setMaxShots(Number(e.target.value))} sx={{ width: 92 }}
-          slotProps={{ htmlInput: { min: 1, max: 12 } }}
-        />
-        <Button disabled={busy || !premise.trim()} data-testid="create" onClick={submit}>
-          {busy ? "Running…" : "Compile & generate"}
-        </Button>
-      </Stack>
-      <TextField
-        label="Custom checks (one per line — optional)" multiline minRows={2}
-        value={customChecks} onChange={(e) => setCustomChecks(e.target.value)}
-        placeholder={"a title card must be visible\nthe camera should pan right"}
-        helperText="Plain-language rules compile to the closed vocabulary; anything unsupported (audio, on-screen text, time windows) is omitted."
-        sx={{ mt: 1.5, width: "100%" }}
-        slotProps={{ htmlInput: { "data-testid": "custom-checks" } }}
-      />
-    </Panel>
+    <Box sx={{ position: "relative", pt: { xs: 4, sm: 8 }, pb: { xs: 4, sm: 6 } }}>
+      <AmbientVocab />
+      <Box sx={{ position: "relative", zIndex: 1, maxWidth: 800, mx: "auto" }}>
+        <Typography variant="h1" sx={{
+          fontSize: "clamp(2rem, 4.5vw, 3.1rem)", letterSpacing: "-0.03em",
+          lineHeight: 1.08, textAlign: "center", mb: 2,
+        }}>
+          Turn a premise into a{" "}
+          <Box component="span" sx={{ color: tokens.pass }}>certified</Box> episode.
+        </Typography>
+        <Typography color="text.secondary" sx={{ textAlign: "center", maxWidth: 640, mx: "auto", mb: 4.5 }}>
+          Dailies writes the shot list and compiles it into machine-checkable assertions.
+          Every rendered clip must pass that contract — deterministic CV first, at zero
+          token cost — before it can be promoted into the episode.
+        </Typography>
+
+        <Paper sx={{ p: { xs: 1.75, sm: 2.25 }, borderRadius: "16px" }}>
+          <TextField
+            variant="standard" multiline minRows={2} fullWidth
+            value={premise} onChange={(e) => setPremise(e.target.value)}
+            placeholder="What should this episode be about?"
+            slotProps={{
+              input: { disableUnderline: true, sx: { fontSize: 17, lineHeight: 1.45, px: 0.5, py: 0.5 } },
+              htmlInput: { "data-testid": "premise", "aria-label": "Premise" },
+            }}
+          />
+          <Stack direction="row" spacing={1.25} useFlexGap
+            sx={{ flexWrap: "wrap", alignItems: "center", mt: 1.5, pt: 1.5, borderTop: 1, borderColor: "divider" }}>
+            <TextField
+              select label="Assertion pack" size="small" value={pack} onChange={(e) => setPack(e.target.value)}
+              sx={{ minWidth: 175 }}
+              slotProps={{ htmlInput: { "data-testid": "pack" } }}
+            >
+              {packs.map((p) => <MenuItem key={p.name} value={p.name}>{p.name} ({p.defaults})</MenuItem>)}
+            </TextField>
+            <TextField
+              type="number" label="Shots" size="small" value={maxShots}
+              onChange={(e) => setMaxShots(Number(e.target.value))} sx={{ width: 84 }}
+              slotProps={{ htmlInput: { min: 1, max: 12 } }}
+            />
+            <Button variant="text" color="inherit" size="small" onClick={() => setChecksOpen((o) => !o)}
+              sx={{ color: "text.secondary", fontWeight: 600 }}>
+              Custom checks {checksOpen ? "▴" : "▾"}
+            </Button>
+            <Box sx={{ flexGrow: 1 }} />
+            <Button disabled={busy || !premise.trim()} data-testid="create" onClick={submit}>
+              {busy ? "Compiling…" : "Compile & generate"}
+            </Button>
+          </Stack>
+          <Collapse in={checksOpen}>
+            <TextField
+              label="Custom checks (one per line — optional)" multiline minRows={2}
+              value={customChecks} onChange={(e) => setCustomChecks(e.target.value)}
+              placeholder={"a title card must be visible\nthe camera should pan right"}
+              helperText="Plain-language rules compile to the closed vocabulary; anything unsupported (audio, on-screen text, time windows) is omitted."
+              sx={{ mt: 2, width: "100%" }}
+              slotProps={{ htmlInput: { "data-testid": "custom-checks" } }}
+            />
+          </Collapse>
+        </Paper>
+
+        <Stack direction="row" spacing={0.75} useFlexGap
+          sx={{ flexWrap: "wrap", justifyContent: "center", mt: 2.5 }}>
+          {SAMPLE_PREMISES.map((s) => (
+            <Chip key={s} size="small" variant="outlined" label={s} onClick={() => setPremise(s)}
+              sx={{ maxWidth: "100%", height: "auto", py: 0.4, color: "text.secondary", "& .MuiChip-label": { whiteSpace: "normal" } }} />
+          ))}
+        </Stack>
+      </Box>
+    </Box>
   );
 }
 
