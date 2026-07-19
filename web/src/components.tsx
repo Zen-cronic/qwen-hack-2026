@@ -12,6 +12,7 @@ import Typography from "@mui/material/Typography";
 import { alpha, styled } from "@mui/material/styles";
 import { mediaUrl } from "./api";
 import { mono, statusColor, tokens } from "./theme";
+import { checkLabel, packLabel, stageLabel } from "./vocabulary";
 import type { AssertionResult, Pack, ShotState, Take, Wallet, Project } from "./types";
 
 // Flat bordered surface — the repeated "panel" from the old CSS, now one component.
@@ -127,11 +128,15 @@ export function NewProject({ packs, busy, onCreate }: {
           <Stack direction="row" spacing={1.25} useFlexGap
             sx={{ flexWrap: "wrap", alignItems: "center", mt: 1.5, pt: 1.5, borderTop: 1, borderColor: "divider" }}>
             <TextField
-              select label="Assertion pack" size="small" value={pack} onChange={(e) => setPack(e.target.value)}
-              sx={{ minWidth: 175 }}
+              select label="Rules" size="small" value={pack} onChange={(e) => setPack(e.target.value)}
+              sx={{ minWidth: 215 }}
               slotProps={{ htmlInput: { "data-testid": "pack" } }}
             >
-              {packs.map((p) => <MenuItem key={p.name} value={p.name}>{p.name} ({p.defaults})</MenuItem>)}
+              {packs.map((p) => (
+                <MenuItem key={p.name} value={p.name}>
+                  {packLabel(p.name)} · {p.defaults} checks
+                </MenuItem>
+              ))}
             </TextField>
             <TextField
               type="number" label="Shots" size="small" value={maxShots}
@@ -152,7 +157,8 @@ export function NewProject({ packs, busy, onCreate }: {
               label="Custom checks (one per line — optional)" multiline minRows={2}
               value={customChecks} onChange={(e) => setCustomChecks(e.target.value)}
               placeholder={"a title card must be visible\nthe camera should pan right"}
-              helperText="Plain-language rules compile to the closed vocabulary; anything unsupported (audio, on-screen text, time windows) is omitted."
+              helperText={"Written however you'd say it. Anything we can't measure yet — audio, "
+                + "on-screen text, “the first three seconds” — is left out rather than faked."}
               sx={{ mt: 2, width: "100%" }}
               slotProps={{ htmlInput: { "data-testid": "custom-checks" } }}
             />
@@ -220,7 +226,7 @@ const STAGE_CAPTIONS: Record<string, string> = {
   promoting: "Certified shots re-render on the premium tier.",
   assembling: "Cutting the certified episode with ffmpeg.",
   done: "Every shipped clip passed its contract.",
-  failed: "The run stopped — details above.",
+  failed: "Something went wrong — details above.",
 };
 
 export function Pipeline({ status }: { status: string }) {
@@ -244,7 +250,7 @@ export function Pipeline({ status }: { status: string }) {
       {STAGE_CAPTIONS[status] && (
         <Typography data-testid="stage-caption" variant="body2" color="text.secondary"
           sx={{ mt: 1, fontFamily: mono, fontSize: 12.5 }}>
-          <Box component="span" sx={{ color: "text.primary", fontWeight: 600 }}>{status}</Box>
+          <Box component="span" sx={{ color: "text.primary", fontWeight: 600 }}>{stageLabel(status)}</Box>
           {" — "}{STAGE_CAPTIONS[status]}
         </Typography>
       )}
@@ -302,7 +308,10 @@ function Check({ r, onVerdict }: { r: AssertionResult; onVerdict?: (v: string) =
       <Box sx={{ width: 9, height: 9, borderRadius: "50%", mt: "4px", flex: "none", bgcolor: statusColor(r.status) }} />
       <Box sx={{ minWidth: 0 }}>
         <Box>
-          <Typography component="span" sx={{ fontSize: 12, fontWeight: 600 }}>{r.type}</Typography>
+          <Typography component="span" sx={{ fontSize: 12.5, fontWeight: 600 }}>{checkLabel(r)}</Typography>
+          {/* The machine name stays visible: it is the closed-vocabulary receipt, and
+              the reason this check is reproducible rather than an opinion. */}
+          <Box component="span" sx={{ fontFamily: mono, fontSize: 10, color: "text.secondary", opacity: 0.7, ml: 0.75 }}>{r.type}</Box>
           {r.advisory && (
             <Box component="span" sx={{ fontSize: 9, color: "text.secondary", border: 1, borderColor: "divider", borderRadius: "4px", px: 0.5, ml: 0.5 }}>advisory</Box>
           )}
@@ -425,7 +434,7 @@ export function ShotCard({ shot, onVerdict, onPatch }: {
             <Typography sx={{ fontFamily: mono, fontSize: 10.5, color: "text.secondary" }}>
               {patching
                 ? "re-rendering from the last good frame, then re-verifying"
-                : `re-render this shot only — ${target.type} is the blocker`}
+                : `re-render this shot only — not yet true: ${checkLabel(target)}`}
             </Typography>
           </Box>
         )}

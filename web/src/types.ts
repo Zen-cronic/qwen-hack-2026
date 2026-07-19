@@ -8,6 +8,7 @@ export interface AssertionResult {
   detail: string;
   measured: Record<string, unknown>;
   evidence: string[];
+  params: Record<string, unknown>;  // the assertion's own params — needed to name it in plain language
 }
 
 export interface Take {

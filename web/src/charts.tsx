@@ -7,6 +7,7 @@ import Paper from "@mui/material/Paper";
 import Typography from "@mui/material/Typography";
 import { mono, tokens } from "./theme";
 import type { Metrics } from "./types";
+import { shortLabel } from "./vocabulary";
 
 const C = { pass: tokens.pass, fail: tokens.fail, inconclusive: tokens.inconclusive };
 const tip = {
@@ -46,8 +47,10 @@ function Legend({ items }: { items: { c: string; label: string }[] }) {
 }
 
 export function ChartsPanel({ m }: { m: Metrics }) {
+  // `label` is what the axis shows; `type` stays on the datum so the tooltip can still
+  // name the machine check — the axis is for scanning, the tooltip is for citing.
   const heat = Object.entries(m.heatmap).map(([type, c]) => ({
-    type, pass: c.pass, fail: c.fail, inconclusive: c.inconclusive,
+    type, label: shortLabel(type), pass: c.pass, fail: c.fail, inconclusive: c.inconclusive,
   }));
   const frontier = m.frontier.map((f) => ({ ...f, quality: Math.round(f.quality * 100) }));
 
@@ -89,7 +92,7 @@ export function ChartsPanel({ m }: { m: Metrics }) {
               <ResponsiveContainer width="100%" height={240}>
                 <BarChart data={heat} layout="vertical" margin={{ left: 20 }}>
                   <XAxis type="number" hide />
-                  <YAxis type="category" dataKey="type" width={130} tick={{ fill: tokens.muted, fontSize: 11 }} />
+                  <YAxis type="category" dataKey="label" width={150} tick={{ fill: tokens.muted, fontSize: 11 }} />
                   <Tooltip {...tip} />
                   <Bar dataKey="pass" stackId="a" fill={C.pass} isAnimationActive={false} />
                   <Bar dataKey="fail" stackId="a" fill={C.fail} isAnimationActive={false} />
