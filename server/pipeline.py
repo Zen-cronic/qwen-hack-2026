@@ -41,6 +41,7 @@ Tier0Fn = Callable[[ShotSpec, str], list[AssertionResult]]               # (spec
 TierAFn = Callable[[str, ShotSpec, str], list[AssertionResult]]          # (video_path, spec, evidence_dir) -> results
 TierBFn = Callable[[str, ShotSpec], list[AssertionResult]]               # (video_path, spec) -> results
 RepairFn = Callable[[ShotSpec, list[AssertionResult]], tuple[str, object]]  # (spec, failures) -> (new_prompt, usage)
+PatchVideoFn = Callable[[str, str, str], object]                          # (prompt, model, frame_path) -> WanResult-like
 AssembleFn = Callable[[list[str], str], str]                             # (clip_paths, out_path) -> episode_path
 
 
@@ -56,6 +57,7 @@ class Deps:
     assemble_fn: AssembleFn
     ledger: LedgerWriter
     custom_rule_fn: CustomRuleFn | None = None  # optional: compile user-authored checks
+    patch_video_fn: PatchVideoFn | None = None  # optional: frame-anchored targeted repair
 
 
 @dataclass
@@ -65,6 +67,10 @@ class Config:
     t2i_model: str = "wan2.1-t2i-plus"
     draft_model: str = "wan2.1-t2v-turbo"
     final_model: str = "wan2.2-t2v-plus"
+    # Frame-anchored repair. i2v-flash takes a single anchor, which is what a motion
+    # repair wants — kf2v interpolates between two keyframes, so pinning the last one
+    # would re-impose the very end state the patch is trying to fix.
+    patch_model: str = "wan2.2-i2v-flash"
     max_retakes: int = 1
     final_cap: int = 4
     packs_dir: str | None = None

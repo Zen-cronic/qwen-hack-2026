@@ -139,6 +139,20 @@ class _DemoGen:
                          from_cache=cached, seconds=0 if cached else 5,
                          cached_seconds=5 if cached else 0, latency_ms=120)
 
+    def gen_patch(self, prompt: str, model: str, frame_path: str) -> WanResult:
+        """Frame-anchored repair, offline. The anchor's bytes join the cache key exactly
+        as they do in wan.py, so two patches of one shot address different clips."""
+        p = Path(frame_path)
+        salt = hashlib.sha1(p.read_bytes()).hexdigest()[:12] if p.exists() else "noanchor"
+        key = self._key(f"{prompt}|patch|{salt}", model)
+        path = self.cache_dir / f"{key}.mp4"
+        cached = path.exists()
+        if not cached:
+            _write_clip(path, _direction_from_prompt(prompt))
+        return WanResult(status="SUCCEEDED", kind="video", local_path=str(path),
+                         from_cache=cached, seconds=0 if cached else 5,
+                         cached_seconds=5 if cached else 0, latency_ms=90)
+
     def gen_image(self, prompt: str) -> WanResult:
         key = self._key(prompt, "t2i")
         path = self.cache_dir / f"{key}.png"
@@ -231,5 +245,6 @@ def build_demo_runtime(data_dir: str | None = None) -> "object":
         assemble_fn=assemble,          # REAL ffmpeg
         ledger=LedgerWriter(root / "ledger.jsonl"),
         custom_rule_fn=_demo_custom_rules,
+        patch_video_fn=gen.gen_patch,
     )
     return Runtime(store=Store(str(root / "projects")), deps=deps, cfg=cfg, governor=None)
