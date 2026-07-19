@@ -18,15 +18,32 @@ _SYSTEM = (
     "FAILED on the rendered clip, each with what was measured. Rewrite the prompt so "
     "the next render is likely to satisfy those assertions WITHOUT changing the creative "
     "intent (same subject, scene, and action). Be concrete and visual; keep it one "
-    'continuous ~5-second shot. Output STRICT JSON only: {"prompt": "<revised prompt>"}.'
+    "continuous ~5-second shot. When a failure names a time window, direct the fix at "
+    "what happens during THAT part of the shot — say what the camera or subject should "
+    "be doing then — instead of restating the whole shot. "
+    'Output STRICT JSON only: {"prompt": "<revised prompt>"}.'
 )
+
+# Locus keys are phrased in prose below; a raw frame index is noise to a prompt writer.
+_LOCUS_KEYS = ("fail_window_s", "worst_frame", "worst_frame_s", "fail_span_frames")
+
+
+def _locus_phrase(measured: dict) -> str:
+    """Human phrasing for where the failure sits, when the check localized it."""
+    w = measured.get("fail_window_s")
+    if not (isinstance(w, (list, tuple)) and len(w) == 2):
+        return ""
+    lo, hi = w
+    return f" — worst from {lo:.1f}s to {hi:.1f}s" if hi > lo else f" — at {lo:.1f}s"
 
 
 def _failures_block(failures: list[AssertionResult]) -> str:
     lines = []
     for r in failures:
-        measured = ", ".join(f"{k}={v}" for k, v in (r.measured or {}).items())
-        lines.append(f"- {r.type.value} FAILED: {r.detail}" + (f" ({measured})" if measured else ""))
+        m = dict(r.measured or {})
+        measured = ", ".join(f"{k}={v}" for k, v in m.items() if k not in _LOCUS_KEYS)
+        lines.append(f"- {r.type.value} FAILED: {r.detail}"
+                     + (f" ({measured})" if measured else "") + _locus_phrase(m))
     return "\n".join(lines) or "- (unspecified failure)"
 
 
