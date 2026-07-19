@@ -33,13 +33,15 @@ class ResourceKind(str, Enum):
     IMAGE = "image"          # tier0 t2i still
     VIDEO_DRAFT = "video_draft"   # wan2.1-t2v-turbo
     VIDEO_FINAL = "video_final"   # wan2.2-t2v-plus
+    VIDEO_PATCH = "video_patch"   # wan i2v/kf2v targeted repair — its own free-tier pool
 
 
 # Nominal $/unit (list-price estimates, NOT free-tier cost). Tune freely.
 _PRICE_PER_1K_IN = {ResourceKind.CHAT: 0.0004, ResourceKind.VLM: 0.0008}
 _PRICE_PER_1K_OUT = {ResourceKind.CHAT: 0.0012, ResourceKind.VLM: 0.0020}
 _PRICE_PER_IMAGE = 0.02
-_PRICE_PER_VIDEO_SECOND = {ResourceKind.VIDEO_DRAFT: 0.10, ResourceKind.VIDEO_FINAL: 0.30}
+_PRICE_PER_VIDEO_SECOND = {ResourceKind.VIDEO_DRAFT: 0.10, ResourceKind.VIDEO_FINAL: 0.30,
+                           ResourceKind.VIDEO_PATCH: 0.10}
 
 
 class LedgerEntry(BaseModel):
@@ -80,6 +82,7 @@ class Wallet(BaseModel):
 
     draft_clips: int = 0
     final_clips: int = 0
+    patch_clips: int = 0     # i2v/kf2v repairs — a separate free-tier pool from t2v
     images: int = 0
     tokens_in: int = 0
     tokens_out: int = 0
@@ -101,6 +104,8 @@ class Wallet(BaseModel):
                     w.draft_clips += 1
                 elif e.kind is ResourceKind.VIDEO_FINAL:
                     w.final_clips += 1
+                elif e.kind is ResourceKind.VIDEO_PATCH:
+                    w.patch_clips += 1
             w.est_usd += e.est_usd
         w.est_usd = round(w.est_usd, 6)
         return w
