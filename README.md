@@ -203,6 +203,7 @@ System dependency: `ffmpeg` (assembly).
 
 ## Docs
 
+- [docs/qwen-usage.md](docs/qwen-usage.md) — how Dailies uses Qwen Cloud (function calling, custom skills, MCP producer+consumer, Wan, Qwen-VL, Qwen-TTS), mapped to the judging rubric
 - [docs/demo.md](docs/demo.md) — demo run-of-show (< 3 min) showcasing the workbench, Qwen custom tool, and MCP loop
 - [docs/impact.md](docs/impact.md) — Problem Value & Impact: pain, buyer, competitor analysis, moat, productization path
 - [docs/market-landscape.md](docs/market-landscape.md) — the cited survey behind the improvement statement (and how it rewrote our own claim)
