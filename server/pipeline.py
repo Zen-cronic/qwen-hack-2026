@@ -21,6 +21,7 @@ from typing import Callable
 
 from server.compiler import compile_shots, load_pack
 from server.metrics import LedgerWriter, ResourceKind
+from server.patch import anchor_second, extract_frame, localized_failure
 from server.specs import Assertion, AssertionResult, ShotSpec, Status, parse_assertions
 from server.tts import narration_for
 from server.store import (
@@ -109,6 +110,31 @@ def _pop_usage(stage_fn) -> tuple[int, int]:
     return (0, 0)
 
 
+def build_style_descriptor(premise: str, specs: list[ShotSpec]) -> str:
+    """A shared look/identity clause woven into every shot's generation prompt.
+
+    Deterministic and free — no extra model call. It fixes the two things that drift
+    across independently generated shots: the visual grade, and the identity of any
+    recurring subject. Frame-anchored i2v (repair/promotion) carries continuity WITHIN a
+    shot; this descriptor carries the look ACROSS shots so the episode reads as one piece.
+    """
+    seen: list[str] = []
+    for s in specs:
+        subj = (getattr(s, "subject", None) or "").strip()
+        if subj and subj.lower() not in [x.lower() for x in seen]:
+            seen.append(subj)
+    look = ("consistent cinematic look throughout: one unified color grade, matched "
+            "lighting and lens, continuous art direction")
+    if seen:
+        return f"{look}; hold a consistent appearance and wardrobe for {'; '.join(seen)}"
+    return look
+
+
+# Which second of the approved draft anchors the promoted final. Early, so the certified
+# clip BEGINS like the take the human approved and reads as a continuation of it.
+PROMOTE_ANCHOR_S = 0.1
+
+
 class Pipeline:
     def __init__(self, store: Store, project_id: str, deps: Deps, cfg: Config | None = None):
         self.store = store
@@ -158,6 +184,26 @@ class Pipeline:
         d.mkdir(parents=True, exist_ok=True)
         return str(d)
 
+    def _compose_prompt(self, base: str) -> str:
+        """Weave the project's shared visual bible into a generation prompt. Applied at
+        the gen call ONLY — takes store the raw creative prompt, so this never
+        double-composes, and repair/promotion re-compose from that raw prompt."""
+        desc = self.store.get(self.pid).style_descriptor
+        return f"{base} — {desc}" if desc else base
+
+    def _anchor_for_retake(self, video_path: str, results: list[AssertionResult],
+                           idx: int, take_no: int) -> str | None:
+        """The last good frame before the located failure — the i2v anchor for a retake.
+
+        Reuses Tier-A's failure localization (server.patch). Returns None when the failure
+        can't be placed in time, so the caller falls back to a fresh t2v roll rather than
+        anchoring on a frame that isn't meaningfully 'before' the defect."""
+        failure = localized_failure(results)
+        if failure is None:
+            return None
+        out = Path(self._evidence_dir(idx, take_no)) / "retake_anchor.png"
+        return extract_frame(video_path, anchor_second(failure), out)
+
     # stages
 
     def _scripting(self) -> None:
@@ -184,7 +230,14 @@ class Pipeline:
                     tokens_in=tin, tokens_out=tout)
         if specs is None:
             raise ValueError(f"script agent output failed to compile after retry: {last_err}")
-        self._set(lambda p: setattr(p, "shots", [ShotState(spec=s) for s in specs]))
+
+        def set_shots(p: ProjectState) -> None:
+            p.shots = [ShotState(spec=s) for s in specs]
+            # The shared look is fixed here, once, from the compiled shots — every
+            # downstream generation composes it in so the episode stays coherent.
+            p.style_descriptor = build_style_descriptor(p.premise, specs)
+
+        self._set(set_shots)
 
     def _compile_custom_checks(self, p: ProjectState) -> list[Assertion]:
         """Compile the project's plain-language custom checks into validated assertions.
@@ -211,7 +264,7 @@ class Pipeline:
         self._status(ProjectStatus.TIER0)
         for idx in range(len(self.store.get(self.pid).shots)):
             spec = self.store.get(self.pid).shots[idx].spec
-            res = self.deps.gen_image_fn(spec.prompt)
+            res = self.deps.gen_image_fn(self._compose_prompt(spec.prompt))
             self._spend(kind=ResourceKind.IMAGE, model=self.cfg.t2i_model, stage="tier0",
                         shot_index=idx, images=0 if getattr(res, "from_cache", False) else 1,
                         latency_ms=getattr(res, "latency_ms", 0),
@@ -243,16 +296,26 @@ class Pipeline:
     def _process_shot(self, idx: int) -> None:
         spec = self.store.get(self.pid).shots[idx].spec
         prompt = spec.prompt
+        anchor: str | None = None   # last good frame of the prior take; drives an i2v retake
         passed = False
         for take_no in range(self.cfg.max_retakes + 1):
             self._shot_status(idx, ShotStatus.DRAFTING)
-            res = self.deps.gen_video_fn(prompt, self.cfg.draft_model)
+            # A retake continues from the frame that still passed (i2v) rather than
+            # re-rolling the whole shot from noise — so the fix inherits the composition
+            # the draft already got right and stays visually continuous with it. The first
+            # take, or a runtime with no frame-anchored model, uses a fresh t2v draft.
+            if anchor and self.deps.patch_video_fn is not None:
+                res = self.deps.patch_video_fn(self._compose_prompt(prompt), self.cfg.patch_model, anchor)
+                tier, model, kind = "repair", self.cfg.patch_model, ResourceKind.VIDEO_PATCH
+            else:
+                res = self.deps.gen_video_fn(self._compose_prompt(prompt), self.cfg.draft_model)
+                tier, model, kind = "draft", self.cfg.draft_model, ResourceKind.VIDEO_DRAFT
             billed = 0 if getattr(res, "from_cache", False) else getattr(res, "seconds", 0)
-            self._spend(kind=ResourceKind.VIDEO_DRAFT, model=self.cfg.draft_model, stage="drafting",
+            self._spend(kind=kind, model=model, stage="drafting",
                         shot_index=idx, video_seconds=billed,
                         cached_seconds=getattr(res, "cached_seconds", 0),
                         latency_ms=getattr(res, "latency_ms", 0), note=_spend_note(res))
-            take = Take(take_no=take_no, tier="draft", model=self.cfg.draft_model, prompt=prompt,
+            take = Take(take_no=take_no, tier=tier, model=model, prompt=prompt,
                         status=TakeStatus.DONE if res.ok else TakeStatus.FAILED,
                         task_id=getattr(res, "task_id", None), video_path=res.local_path if res.ok else None)
             if not res.ok:
@@ -282,6 +345,7 @@ class Pipeline:
                             shot_index=idx, tokens_in=getattr(usage, "prompt_tokens", 0),
                             tokens_out=getattr(usage, "completion_tokens", 0))
                 prompt = new_prompt
+                anchor = self._anchor_for_retake(res.local_path, results, idx, take_no)
 
         if passed:
             self._promote(idx)
@@ -300,9 +364,25 @@ class Pipeline:
             self._set(lambda p: _certify(p, idx, p.shots[idx].latest_take.video_path))
             return
 
-        res = self.deps.gen_video_fn(last.prompt, self.cfg.final_model)
+        # Anchor the final on the take that just passed, so the certified clip is a
+        # continuation of what was approved rather than a fresh roll that drifts off it. A
+        # seed can't do this — it doesn't transfer across models; the frame does. Fall back
+        # to a t2v final when no frame-anchored model is wired (e.g. the fixtures runtime).
+        spec = p.shots[idx].spec
+        anchor = None
+        if self.deps.patch_video_fn is not None:
+            out = Path(self._evidence_dir(idx, 99)) / "final_anchor.png"
+            anchor = extract_frame(last.video_path, PROMOTE_ANCHOR_S, out)
+        if anchor is not None:
+            res = self.deps.patch_video_fn(self._compose_prompt(last.prompt), self.cfg.patch_model, anchor)
+            final_model = self.cfg.patch_model
+        else:
+            res = self.deps.gen_video_fn(self._compose_prompt(last.prompt), self.cfg.final_model)
+            final_model = self.cfg.final_model
         billed = 0 if getattr(res, "from_cache", False) else getattr(res, "seconds", 0)
-        self._spend(kind=ResourceKind.VIDEO_FINAL, model=self.cfg.final_model, stage="promoting",
+        # Recorded as the FINAL however it was rendered — this IS the certified clip, and
+        # the role is what the frontier and wallet reason about, not the endpoint used.
+        self._spend(kind=ResourceKind.VIDEO_FINAL, model=final_model, stage="promoting",
                     shot_index=idx, video_seconds=billed,
                     cached_seconds=getattr(res, "cached_seconds", 0),
                     latency_ms=getattr(res, "latency_ms", 0), note=_spend_note(res))
@@ -312,8 +392,8 @@ class Pipeline:
             return
 
         # Re-verify Tier-A on the final (deterministic, no tokens).
-        results = list(self.deps.tier_a_fn(res.local_path, p.shots[idx].spec, self._evidence_dir(idx, 99)))
-        final_take = Take(take_no=len(p.shots[idx].takes), tier="final", model=self.cfg.final_model,
+        results = list(self.deps.tier_a_fn(res.local_path, spec, self._evidence_dir(idx, 99)))
+        final_take = Take(take_no=len(p.shots[idx].takes), tier="final", model=final_model,
                           prompt=last.prompt, status=TakeStatus.DONE, task_id=getattr(res, "task_id", None),
                           video_path=res.local_path, results=results,
                           passed=not [r for r in results if not r.advisory and r.status is Status.FAIL])
@@ -321,10 +401,9 @@ class Pipeline:
         if final_take.passed:
             self._set(lambda p: _certify(p, idx, res.local_path))
         else:
-            # The premium final regressed on the deterministic tier even though the draft
-            # cleared it. Certify the draft rather than ship an unverified final — the same
-            # fallback the budget and promotion-failure paths above already take. Certifying
-            # res.local_path here would put a Tier-A FAIL into the episode.
+            # The final regressed on the deterministic tier even though the draft cleared
+            # it. Certify the draft rather than ship an unverified final — the same fallback
+            # the budget and promotion-failure paths above already take.
             self._set(lambda p: _certify(p, idx, last.video_path))
 
     def _assemble(self) -> None:

@@ -99,6 +99,10 @@ class ProjectState(BaseModel):
     pack: str
     max_shots: int
     custom_checks: list[str] = Field(default_factory=list)  # user-authored plain-language rules
+    # A shared "visual bible" composed into every shot's generation prompt so the episode
+    # reads as one coherent piece — unified grade/lighting/lens, and recurring subjects
+    # held to one appearance. Set once at scripting; see Pipeline._compose_prompt.
+    style_descriptor: str = ""
     status: ProjectStatus = ProjectStatus.QUEUED
     created_ts: float = Field(default_factory=time.time)
     updated_ts: float = Field(default_factory=time.time)

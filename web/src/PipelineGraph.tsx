@@ -5,7 +5,7 @@
  * pattern lets React Flow keep measuring node sizes (needed for edge routing) while we
  * replace the derived data on every 2.5s poll.
  */
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import Box from "@mui/material/Box";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
@@ -26,13 +26,29 @@ const LEGEND: { label: string; color: string }[] = [
   { label: "pending", color: tokens.pending },
 ];
 
-export function PipelineGraph({ project, stagger = false }: { project: Project; stagger?: boolean }) {
+export function PipelineGraph({ project, stagger = false, onPatch }: {
+  project: Project;
+  stagger?: boolean;
+  onPatch?: (shotIndex: number) => Promise<void>;
+}) {
+  // A stable wrapper so injecting the handler into node data never churns the memo on a
+  // parent re-render; the ref always points at App's latest onPatch. hasPatch (a boolean)
+  // is the only presence signal the memo depends on.
+  const onPatchRef = useRef(onPatch);
+  useEffect(() => { onPatchRef.current = onPatch; });
+  const hasPatch = !!onPatch;
+  const patchFn = useCallback((i: number) => onPatchRef.current?.(i) ?? Promise.resolve(), []);
+
   // stagger tags each node with a per-index entry delay for the agent-authored reveal;
-  // a live run passes no stagger, so nodes just update in place on each poll.
+  // a live run passes no stagger, so nodes just update in place on each poll. onPatch is
+  // injected only into patchable check nodes, so only they carry the re-render affordance.
   const derivedNodes = useMemo(() => {
     const ns = deriveNodes(project);
-    return stagger ? ns.map((n, i) => ({ ...n, data: { ...n.data, enterDelay: i * 90 } })) : ns;
-  }, [project, stagger]);
+    const wired = hasPatch
+      ? ns.map((n) => (n.data.patchable ? { ...n, data: { ...n.data, onPatch: patchFn } } : n))
+      : ns;
+    return stagger ? wired.map((n, i) => ({ ...n, data: { ...n.data, enterDelay: i * 90 } })) : wired;
+  }, [project, stagger, hasPatch, patchFn]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState(derivedNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(deriveEdges(project));

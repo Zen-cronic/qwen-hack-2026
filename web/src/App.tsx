@@ -120,7 +120,7 @@ export default function App() {
 
         {project && (
           <>
-            <PipelineGraph project={project} />
+            <PipelineGraph project={project} onPatch={onPatch} />
             <Pipeline status={project.status} />
             {project.status === "awaiting_review" && <ReviewBar onApprove={onApprove} shots={project.shots} />}
             {project.error && <Paper sx={{ p: 2, mb: 2.5, borderColor: "error.main" }}>{project.error}</Paper>}
@@ -136,7 +136,7 @@ export default function App() {
         <Typography component="footer" sx={{
           mt: 8, textAlign: "center", fontFamily: mono, fontSize: 11.5, color: "text.secondary",
         }}>
-          qwen-plus scripting · wan2.1-turbo drafts · wan2.2-plus finals · qwen-vl-plus advisory — on Alibaba Cloud
+          qwen-plus scripting · wan2.1-turbo drafts · wan2.2 i2v finals · qwen-vl-plus advisory — on Alibaba Cloud
         </Typography>
       </Container>
     </>

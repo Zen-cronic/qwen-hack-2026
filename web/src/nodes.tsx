@@ -4,8 +4,9 @@
  * pulse are driven by the derived NodeStatus so the canvas reads the same way the board
  * and stepper do. Presentational only — all state comes from graph.ts.
  */
-import type { ReactNode } from "react";
+import { type MouseEvent, type ReactNode, useState } from "react";
 import Box from "@mui/material/Box";
+import Button from "@mui/material/Button";
 import Chip from "@mui/material/Chip";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
@@ -153,6 +154,39 @@ export function ShotNode({ data }: NodeProps) {
   );
 }
 
+// The one action on the read-only canvas: re-render a shot whose latest take still fails a
+// blocking check, from the same second the board's patch button names. stopPropagation
+// keeps the node-click (scroll-to-card) from also firing; nodrag/nopan keep React Flow
+// from treating the press as a canvas pan. Patching acts on the shot, so state is local.
+function PatchButton({ data }: { data: DNodeData }) {
+  const [patching, setPatching] = useState(false);
+  const anchor = (data.anchorS ?? 0).toFixed(1);
+  const run = async (e: MouseEvent<HTMLButtonElement>) => {
+    e.stopPropagation();
+    if (patching) return;
+    setPatching(true);
+    try { await data.onPatch!(data.shotIndex!); } finally { setPatching(false); }
+  };
+  return (
+    <Box sx={{ px: 1.25, pb: 1 }}>
+      <Button
+        className="nodrag nopan" data-testid="node-patch"
+        size="small" variant="outlined" color="inherit" disabled={patching} onClick={run}
+        title={data.failLabel ? `not yet true: ${data.failLabel}` : undefined}
+        aria-label={`Re-render shot ${data.shotIndex} from ${anchor} seconds`}
+        sx={{
+          fontFamily: mono, fontSize: 9.5, lineHeight: 1.4, py: 0.2, px: 0.9,
+          minHeight: 0, width: "100%",
+          borderColor: alpha(tokens.fail, 0.5), color: tokens.fail,
+          "&:hover": { borderColor: tokens.fail, bgcolor: alpha(tokens.fail, 0.08) },
+        }}
+      >
+        {patching ? "re-rendering…" : `⟲ re-render from ${anchor}s`}
+      </Button>
+    </Box>
+  );
+}
+
 export function CheckNode({ data }: NodeProps) {
   const d = data as DNodeData;
   const checks = d.checks ?? [];
@@ -179,6 +213,7 @@ export function CheckNode({ data }: NodeProps) {
       ) : (
         <Caption text={d.status === "idle" ? "awaiting a take" : d.caption} />
       )}
+      {d.patchable && d.onPatch && d.shotIndex != null && <PatchButton data={d} />}
     </NodeShell>
   );
 }

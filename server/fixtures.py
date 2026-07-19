@@ -142,6 +142,11 @@ def build_fixture_runtime(data_dir: str | None = None):
         repair_fn=_fixture_repair,
         assemble_fn=assemble,               # REAL ffmpeg
         ledger=LedgerWriter(root / "ledger.jsonl"),
+        # Frame-anchored i2v — what makes a retake continue from the draft it fixes and the
+        # certified final continue from the take that was approved, instead of re-rolling
+        # from noise. Ungoverned like the rest of this runtime; warming is the one spend.
+        patch_video_fn=lambda prompt, model, frame: wan.generate_video_from_frame(
+            prompt, frame, model=model),
         # REAL qwen-tts (CosyVoice) narration; silent Wan clips get a spoken slate per
         # shot, synthesized once during the warm and cached like the clips.
         narrate_fn=tts.synthesize,

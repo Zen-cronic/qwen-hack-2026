@@ -188,10 +188,19 @@ def patch_shot(store: Store, pid: str, shot_index: int, deps, cfg, *, model: str
     store.update(pid, mut)
 
     if tk.passed:
-        paths = [s.final_path for s in store.get(pid).shots if s.certified and s.final_path]
+        shipped = [s for s in store.get(pid).shots if s.certified and s.final_path]
+        paths = [s.final_path for s in shipped]
         if paths:
             out = str(Path(cfg.data_dir) / pid / "episode.mp4")
-            episode = deps.assemble_fn(paths, out)  # free re-concat, no tokens
+            # Re-narrate through the pipeline's own path so the re-cut keeps its sound.
+            # Re-concatenating without audio_paths silently ships a SILENT replacement —
+            # the narration the first assemble muxed would vanish the moment a shot is
+            # patched. Every line was already synthesized, so it replays from cache: this
+            # stays free (no tokens, no video seconds). Mirrors the /assemble endpoint.
+            from server.pipeline import Pipeline
+            audio = Pipeline(store, pid, deps, cfg)._narrate(shipped)
+            episode = (deps.assemble_fn(paths, out, audio_paths=audio) if audio
+                       else deps.assemble_fn(paths, out))
             store.update(pid, lambda pr: setattr(pr, "episode_path", episode))
 
     return PatchOutcome(

@@ -223,7 +223,7 @@ const STAGE_CAPTIONS: Record<string, string> = {
   drafting: "Rendering draft clips on the budget tier.",
   verifying: "Running the checklist: deterministic CV first (zero tokens), VLM advisory on top.",
   repairing: "A shot failed its contract — feeding the failure back into a retake prompt.",
-  promoting: "Certified shots re-render on the premium tier.",
+  promoting: "Approved takes re-render as a frame-anchored final — continuous with the take you saw.",
   assembling: "Cutting the certified episode with ffmpeg.",
   done: "Every shipped clip passed its contract.",
   failed: "Something went wrong — details above.",
@@ -461,9 +461,24 @@ export function ConformanceBoard({ project, onVerdict, onPatch }: {
   );
 }
 
+// The episode file keeps a stable path (episode.mp4), but its BYTES change whenever a
+// shot is patched and the cut is re-concatenated. Without a changing URL the <video>
+// element replays the browser-cached old cut — the patched clip, and its restored
+// narration, would never appear. Key the URL on the certified takes so it changes
+// exactly when the episode does.
+function episodeSrc(project: Project): string {
+  const base = mediaUrl(project.episode_path);
+  if (!base) return "";
+  const rev = project.shots.map((s) => s.final_path ?? "").join("|");
+  let h = 5381;
+  for (let i = 0; i < rev.length; i++) h = ((h << 5) + h + rev.charCodeAt(i)) | 0;
+  return `${base}?rev=${(h >>> 0).toString(36)}`;
+}
+
 export function FinalCut({ project }: { project: Project }) {
   const [copied, setCopied] = useState(false);
   if (!project.episode_path) return null;
+  const src = episodeSrc(project);
   const copyLink = async () => {
     try {
       await navigator.clipboard.writeText(window.location.href);
@@ -477,7 +492,7 @@ export function FinalCut({ project }: { project: Project }) {
         <Typography variant="h2">Certified episode</Typography>
         <Chip size="small" label="every contract passed" sx={badgeSx("certified")} />
       </Stack>
-      <Box component="video" controls src={mediaUrl(project.episode_path)}
+      <Box component="video" controls src={src}
         sx={{ width: "100%", borderRadius: "10px", bgcolor: "#000", display: "block" }} />
       <Stack direction="row" spacing={1.5} sx={{ mt: 1.25, alignItems: "center", flexWrap: "wrap" }}>
         <Typography variant="body2" color="text.secondary" sx={{ flex: 1, minWidth: 260 }}>
@@ -488,7 +503,7 @@ export function FinalCut({ project }: { project: Project }) {
           {copied ? "Link copied ✓" : "Copy report link"}
         </Button>
         <Button size="small" variant="outlined" color="inherit" component="a"
-          href={mediaUrl(project.episode_path)} download="dailies-episode.mp4">
+          href={src} download="dailies-episode.mp4">
           Download episode
         </Button>
       </Stack>

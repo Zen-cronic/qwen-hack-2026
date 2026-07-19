@@ -11,7 +11,7 @@
  */
 import { type Edge, type Node, Position } from "@xyflow/react";
 import { shortLabel } from "./vocabulary";
-import type { PipelinePlan, Project, ShotState } from "./types";
+import type { AssertionResult, PipelinePlan, Project, ShotState } from "./types";
 
 export type NodeStatus =
   | "idle" | "active" | "done" | "failed" | "pass" | "fail" | "inconclusive";
@@ -31,6 +31,13 @@ export interface DNodeData {
   shotIndex?: number;
   episodePath?: string | null;
   enterDelay?: number;                // ms; set only for the staggered plan reveal
+  // Patch affordance — derived here (pure), wired to a handler at the PipelineGraph
+  // boundary. Set on a check node whose shot's latest take has a localizable blocking
+  // failure, so the graph offers a re-render exactly where the board does.
+  patchable?: boolean;
+  anchorS?: number;                   // the second the re-render will anchor at
+  failLabel?: string;                 // the blocking check that isn't true yet
+  onPatch?: (shotIndex: number) => void | Promise<void>;
   [key: string]: unknown;
 }
 
@@ -46,6 +53,27 @@ const rank = (s: string) => STATUS_ORDER.indexOf(s);
 
 const latestTake = (shot: ShotState) =>
   shot.takes.length ? shot.takes[shot.takes.length - 1] : undefined;
+
+// Mirrors server/patch.py's ANCHOR_LEAD_S and ShotCard's patch gate: the graph offers a
+// re-render on exactly the shots the board does, anchored at the same second, so the two
+// surfaces never disagree about whether a shot is patchable.
+const ANCHOR_LEAD_S = 0.2;
+
+function failWindow(r: AssertionResult): [number, number] | null {
+  const raw = r.measured?.fail_window_s;
+  if (!Array.isArray(raw) || raw.length !== 2) return null;
+  const [lo, hi] = raw;
+  return typeof lo === "number" && typeof hi === "number" ? [lo, hi] : null;
+}
+
+// The blocking Tier-A failure on a shot's LATEST take that a patch would target — a
+// non-advisory fail Tier-A could localize in time. Advisory flags never block, so they
+// never justify spending a re-render (the same rule the server enforces).
+function patchTarget(shot: ShotState): AssertionResult | undefined {
+  return latestTake(shot)?.results.find(
+    (r) => !r.advisory && r.status === "fail" && failWindow(r),
+  );
+}
 
 // A clip was produced for this shot — mirrors ShotCard's thumb rule (first evidence
 // frame of the latest take, else the pre-render still).
@@ -144,11 +172,15 @@ export function deriveNodes(project: Project): DNode[] {
         caption: t?.tier === "final" ? "premium take" : t ? "draft take" : "generate",
       },
     });
+    const target = shot ? patchTarget(shot) : undefined;
     nodes.push({
       id: `check-${i}`, type: "check", position: { x: col(4), y },
       data: {
         kind: "check", label: "Checks", status: cs, checks, shotIndex: i,
         caption: "Tier-A CV · VLM advisory",
+        patchable: !!target,
+        anchorS: target ? Math.max(0, failWindow(target)![0] - ANCHOR_LEAD_S) : undefined,
+        failLabel: target ? shortLabel(target.type) : undefined,
       },
     });
   }
