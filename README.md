@@ -100,6 +100,15 @@ premise → script + specs (qwen-plus) → compiled assertion checklist
   cost-quality scatter, repair convergence, and cost-per-passing-second.
 - **Judge-safe:** a content-addressed cache makes re-verification of cached clips cost zero
   video quota, so the live URL survives the judging window.
+- **Agent-authored pipeline graph:** describe the episode in plain language and a Qwen tool
+  (`build_pipeline_graph`, `server/agent_plan.py`) wires the run as a node graph — the model
+  supplies only validated parameters, so the topology is always well-formed — then hands off
+  to the same pipeline. The graph is a live control surface (React Flow, `web/src/graph.ts`)
+  derived from the ordinary 2.5s poll.
+
+![A Qwen agent wires the pipeline from a plain-language request — shot list, deterministic CV
+and VLM checks, the human review gate, and a certified cut — as a live graph you can watch
+run](dailies-agent.png)
 
 ![The finished run — capability heatmap, cost–quality frontier, repair convergence, and the
 conformance board over a certified episode](dailies-done.png)
