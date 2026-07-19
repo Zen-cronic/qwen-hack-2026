@@ -10,6 +10,7 @@ import Typography from "@mui/material/Typography";
 import { alpha } from "@mui/material/styles";
 import { createProject, getPacks, getProject, patchShot, review, sendVerdict } from "./api";
 import { ChartsPanel } from "./charts";
+import { AgentPrompt } from "./AgentPrompt";
 import { ConformanceBoard, FinalCut, NewProject, Pipeline, ReviewBar, WalletMeter } from "./components";
 import { PipelineGraph } from "./PipelineGraph";
 import { mono, tokens } from "./theme";
@@ -103,7 +104,19 @@ export default function App() {
       <Container maxWidth="lg" sx={{ pt: 3, pb: 8 }}>
         {err && <Paper data-testid="error" sx={{ p: 2, mb: 2.5, borderColor: "error.main" }}>{err}</Paper>}
 
-        {!project && <NewProject packs={packs} busy={busy} onCreate={onCreate} />}
+        {!project && (
+          <>
+            <AgentPrompt busy={busy} onCreate={onCreate} />
+            <Stack direction="row" spacing={2} sx={{ maxWidth: 860, mx: "auto", my: 3, alignItems: "center" }}>
+              <Box sx={{ flex: 1, height: "1px", bgcolor: "divider" }} />
+              <Typography sx={{ fontFamily: mono, fontSize: 11, color: "text.secondary", whiteSpace: "nowrap" }}>
+                or configure it yourself
+              </Typography>
+              <Box sx={{ flex: 1, height: "1px", bgcolor: "divider" }} />
+            </Stack>
+            <NewProject packs={packs} busy={busy} onCreate={onCreate} />
+          </>
+        )}
 
         {project && (
           <>

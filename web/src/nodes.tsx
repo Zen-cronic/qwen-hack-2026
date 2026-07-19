@@ -71,6 +71,15 @@ function NodeShell({ data, children }: { data: DNodeData; children?: ReactNode }
       border: `1px solid ${lit ? alpha(c, 0.55) : tokens.border}`,
       boxShadow: data.status === "active" ? `0 0 0 1px ${alpha(c, 0.5)}` : "none",
       overflow: "hidden",
+      ...(data.enterDelay != null && {
+        opacity: 0,
+        animation: "dailies-node-enter 0.4s ease forwards",
+        animationDelay: `${data.enterDelay}ms`,
+        "@keyframes dailies-node-enter": {
+          from: { opacity: 0, transform: "translateY(6px) scale(0.96)" },
+          to: { opacity: 1, transform: "translateY(0) scale(1)" },
+        },
+      }),
     }}>
       <Handles />
       <Stack direction="row" spacing={0.75} sx={{ alignItems: "center", px: 1.25, pt: 1, pb: children ? 0.75 : 1 }}>

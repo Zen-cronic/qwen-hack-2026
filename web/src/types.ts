@@ -89,3 +89,37 @@ export interface Pack {
   description: string;
   defaults: number;
 }
+
+export interface PlanNode {
+  id: string;
+  kind: string;   // stage | review | shot | check | episode
+  label: string;
+}
+
+export interface PlanEdge {
+  source: string;
+  target: string;
+}
+
+export interface PipelinePlan {
+  premise: string;
+  pack: string;
+  max_shots: number;
+  custom_checks: string[];
+  rationale: string;
+  nodes: PlanNode[];
+  edges: PlanEdge[];
+}
+
+export interface PlanTranscriptEntry {
+  role: string;
+  name?: string;
+  arguments?: string;
+  result?: unknown;
+  content?: string | null;
+}
+
+export interface PlanResponse {
+  plan: PipelinePlan;
+  transcript: PlanTranscriptEntry[];
+}

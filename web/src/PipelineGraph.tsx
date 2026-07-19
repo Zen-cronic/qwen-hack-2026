@@ -5,7 +5,7 @@
  * pattern lets React Flow keep measuring node sizes (needed for edge routing) while we
  * replace the derived data on every 2.5s poll.
  */
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import Box from "@mui/material/Box";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
@@ -26,13 +26,20 @@ const LEGEND: { label: string; color: string }[] = [
   { label: "pending", color: tokens.pending },
 ];
 
-export function PipelineGraph({ project }: { project: Project }) {
-  const [nodes, setNodes, onNodesChange] = useNodesState(deriveNodes(project));
+export function PipelineGraph({ project, stagger = false }: { project: Project; stagger?: boolean }) {
+  // stagger tags each node with a per-index entry delay for the agent-authored reveal;
+  // a live run passes no stagger, so nodes just update in place on each poll.
+  const derivedNodes = useMemo(() => {
+    const ns = deriveNodes(project);
+    return stagger ? ns.map((n, i) => ({ ...n, data: { ...n.data, enterDelay: i * 90 } })) : ns;
+  }, [project, stagger]);
+
+  const [nodes, setNodes, onNodesChange] = useNodesState(derivedNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(deriveEdges(project));
 
   // Re-derive on each new snapshot. Positions are fixed, so this refreshes status/thumbs
   // in place without moving the graph.
-  useEffect(() => { setNodes(deriveNodes(project)); }, [project, setNodes]);
+  useEffect(() => { setNodes(derivedNodes); }, [derivedNodes, setNodes]);
   useEffect(() => { setEdges(deriveEdges(project)); }, [project, setEdges]);
 
   return (

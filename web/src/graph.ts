@@ -11,7 +11,7 @@
  */
 import { type Edge, type Node, Position } from "@xyflow/react";
 import { shortLabel } from "./vocabulary";
-import type { Project, ShotState } from "./types";
+import type { PipelinePlan, Project, ShotState } from "./types";
 
 export type NodeStatus =
   | "idle" | "active" | "done" | "failed" | "pass" | "fail" | "inconclusive";
@@ -30,6 +30,7 @@ export interface DNodeData {
   checks?: { label: string; status: string }[];
   shotIndex?: number;
   episodePath?: string | null;
+  enterDelay?: number;                // ms; set only for the staggered plan reveal
   [key: string]: unknown;
 }
 
@@ -203,6 +204,27 @@ export function deriveEdges(project: Project): Edge[] {
   }
   edges.push(edge("assemble", "episode"));
   return edges;
+}
+
+// A Project-shaped stub so an agent-authored plan renders through the exact same derive
+// path as a live run. status "planned" is off the pipeline's status line, so every node
+// reads idle — the graph shows its full shape before anything has run.
+export function planStubProject(plan: PipelinePlan): Project {
+  return {
+    id: "", premise: plan.premise, pack: plan.pack, max_shots: plan.max_shots,
+    custom_checks: plan.custom_checks, status: "planned", shots: [],
+    wallet: {
+      draft_clips: 0, final_clips: 0, patch_clips: 0, images: 0,
+      tokens_in: 0, tokens_out: 0, video_seconds: 0, est_usd: 0,
+    },
+    episode_path: null, error: null,
+    metrics: {
+      summary: { shots_total: 0, certified: 0, failed: 0 },
+      heatmap: {}, frontier: [], convergence: [],
+      repair: { retakes_total: 0, shots_repaired: 0, repair_successes: 0 },
+      cost_per_passing_second: null, transfer_rate: null,
+    },
+  };
 }
 
 export { Position };

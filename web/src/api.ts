@@ -1,4 +1,4 @@
-import type { Pack, Project } from "./types";
+import type { Pack, PlanResponse, Project } from "./types";
 
 async function j<T>(r: Response): Promise<T> {
   if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
@@ -27,6 +27,12 @@ export const patchShot = (id: string, shotIndex: number) =>
     .then(j<{ ok: boolean; reason: string; anchor_s: number | null; certified: boolean }>);
 
 export const getPacks = () => fetch("/api/packs").then(j<{ packs: Pack[] }>);
+
+/** Ask the Qwen agent to author a pipeline from a plain-language request. Returns the
+ *  expanded plan (run parameters + canonical graph) plus the tool-call transcript. */
+export const planPipeline = (message: string) =>
+  fetch("/api/agent/plan", { ...JSON_POST, body: JSON.stringify({ message }) })
+    .then(j<PlanResponse>);
 
 // The stored path IS the contract: pass it verbatim and let the media route
 // resolve it against its own DATA_ROOT guard. Any client-side prefix surgery
