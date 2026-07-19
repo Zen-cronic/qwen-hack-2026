@@ -14,8 +14,10 @@
 
 ## Deadlines
 
-- Submission: **2026-07-09, 2:00pm PDT** (Devpost is authoritative; submit by ~10am PDT)
-- Judging: 2026-07-10 → 2026-07-31 · Results: ~2026-08-07
+- Submission: **2026-07-20, 2:00pm PDT** = 5:00pm EDT (Devpost is authoritative; submit by ~10am PDT).
+  The Build Session FAQ still shows the pre-correction Jul 9 date and is stale — it carries a
+  "Last Updated: June 30" stamp. Devpost's own deadline field governs.
+- Judging: 2026-07-21 → 2026-07-31 · Results: ~2026-08-07
 
 ## Sanctioned Qwen Cloud base URLs (must be visible in the repo)
 

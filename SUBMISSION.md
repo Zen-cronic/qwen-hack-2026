@@ -5,7 +5,11 @@
   - `https://dashscope-intl.aliyuncs.com/compatible-mode/v1`
   - `https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1` (OpenAI-compatible)
   - `https://token-plan.ap-southeast-1.maas.aliyuncs.com/apps/anthropic` (Anthropic-compatible)
-- [ ] **Screenshot of running resources from Alibaba Cloud Workbench** — "No proof = not eligible"
+- [ ] **Proof of Alibaba Cloud deployment** — "No proof = not eligible". The rules and the FAQ
+  word this differently, so satisfy both: (a) screenshot of running resources from the Alibaba
+  Cloud Workbench, and (b) "a link to a code file in their code repo that demonstrates use of
+  Alibaba Cloud services and APIs" — use [server/wan.py](server/wan.py) (the DashScope async
+  task API against `dashscope-intl.aliyuncs.com`).
 - [ ] **Architecture diagram** — "how Qwen Cloud connects to your backend, database, and frontend"
 - [ ] **Demo video** — "less than three (3) minutes", public on YouTube/Vimeo/Youku, "must include footage that shows the Project functioning on the device for which it was built", "not a Figma mockup — real working app!", no third-party trademarks / copyrighted music
 - [ ] **Text description** — features + functionality, in English
