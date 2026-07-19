@@ -17,6 +17,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
+from server.agent_plan import plan_from_message
 from server.compiler import available_packs, load_pack
 from server.config import settings
 from server.metrics import LedgerWriter
@@ -48,6 +49,10 @@ class VerdictReq(BaseModel):
     shot_index: int
     assertion_type: AssertionType
     verdict: Status
+
+
+class PlanReq(BaseModel):
+    message: str = Field(min_length=1)
 
 
 def create_app(runtime: Runtime) -> FastAPI:
@@ -138,6 +143,16 @@ def create_app(runtime: Runtime) -> FastAPI:
                    else rt().deps.assemble_fn(paths, out))
         rt().store.update(pid, lambda pr: setattr(pr, "episode_path", episode))
         return {"episode": episode}
+
+    @app.post("/api/agent/plan")
+    def agent_plan(req: PlanReq):
+        # The Qwen agent authors the run: it calls build_pipeline_graph with the run
+        # parameters, and the server expands them into the canonical graph. Demo/fixtures
+        # (and a keyless box) use a deterministic stub so the flow is hermetic and free.
+        demo = settings.DAILIES_DEMO or settings.DAILIES_FIXTURES
+        packs = available_packs(rt().cfg.packs_dir)
+        plan, transcript = plan_from_message(req.message, demo=demo, packs=packs)
+        return {"plan": plan.model_dump(mode="json"), "transcript": transcript}
 
     @app.get("/api/packs")
     def packs():
