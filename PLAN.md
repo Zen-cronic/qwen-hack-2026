@@ -157,3 +157,38 @@ Recorded off cached artifacts; the planted kill-shot is pre-validated from hero 
 
 ## Post-deadline (fork only — repo freezes at submission boundary)
 `compile_shot` / `get_conformance_report` MCP tools, CosyVoice TTS, Wanform-style plan/apply layer, day-job brand packs — all in a clean fork per FAQ rule.
+
+## UI overhaul — Jul 18 (T-2): production-SaaS structure, cutting-room identity
+
+The SPA reads as an ops dashboard; shipped chat-to-video products read as products. Two
+structural patterns from the market survey are worth adopting — the prompt-box-as-hero
+(ngram: one big prompt card with the controls inside it, starting-point pills, the
+subject's vernacular as faint background texture) and staged progressive disclosure
+(one surveyed showrunner: a five-word phase stepper with a single active pill and a quiet
+mono status caption; content mounts only once it has data). Their *skin* (light candy
+gradients) is exactly the field-default look, so the dark cutting-room identity stays.
+
+**Decisions:** keep `theme.ts` tokens/status colors/mono conceit; adopt structure only.
+Fonts become real and self-hosted (`@fontsource-variable/instrument-sans` +
+`@fontsource/ibm-plex-mono` — zero external requests from the built page). Signature
+element: an ambient assertion-DSL field behind the hero (the actual closed vocabulary as
+faint mono texture — honest, and only possible with a DSL).
+
+**The three acts, by run status:**
+1. *Hero* — display headline ("Turn a premise into a certified episode."), one prompt
+   card (premise + pack + shots + collapsible custom checks + CTA), sample-premise pills.
+2. *Run* — 10 internal stages grouped into 5 phase pills (Script · Stills · Review ·
+   Takes · Cut), active pill pulsing, existing per-stage captions beneath in mono; at
+   `awaiting_review` the gate is the dominant panel; charts stay unmounted until they
+   carry data (the e2e only queries charts after the final cut — verified safe).
+3. *Done* — unchanged order (tiles/charts → board → certified episode) + mono footer
+   naming the model roster on Alibaba Cloud.
+
+**Steps (one commit each):** fonts foundation → hero → run-view acts + chart gating →
+refreshed README screenshots → *gated stretch:* `server/demo.py` designed slate clips
+(vertical two-tone gradient for pan-invariant luma + seeded grain so Farneback still
+reads the pan + label baked into the panning texture; version-salt `_DemoGen._key` so
+stale caches can't serve old clips). Every e2e testid keeps identical semantics;
+custom-checks stays default-expanded (the e2e fills it). Verify per commit: pytest,
+`tsc --noEmit`, `vite build` (+ grep dist CSS for external URLs), Playwright e2e,
+`e2e:shots` + eyeball both PNGs.
