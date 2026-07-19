@@ -60,10 +60,38 @@ def _direction_from_prompt(prompt: str) -> str:
 
 
 def _texture(h: int, w_total: int) -> np.ndarray:
+    """Designed slate instead of raw noise, with every measured property preserved.
+
+    Three layers, each load-bearing for a Tier-A check:
+    - vertical dusk gradient in the brand palette — constant along x, so a sliding
+      crop window keeps the same mean luma (flicker-safe) and the dominant colors
+      sit near packs/brand_rules.yaml's palette; overall mean ~105, inside every
+      pack's brightness bounds;
+    - seeded luma grain (blurred) — Farneback needs trackable structure; a clean
+      gradient sliding horizontally reads as zero flow and would un-kill the
+      planted kill-shot;
+    - a faint tiled label, baked into the wide texture so it pans WITH the content
+      (a fixed overlay would dilute the mean flow toward static).
+    """
     rng = np.random.default_rng(7)
-    tex = (rng.random((h, w_total)) * 200 + 30).astype(np.uint8)  # mean well inside [25,235]
-    tex = cv2.GaussianBlur(tex, (0, 0), 2.0)
-    return cv2.cvtColor(tex, cv2.COLOR_GRAY2BGR)
+    stops = [(0.0, (250, 247, 245)), (0.45, (255, 95, 11)), (1.0, (22, 17, 14))]  # BGR #f5f7fa -> #0b5fff -> #0e1116, sky over sea
+    ys = np.linspace(0.0, 1.0, h)
+    col = np.zeros((h, 3), np.float32)
+    for c in range(3):
+        col[:, c] = np.interp(ys, [s[0] for s in stops], [float(s[1][c]) for s in stops])
+    base = np.repeat(col[:, None, :], w_total, axis=1)
+
+    grain = rng.random((h, w_total)).astype(np.float32) * 90 - 45
+    grain = cv2.GaussianBlur(grain, (0, 0), 2.0)
+    base = np.clip(base + grain[:, :, None], 0, 255).astype(np.uint8)
+
+    overlay = base.copy()
+    for x0 in range(20, w_total, 260):
+        cv2.putText(overlay, "tier-A: zero tokens", (x0 + 34, 26),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.34, (30, 30, 34), 1, cv2.LINE_AA)
+        cv2.putText(overlay, "DAILIES / SYNTHETIC TAKE", (x0, h - 16),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.38, (255, 255, 255), 1, cv2.LINE_AA)
+    return cv2.addWeighted(overlay, 0.35, base, 0.65, 0)
 
 
 def _write_clip(path: Path, direction: str, w=320, h=180, n=40, fps=8) -> None:
@@ -96,7 +124,10 @@ class _DemoGen:
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
     def _key(self, prompt: str, model: str) -> str:
-        return hashlib.sha1(f"{model}|{prompt}".encode()).hexdigest()[:16]
+        # v2 salt: the key hashes only model|prompt, not clip content, so changing
+        # the synthesis (gray noise -> designed slates) must bust pre-existing
+        # caches or a warm data dir would replay the old look forever.
+        return hashlib.sha1(f"v2|{model}|{prompt}".encode()).hexdigest()[:16]
 
     def gen_video(self, prompt: str, model: str, negative_prompt: str | None = None) -> WanResult:
         key = self._key(prompt, model)
