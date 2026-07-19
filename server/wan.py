@@ -24,6 +24,7 @@ change the prompt, hence the key) generate fresh while replays stay free.
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import os
 import time
@@ -68,9 +69,38 @@ def video_size_for(model: str) -> str:
     return VIDEO_SIZE_BY_MODEL.get(model, DEFAULT_VIDEO_SIZE)
 
 
-def cache_key(model: str, prompt: str, seed: int | None, size: str, negative_prompt: str | None) -> str:
+IMAGE2VIDEO_URL = f"{DASHSCOPE_BASE_URL}/api/v1/services/aigc/image2video/video-synthesis"
+
+# Frame-anchored video models: which endpoint serves each, and what it calls the input
+# image. Both spellings are verified live — docs/verification.md section 3c.
+FRAME_ANCHORED: dict[str, tuple[str, str]] = {
+    "wan2.2-i2v-flash": (VIDEO_SYNTHESIS_URL, "img_url"),
+    "wan2.1-i2v-turbo": (VIDEO_SYNTHESIS_URL, "img_url"),
+    "wan2.1-kf2v-plus": (IMAGE2VIDEO_URL, "first_frame_url"),
+}
+
+
+def cache_key(model: str, prompt: str, seed: int | None, size: str,
+              negative_prompt: str | None, salt: str = "") -> str:
+    # `salt` is appended only when non-empty, so every key minted before frame-anchored
+    # generation existed is byte-identical — a warm cache must not be invalidated by
+    # adding a component to the address.
     raw = f"{model}|{prompt}|{seed}|{size}|{negative_prompt or ''}"
+    if salt:
+        raw += f"|{salt}"
     return hashlib.sha1(raw.encode("utf-8")).hexdigest()
+
+
+def frame_data_uri(path: str | os.PathLike[str]) -> str:
+    """A local frame as a base64 `data:` URI.
+
+    The DashScope video endpoints read these in place of an HTTP URL, which is the only
+    reason a repair can anchor to a frame that exists solely on this box — there is no
+    public URL for it and no OSS upload step (docs/verification.md section 3c).
+    """
+    p = Path(path)
+    mime = "image/png" if p.suffix.lower() == ".png" else "image/jpeg"
+    return f"data:{mime};base64," + base64.b64encode(p.read_bytes()).decode("ascii")
 
 
 @dataclass
@@ -164,8 +194,10 @@ class WanClient:
         ext: str,
         url_from_output,
         billed_seconds: int,
+        extra_input: dict | None = None,
+        salt: str = "",
     ) -> WanResult:
-        key = cache_key(model, prompt, seed, size, negative_prompt)
+        key = cache_key(model, prompt, seed, size, negative_prompt, salt)
         dest = self.cache_dir / f"{key}.{ext}"
         if dest.exists():
             return WanResult(status="SUCCEEDED", kind=kind, local_path=str(dest),
@@ -174,7 +206,13 @@ class WanClient:
         body: dict = {"model": model, "input": {"prompt": prompt}}
         if negative_prompt:
             body["input"]["negative_prompt"] = negative_prompt
-        params: dict = {"size": size, "prompt_extend": True, "watermark": False}
+        if extra_input:
+            body["input"].update(extra_input)
+        params: dict = {"prompt_extend": True, "watermark": False}
+        # A frame-anchored call takes its dimensions from the anchor image; sending an
+        # explicit size alongside one is how you get InvalidParameter for no reason.
+        if size:
+            params["size"] = size
         if seed is not None:
             params["seed"] = seed
         body["parameters"] = params
@@ -224,6 +262,51 @@ class WanClient:
             ext="mp4",
             url_from_output=lambda out: out.get("video_url"),
             billed_seconds=CLIP_SECONDS,
+        )
+
+    def generate_video_from_frame(
+        self,
+        prompt: str,
+        frame_path: str | os.PathLike[str],
+        *,
+        model: str,
+        negative_prompt: str | None = None,
+    ) -> WanResult:
+        """Re-render a shot anchored to a real frame of its own footage.
+
+        This is the targeted repair: instead of re-rolling the whole shot from noise on
+        a revised prompt, hold the composition that already passed and regenerate from
+        there. Runs on the i2v/kf2v quota, which is separate from the t2v draft and
+        final reserve.
+
+        The anchor is sent inline as a data URI — the frame lives only on this box, so
+        there is no URL to give. Its bytes salt the cache key, because two repairs of
+        one shot differ by anchor, not by prompt, and would otherwise collide.
+        """
+        try:
+            endpoint, field = FRAME_ANCHORED[model]
+        except KeyError:
+            return WanResult(status="FAILED", kind="video", code="UnsupportedModel",
+                             message=f"{model} is not a frame-anchored model; "
+                                     f"known: {sorted(FRAME_ANCHORED)}")
+        p = Path(frame_path)
+        if not p.exists():
+            return WanResult(status="FAILED", kind="video", code="NoAnchorFrame",
+                             message=f"anchor frame missing: {p}")
+
+        return self._generate(
+            kind="video",
+            endpoint=endpoint,
+            model=model,
+            prompt=prompt,
+            seed=None,
+            size="",  # the anchor image defines the frame size
+            negative_prompt=negative_prompt,
+            ext="mp4",
+            url_from_output=lambda out: out.get("video_url"),
+            billed_seconds=CLIP_SECONDS,
+            extra_input={field: frame_data_uri(p)},
+            salt=hashlib.sha1(p.read_bytes()).hexdigest()[:12],
         )
 
     def generate_image(
