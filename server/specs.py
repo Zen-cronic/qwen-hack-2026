@@ -130,9 +130,16 @@ class AssertionResult(BaseModel):
     detail: str = ""
     measured: dict[str, Any] = Field(default_factory=dict)
     evidence: list[str] = Field(default_factory=list)  # relative media paths (frames)
+    # The assertion's own params, carried onto the result. Without these a reader knows
+    # a `subject_present` check ran but not WHICH subject it was about, and "at most 1
+    # cut" is indistinguishable from "no cuts" — so any human phrasing of a result is
+    # impossible downstream. Cheap to carry, and the SPA needs it to name checks in
+    # plain language instead of echoing the machine type.
+    params: dict[str, Any] = Field(default_factory=dict)
 
     @classmethod
     def for_assertion(cls, a: Assertion, status: Status, detail: str = "", **kw: Any) -> "AssertionResult":
+        kw.setdefault("params", dict(a.params))
         return cls(type=a.type, tier=a.tier, advisory=a.advisory, status=status, detail=detail, **kw)
 
 

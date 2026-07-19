@@ -71,3 +71,23 @@ def test_parse_assertions_reports_offending_index():
 def test_shotspec_rejects_empty_prompt():
     with pytest.raises(ValidationError):
         ShotSpec(index=0, prompt="   ")
+
+
+def test_result_carries_the_assertion_params():
+    # The UI names a check in plain language ("The ginger street cat is in frame"),
+    # which is impossible from the type alone — the subject, the bounds, and the cut
+    # allowance all live in params. So a result has to carry them.
+    from server.specs import AssertionResult, Status
+
+    a = Assertion(type=AssertionType.SUBJECT_PRESENT, params={"subject": "ginger_street_cat"})
+    r = AssertionResult.for_assertion(a, Status.PASS, detail="seen")
+    assert r.params == {"subject": "ginger_street_cat"}
+
+    # A copy, not a reference: mutating a result must not rewrite the spec it came from.
+    r.params["subject"] = "someone else"
+    assert a.params["subject"] == "ginger_street_cat"
+
+    # scene_cuts max=0 and max=1 are different promises; both must survive onto the result.
+    zero = AssertionResult.for_assertion(
+        Assertion(type=AssertionType.SCENE_CUTS, params={"max": 0}), Status.PASS)
+    assert zero.params["max"] == 0
