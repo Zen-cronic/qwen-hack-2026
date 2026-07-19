@@ -11,6 +11,7 @@ import { alpha } from "@mui/material/styles";
 import { createProject, getPacks, getProject, patchShot, review, sendVerdict } from "./api";
 import { ChartsPanel } from "./charts";
 import { ConformanceBoard, FinalCut, NewProject, Pipeline, ReviewBar, WalletMeter } from "./components";
+import { PipelineGraph } from "./PipelineGraph";
 import { mono, tokens } from "./theme";
 import type { Pack, Project } from "./types";
 
@@ -106,6 +107,7 @@ export default function App() {
 
         {project && (
           <>
+            <PipelineGraph project={project} />
             <Pipeline status={project.status} />
             {project.status === "awaiting_review" && <ReviewBar onApprove={onApprove} shots={project.shots} />}
             {project.error && <Paper sx={{ p: 2, mb: 2.5, borderColor: "error.main" }}>{project.error}</Paper>}
