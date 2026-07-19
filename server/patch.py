@@ -59,6 +59,19 @@ class PatchOutcome:
         }
 
 
+def _spend(store: Store, pid: str, deps, **kw) -> None:
+    """Record to the process-wide ledger AND the project's own copy, mirroring
+    Pipeline._spend. The wallet meter reads the project copy, so recording only to the
+    writer leaves a patch invisible in the UI even though the audit trail has it."""
+    entry = deps.ledger.record(**kw)
+
+    def mut(p) -> None:
+        p.ledger.append(entry)
+        p.recompute_wallet()
+
+    store.update(pid, mut)
+
+
 def localized_failure(results: list[AssertionResult]) -> AssertionResult | None:
     """The first blocking failure that Tier-A could place in time.
 
@@ -108,37 +121,48 @@ def patch_shot(store: Store, pid: str, shot_index: int, deps, cfg, *, model: str
         return PatchOutcome(False, "this runtime has no frame-anchored generator", shot_index)
 
     st = p.shots[shot_index]
+    spec: ShotSpec = st.spec
     take = st.latest_take
     source = (take.video_path if take else None) or st.final_path
     if not source or not Path(source).exists():
         return PatchOutcome(False, "shot has no rendered clip to patch", shot_index)
 
-    failure = localized_failure(take.results if take else [])
+    patch_no = len(st.takes)
+    ev_dir = Path(cfg.data_dir) / pid / "evidence" / f"shot{shot_index}" / f"patch{patch_no}"
+
+    # Re-measure the clip rather than trusting the results stored beside it. Tier-A gained
+    # failure localization after runs were already on disk, and those takes carry no window
+    # at all — re-verifying is deterministic CV on a file we already have, so it costs
+    # nothing and it is the only way to patch a run that predates the feature. It also
+    # keeps a patch honest if the checks themselves have changed since the take was cut.
+    fresh = list(deps.tier_a_fn(source, spec, str(ev_dir / "reverify")))
+    # A fresh measurement is authoritative WHENEVER it produced one. Falling back to the
+    # stored results on a clean re-verify would let a stale recorded failure justify
+    # patching a clip that now passes. Stored results are only for the case where Tier-A
+    # returned nothing at all — an unreadable clip, or a spec with no Tier-A assertions.
+    failure = localized_failure(fresh) if fresh else localized_failure(take.results if take else [])
     if failure is None:
         return PatchOutcome(False, "no blocking failure with a located window", shot_index)
 
     at = anchor_second(failure)
-    patch_no = len(st.takes)
-    ev_dir = Path(cfg.data_dir) / pid / "evidence" / f"shot{shot_index}" / f"patch{patch_no}"
     anchor = extract_frame(source, at, ev_dir / "anchor.png")
     if anchor is None:
         return PatchOutcome(False, f"could not read a frame at {at:.2f}s", shot_index, at)
 
     # Reuse the repair agent: it already phrases the locus and holds creative intent fixed.
-    spec: ShotSpec = st.spec
     prompt, usage = deps.repair_fn(spec, [failure])
-    deps.ledger.record(stage="patching", kind=ResourceKind.CHAT, model=cfg.chat_model,
-                       shot_index=shot_index,
-                       tokens_in=getattr(usage, "prompt_tokens", 0),
-                       tokens_out=getattr(usage, "completion_tokens", 0))
+    _spend(store, pid, deps, stage="patching", kind=ResourceKind.CHAT, model=cfg.chat_model,
+           shot_index=shot_index,
+           tokens_in=getattr(usage, "prompt_tokens", 0),
+           tokens_out=getattr(usage, "completion_tokens", 0))
 
     res = deps.patch_video_fn(prompt, model, anchor)
     billed = 0 if getattr(res, "from_cache", False) else getattr(res, "seconds", 0)
-    deps.ledger.record(stage="patching", kind=ResourceKind.VIDEO_PATCH, model=model,
-                       shot_index=shot_index, video_seconds=billed,
-                       cached_seconds=getattr(res, "cached_seconds", 0),
-                       latency_ms=getattr(res, "latency_ms", 0),
-                       note="cache" if getattr(res, "from_cache", False) else "")
+    _spend(store, pid, deps, stage="patching", kind=ResourceKind.VIDEO_PATCH, model=model,
+           shot_index=shot_index, video_seconds=billed,
+           cached_seconds=getattr(res, "cached_seconds", 0),
+           latency_ms=getattr(res, "latency_ms", 0),
+           note="cache" if getattr(res, "from_cache", False) else "")
 
     tk = Take(take_no=patch_no, tier="patch", model=model, prompt=prompt,
               status=TakeStatus.DONE if res.ok else TakeStatus.FAILED,

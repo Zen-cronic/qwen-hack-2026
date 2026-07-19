@@ -144,6 +144,11 @@ def test_patch_promotes_a_clip_that_now_passes(tmp_path):
     kinds = [e.kind for e in deps.ledger.entries()]
     assert ResourceKind.VIDEO_PATCH in kinds and ResourceKind.CHAT in kinds
 
+    # The spend must also reach the PROJECT's ledger — that copy is what the wallet
+    # meter renders, so recording only to the writer would leave a patch invisible.
+    assert store.get(pid).wallet.patch_clips == 1
+    assert [e.stage for e in store.get(pid).ledger] == ["patching", "patching"]
+
 
 def test_a_patch_that_still_fails_does_not_replace_the_original(tmp_path):
     # The gate applies to repairs too: a patch has to earn the slot by re-verifying.
@@ -173,7 +178,11 @@ def test_patch_refuses_cleanly_when_there_is_nothing_to_anchor_to(tmp_path):
     deps.patch_video_fn = lambda *a: None
     assert not patch_shot(store, pid, 9, deps, cfg, model="wan2.2-i2v-flash").ok
 
-    # A shot whose take carries no located failure has no anchor point.
-    store.update(pid, lambda p: setattr(p.shots[0].takes[0], "results", []))
+    # A clip that satisfies its contract has nothing to anchor to. Note the source is
+    # re-measured, so emptying the stored results would NOT make this case — the clip
+    # itself has to pass.
+    good = tmp_path / "passing.mp4"
+    _write_clip(good, "right")
+    store.update(pid, lambda p: setattr(p.shots[0].takes[0], "video_path", str(good)))
     out = patch_shot(store, pid, 0, deps, cfg, model="wan2.2-i2v-flash")
     assert not out.ok and "located" in out.reason
