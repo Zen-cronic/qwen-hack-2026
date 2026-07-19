@@ -65,12 +65,13 @@ function StatusDot({ status }: { status: NodeStatus }) {
 function NodeShell({ data, children }: { data: DNodeData; children?: ReactNode }) {
   const c = nodeColor(data.status);
   const lit = data.status !== "idle";
+  const interactive = data.shotIndex != null || data.kind === "episode";
   return (
     <Box data-testid="graph-node" sx={{
       width: NODE_W, borderRadius: "10px", bgcolor: tokens.panel2,
       border: `1px solid ${lit ? alpha(c, 0.55) : tokens.border}`,
       boxShadow: data.status === "active" ? `0 0 0 1px ${alpha(c, 0.5)}` : "none",
-      overflow: "hidden",
+      overflow: "hidden", cursor: interactive ? "pointer" : "default",
       ...(data.enterDelay != null && {
         opacity: 0,
         animation: "dailies-node-enter 0.4s ease forwards",

@@ -373,7 +373,7 @@ export function ShotCard({ shot, onVerdict, onPatch }: {
   };
 
   return (
-    <Paper data-testid="shot" sx={{ overflow: "hidden", display: "flex", flexDirection: "column" }}>
+    <Paper data-testid="shot" id={`shot-card-${shot.spec.index}`} sx={{ overflow: "hidden", display: "flex", flexDirection: "column" }}>
       {thumb ? (
         <Box component="img" alt={`shot ${shot.spec.index}`} src={mediaUrl(thumb)}
           sx={{ aspectRatio: "16 / 9", width: "100%", objectFit: "cover", bgcolor: "#000", display: "block" }} />

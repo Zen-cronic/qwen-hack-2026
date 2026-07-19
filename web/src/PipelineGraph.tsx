@@ -5,16 +5,16 @@
  * pattern lets React Flow keep measuring node sizes (needed for edge routing) while we
  * replace the derived data on every 2.5s poll.
  */
-import { useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import Box from "@mui/material/Box";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import {
-  Background, BackgroundVariant, Controls, ReactFlow,
+  Background, BackgroundVariant, Controls, type Node as RFNode, ReactFlow,
   useEdgesState, useNodesState,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { deriveEdges, deriveNodes } from "./graph";
+import { type DNodeData, deriveEdges, deriveNodes } from "./graph";
 import { nodeTypes } from "./nodes";
 import { mono, tokens } from "./theme";
 import type { Project } from "./types";
@@ -42,6 +42,16 @@ export function PipelineGraph({ project, stagger = false }: { project: Project; 
   useEffect(() => { setNodes(derivedNodes); }, [derivedNodes, setNodes]);
   useEffect(() => { setEdges(deriveEdges(project)); }, [project, setEdges]);
 
+  // The graph is a navigable index of the run: clicking a shot/check node jumps to its
+  // detail card in the board below; the episode node jumps to the certified cut. The
+  // full patch/verdict controls stay in the board, where the fail window and anchor live.
+  const onNodeClick = useCallback((_: unknown, node: RFNode) => {
+    const d = node.data as DNodeData;
+    const sel = typeof d.shotIndex === "number" ? `#shot-card-${d.shotIndex}`
+      : d.kind === "episode" ? '[data-testid="finalcut"]' : "";
+    if (sel) document.querySelector(sel)?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, []);
+
   return (
     <Box sx={{ mb: 2.5 }}>
       <Stack direction="row" spacing={1.5} sx={{ alignItems: "center", mb: 1, flexWrap: "wrap" }}>
@@ -63,6 +73,7 @@ export function PipelineGraph({ project, stagger = false }: { project: Project; 
         <ReactFlow
           nodes={nodes} edges={edges}
           onNodesChange={onNodesChange} onEdgesChange={onEdgesChange}
+          onNodeClick={onNodeClick}
           nodeTypes={nodeTypes}
           fitView fitViewOptions={{ padding: 0.16 }}
           minZoom={0.3} maxZoom={1.5}
