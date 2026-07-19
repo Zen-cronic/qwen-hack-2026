@@ -75,6 +75,44 @@ human-stub fallback needed.** Pins (also the code defaults): `VL_MODEL=qwen-vl-p
   at `output.results[0].url`. That URL is a signed OSS link with an `Expires` param
   (~24h) — **download immediately, persist the file not the URL** (same as video).
 
+## 3c. Edit + keyframe backends (Jul 19) — targeted repair is reachable
+
+Section 2 banked free quota for three capabilities `server/` had never called. They are
+the backend for a **targeted repair**: extract the frame a check indicted, re-render the
+shot anchored to it, instead of blind-re-prompting a whole 5 s clip. Probed with
+`scripts/probe_edit_models.py` using the section-3 trick — an empty `input` fails
+server-side validation, so routing is proven without generating anything.
+
+| Model | Endpoint (on `dashscope-intl.aliyuncs.com`) | Verdict |
+|---|---|---|
+| `qwen-image-edit`, `-plus` | `/api/v1/services/aigc/image2image/image-synthesis` | reachable |
+| `wan2.1-kf2v-plus` | `/api/v1/services/aigc/image2video/video-synthesis` | **round-trip SUCCEEDED** |
+| `wan2.2-i2v-flash` | `/api/v1/services/aigc/video-generation/video-synthesis` | reachable |
+| `wanx2.1-imageedit` | — | `Model not exist` — not on this account |
+
+Findings that shape the client:
+
+1. **Validation messages are free schema.** The rejections name the missing fields:
+   `img_url must be set for image to video method` (i2v) and `video frames must be set`
+   (kf2v). The probe cost nothing and returned the request shape.
+2. **The video endpoints accept a base64 `data:` URI in place of a URL.** `i2v-flash`
+   read a 1×1 data URI and rejected it with `Image height or width is too small than
+   240` — a *decode* error, so the image was read. This is the finding the whole feature
+   depends on: frames extracted on a `127.0.0.1` box have no public URL, and no OSS
+   upload step is needed.
+3. **`qwen-image-edit` does NOT accept a data URI** — `url error, please check url` for
+   `base_image_url`, `image_url`, and `images[]` alike. It needs a real HTTP(S) URL, so
+   the frame-editing half of the loop is still blocked on hosting the frame somewhere
+   reachable. `kf2v` alone does not need it.
+4. **`wan2.1-kf2v-plus` confirmed end to end, at a cost of 5 s** (1 of 40 cycles): fields
+   `input.first_frame_url` + `input.last_frame_url`, async submit, `output.video_url` on
+   completion. Unlike i2v it enforces no 240 px minimum, so the guard intended to keep
+   the probe free did not hold — it accepted and generated. Cancel is `PENDING`-only
+   (section 3, finding 4) and the task was already `RUNNING`.
+
+Net: local frame → data URI → `kf2v` → `video_url` is a verified path, on quota that is
+entirely separate from the t2v draft/final reserve.
+
 ## 4. First real end-to-end run (Jul 15) — what the synthetic clips hid
 
 Sections 1–3b verify the API in isolation, and spend almost nothing doing it — which is
