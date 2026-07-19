@@ -124,11 +124,18 @@ def create_app(runtime: Runtime) -> FastAPI:
     @app.post("/api/projects/{pid}/assemble")
     def reassemble(pid: str):
         p = _require(pid)
-        paths = [s.final_path for s in p.shots if s.certified and s.final_path]
-        if not paths:
+        shipped = [s for s in p.shots if s.certified and s.final_path]
+        if not shipped:
             raise HTTPException(400, "no certified shots to assemble")
         out = str(Path(rt().cfg.data_dir) / pid / "episode.mp4")
-        episode = rt().deps.assemble_fn(paths, out)  # free re-concat, no tokens
+        # Narrate through the pipeline's own path so a re-cut episode keeps its sound —
+        # re-concatenating without it would silently ship a silent replacement. Lines
+        # already synthesized replay from cache, so this stays a free operation.
+        pipe = Pipeline(rt().store, pid, rt().deps, rt().cfg)
+        audio = pipe._narrate(shipped)
+        paths = [s.final_path for s in shipped]
+        episode = (rt().deps.assemble_fn(paths, out, audio_paths=audio) if audio
+                   else rt().deps.assemble_fn(paths, out))
         rt().store.update(pid, lambda pr: setattr(pr, "episode_path", episode))
         return {"episode": episode}
 
