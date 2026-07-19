@@ -28,15 +28,7 @@ jobs:
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
-          # Set exactly ONE of these. An unset secret interpolates to an empty
-          # string, so the action uses whichever credential is actually present.
-          # Don't set both — the action documents no precedence between them.
-          # Alibaba SAS instances ship with password login enabled, so
-          # SERVER_PASSWORD is the zero-setup path; SERVER_SSH_KEY is preferred
-          # where the box has the CI public key authorized, because a password
-          # replays from anywhere and cannot be scoped or rotated per-use.
           key: ${{ secrets.SERVER_SSH_KEY }}
-          password: ${{ secrets.SERVER_PASSWORD }}
           envs: ENV_NAME
           script: |
             set -e
