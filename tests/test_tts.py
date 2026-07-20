@@ -105,3 +105,13 @@ def test_missing_audio_url_is_a_failure_not_a_crash(tmp_path):
     tts = TTSClient("k", cache_dir=str(tmp_path / "cache"), http=http)
     r = tts.synthesize("hello")
     assert not r.ok and "no audio url" in (r.message or "")
+
+
+def test_an_over_long_explicit_line_is_also_trimmed():
+    # The explicit branch used to return the agent's line verbatim while only the
+    # fallback was budgeted — so a verbose script agent shipped a sentence that the
+    # assembler cut off mid-word.
+    s = _spec("a lighthouse at dusk", narration=" ".join(["word"] * 40), duration_s=5)
+    text = narration_for(s)
+    assert len(text.split()) <= 13, text
+    assert text.endswith(".")

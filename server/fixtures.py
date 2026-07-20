@@ -73,15 +73,18 @@ _SHOTS = [
     {
         "prompt": ("A weathered lighthouse keeper stands at a rain-streaked window at dusk, "
                    "looking out at a grey sea. Warm lamp light on his face. Cinematic, no cuts."),
+        "narration": "For thirty years he watched a sea that never answered.",
         "assertions": _BASE_ASSERTIONS,
     },
     {
         "prompt": PAN_ASKED,
+        "narration": "Tonight the beam sweeps the cliffs, the way it always has.",
         "assertions": _BASE_ASSERTIONS + [{"type": "camera_motion", "params": {"direction": "right"}}],
     },
     {
         "prompt": ("A glass bottle holding a rolled paper note, washed up among wet dark rocks "
                    "at dusk, small waves lapping around it. Cinematic, no cuts."),
+        "narration": "Then the sea answers — a bottle among the rocks, waiting.",
         "assertions": _BASE_ASSERTIONS,
     },
 ]

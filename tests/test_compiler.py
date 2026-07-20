@@ -93,3 +93,20 @@ def test_shot_assertion_overrides_extra_default_of_same_type():
     specs = compile_shots(raw, pack, extra_defaults=extra)
     cams = [a for a in specs[0].assertions if a.type is AssertionType.CAMERA_MOTION]
     assert len(cams) == 1 and cams[0].params["direction"] == "left"  # shot-specific wins
+
+
+def test_compile_shots_carries_narration_through():
+    # ShotSpec has always declared `narration`, but compile_shots built every spec by
+    # hand and omitted it — so the script agent's spoken line could never reach the
+    # episode and every shot fell back to a slate. Unit-testing narration_for() in
+    # isolation did not catch it, because that test constructs a ShotSpec directly.
+    pack = load_pack("short_drama")
+    specs = compile_shots(
+        [{"prompt": "a lighthouse at dusk", "narration": "For thirty years he watched."}], pack
+    )
+    assert specs[0].narration == "For thirty years he watched."
+
+
+def test_compile_shots_without_narration_leaves_it_unset():
+    pack = load_pack("short_drama")
+    assert compile_shots([{"prompt": "a lighthouse at dusk"}], pack)[0].narration is None

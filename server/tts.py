@@ -116,23 +116,33 @@ class TTSClient:
 WORDS_PER_SECOND = 2.6
 
 
+def _fit(text: str, budget: int) -> str:
+    """Trim to the word budget and close the sentence."""
+    words = text.split()
+    if len(words) > budget:
+        text = " ".join(words[:budget])
+    return text if text.endswith((".", "!", "?", "…")) else f"{text.rstrip(',;:—-')}."
+
+
 def narration_for(spec) -> str:
     """What this shot says out loud, trimmed to what fits inside it.
 
-    Prefers an explicit `narration` from the script agent; otherwise reads the shot
-    description itself. A dailies reel is reviewed, not broadcast, so describing the
-    shot IS the useful thing to hear — it is what a spoken slate does on a real one.
+    Prefers an explicit `narration` from the script agent — a written line that carries
+    the story — and falls back to describing the shot, which is what a spoken slate does
+    on a real dailies reel. Both paths are budget-trimmed: the assembler truncates audio
+    at the clip length, so an over-long line is not extra, it is a sentence cut mid-word.
     """
+    budget = max(4, int(getattr(spec, "duration_s", 5) * WORDS_PER_SECOND))
     explicit = (getattr(spec, "narration", None) or "").strip()
     if explicit:
-        return explicit
+        return _fit(explicit, budget)
     prompt = (getattr(spec, "prompt", "") or "").strip()
     if not prompt:
         return ""
     first = prompt.split(". ")[0].strip().rstrip(".")
     slate = f"Shot {getattr(spec, 'index', 0)}."
-    budget = max(4, int(getattr(spec, "duration_s", 5) * WORDS_PER_SECOND) - len(slate.split()))
     words = first.split()
-    if len(words) > budget:
-        first = " ".join(words[:budget])
+    slate_budget = max(4, budget - len(slate.split()))
+    if len(words) > slate_budget:
+        first = " ".join(words[:slate_budget])
     return f"{slate} {first}." if first else ""

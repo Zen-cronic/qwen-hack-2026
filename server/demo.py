@@ -34,14 +34,17 @@ _FOURCC = cv2.VideoWriter_fourcc(*"mp4v")
 # Fixed storyboard; shot 1 is the planted kill-shot (asserts a right pan).
 _DEMO_SHOTS = [
     {"prompt": "establishing wide shot of a lonely lighthouse at dusk, waves below, still locked-off camera",
+     "narration": "At the edge of the world, one light still keeps watch.",
      "assertions": []},
     {"prompt": "the keeper climbs the spiral staircase, camera slowly pans right to follow him",
      "subject": "the lighthouse keeper",
+     "narration": "Every night he climbs the same hundred and eighty steps.",
      "assertions": [{"type": "camera_motion", "params": {"direction": "right"}},
                     # Tier-0: asked of the still, before this shot costs a single video second.
                     {"type": "subject_present", "params": {"subject": "the lighthouse keeper"}},
                     {"type": "identity_consistent", "params": {"subject": "the lighthouse keeper"}}]},
     {"prompt": "close-up of the great lamp igniting, warm light flooding the glass room",
+     "narration": "The lamp catches. For one more night, the dark gives way.",
      "assertions": [{"type": "action_completed", "params": {"action": "the lamp ignites and glows"}}]},
 ]
 
