@@ -98,7 +98,7 @@ line is **0** in this run. In production it logs `qwen-vl-plus` tokens — on **
 
 This is the core cost design, and the measured batch makes it concrete:
 
-- **Tier-A CV ran 31 check executions across the batch at zero tokens** — it re-runs on every
+- **Tier-A CV ran 26 check executions across the batch at zero tokens** — it re-runs on every
   draft *and* every promoted final because it is free to run. It never appears in the ledger's
   billed columns because there is nothing to meter.
 - **Tier-B VLM ran 3 advisory check executions**, only on drafts, never on finals (by cost
@@ -127,8 +127,9 @@ Tier-A can run on **every** take without a budget conversation.
 Shot 1 is the planted kill-shot: it asserts a rightward camera pan, the first synthetic draft
 is static, and the loop is expected to converge in one retake.
 
-- Takes per shot: **[2, 3, 2]** — shot 2 has an extra draft (take 0 FAIL → take 1 PASS) plus
-  its promoted final; the other two pass on the first draft.
+- Takes per shot: **[2, 2, 2]** — shot 1 has two drafts (take 0 FAIL → take 1 PASS) and no
+  promoted final, because its motion contract skips promotion; shots 0 and 2 pass on the first
+  draft and each add a promoted final.
 - **1 shot repaired, 1 certified** — a single `repairing`/chat call (90 in + 30 out tokens)
   fed only the blocking Tier-A `camera_motion` failure back to `qwen-plus`, which convergence
   fixed on the next take.
