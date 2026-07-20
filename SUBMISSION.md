@@ -1,20 +1,36 @@
 # Submission deliverables — verbatim-sourced from Devpost /rules + update 45055
 
-- [ ] **Public open-source repo** — license file "detectable and visible at the top of the repository page"; contains "all necessary source code, assets, and instructions required for the project to be functional"
-- [ ] **Code file with the Qwen Cloud Base URL clearly visible** — sanctioned base URLs:
+- [x] **Public open-source repo** — license file "detectable and visible at the top of the repository page"; contains "all necessary source code, assets, and instructions required for the project to be functional".
+  Root [LICENSE](LICENSE) is verbatim MIT, which GitHub auto-detects and renders in the About
+  sidebar; also declared in `pyproject.toml`.
+- [x] **Code file with the Qwen Cloud Base URL clearly visible** — sanctioned base URLs:
   - `https://dashscope-intl.aliyuncs.com/compatible-mode/v1`
   - `https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1` (OpenAI-compatible)
   - `https://token-plan.ap-southeast-1.maas.aliyuncs.com/apps/anthropic` (Anthropic-compatible)
+
+  Submit [server/config.py](server/config.py) — the sanctioned URL is a literal there
+  (`QWEN_BASE_URL`, `DASHSCOPE_BASE_URL`). It also appears in `.env.example`,
+  `docker-compose.yml`, and `server/wan.py`'s module docstring.
 - [ ] **Proof of Alibaba Cloud deployment** — "No proof = not eligible". The rules and the FAQ
   word this differently, so satisfy both: (a) screenshot of running resources from the Alibaba
-  Cloud Workbench, and (b) "a link to a code file in their code repo that demonstrates use of
-  Alibaba Cloud services and APIs" — use [server/wan.py](server/wan.py) (the DashScope async
-  task API against `dashscope-intl.aliyuncs.com`).
-- [ ] **Architecture diagram** — "how Qwen Cloud connects to your backend, database, and frontend"
-- [ ] **Demo video** — "less than three (3) minutes", public on YouTube/Vimeo/Youku, "must include footage that shows the Project functioning on the device for which it was built", "not a Figma mockup — real working app!", no third-party trademarks / copyrighted music
-- [ ] **Text description** — features + functionality, in English
-- [ ] **Track identified** — Track 2: AI Showrunner
-- [ ] **Testing access** — link to working demo/site; login credentials if private; free of charge, unrestricted "until the Judging Period ends"
+  Cloud Workbench — **still to capture**, per [deploy.md](docs/deploy.md) "Eligibility"; and
+  (b) "a link to a code file in their code repo that demonstrates use of Alibaba Cloud services
+  and APIs" — use [server/wan.py](server/wan.py), which names the DashScope host and drives its
+  async task API (submit with `X-DashScope-Async`, poll `/tasks/{id}`, fetch the signed result).
+  Corroborating: [server/oss.py](server/oss.py) (OSS SDK) and
+  [.github/workflows/deploy-prod.yml](.github/workflows/deploy-prod.yml) (deploys onto the SAS box).
+- [x] **Architecture diagram** — "how Qwen Cloud connects to your backend, database, and frontend".
+  [docs/architecture.md](docs/architecture.md). If the form takes one image, use the **deployment
+  topology** diagram — it names the SAS instance, the Postgres sidecar and OSS explicitly.
+- [ ] **Demo video** — "less than three (3) minutes", public on YouTube/Vimeo/Youku, "must include footage that shows the Project functioning on the device for which it was built", "not a Figma mockup — real working app!", no third-party trademarks / copyrighted music.
+  Rendered at 2:00; **upload and paste the URL here.**
+- [x] **Text description** — features + functionality, in English. [README.md](README.md); the
+  impact narrative is below and in [docs/impact.md](docs/impact.md).
+- [x] **Track identified** — Track 2: AI Showrunner
+- [ ] **Testing access** — link to working demo/site; login credentials if private; free of charge, unrestricted "until the Judging Period ends".
+  The box's public IP is deliberately absent from this repo; it goes in the Devpost field only.
+  Confirm the runtime first: `curl http://<host>/api/health` should not report `mode: "real"` for
+  an unattended URL — see [deploy.md](docs/deploy.md) on the fresh-final cap.
 - [ ] (Optional, stacks with track prize) **Blog/social post URL** — "showing your journey building with QwenCloud"; judged on "thoroughness and potential impact"; $500 cash + $500 credits × 10 winners
 
 ## Problem Value & Impact

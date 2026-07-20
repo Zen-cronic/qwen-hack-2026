@@ -97,12 +97,14 @@ flowchart TB
         patch["Targeted repair<br/><i>post-run, one shot, outside the pipeline</i><br/>Re-render from the last good frame, re-check,<br/>keep the original clip if it still fails"]:::stage
         ledger["Metrics ledger<br/><i>Container: append-only run log</i><br/>Every model call; derives the<br/>cost-quality frontier"]:::container
         store["Store + snapshots<br/><i>Container: live-run state + media cache</i><br/>Atomic snapshots; identical requests replay for free"]:::container
+        catalog["Catalog database<br/><i>Container: relational store, flag-gated</i><br/>A finished run as rows — projects, shots, takes,<br/>assertion results, ledger"]:::container
         reuse["Reuse surface<br/><i>Container: one conformance engine, three ways</i><br/>Function-calling tool · agent skill · MCP server,<br/>plus our own MCP client that closes the loop"]:::container
     end
 
     qwen["Qwen Cloud<br/><i>External System</i><br/>qwen-plus (chat/repair) · qwen-vl-plus (VLM) ·<br/>qwen3-tts (speech) · Wan (text-to-image,<br/>text-to-video, image-to-video)"]:::external
     mcphost["MCP client host<br/><i>External System</i><br/>A Qwen agent / Claude"]:::external
     disk["Storage volume<br/><i>External: bind-mounted disk</i><br/>Snapshots, run log, cached media"]:::external
+    objstore["Cloud object storage<br/><i>External System</i><br/>Published media, private bucket"]:::external
 
     operator --> spa
     spa -->|"submit a spec, approve the gate,<br/>poll the conformance report"| api
@@ -125,6 +127,8 @@ flowchart TB
     pipe -->|"mutates state, atomic snapshot"| store
     store --> disk
     ledger --> disk
+    pipe -->|"publishes a finished run"| catalog
+    catalog -->|"media by content hash"| objstore
 
     reuse -->|"reuses the same engine"| checks
     reuse -->|"agent + function-calling loop"| qwen

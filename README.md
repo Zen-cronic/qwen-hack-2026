@@ -253,16 +253,21 @@ saying their rule went uncompiled.
 python3.12 -m venv .venv && source .venv/bin/activate   # any Python 3.12 interpreter
 cp .env.example .env               # add your QWEN_API_KEY
 pip install -e ".[dev,mcp,agent]"  # mcp + agent extras: without them, those surfaces' tests skip
-python scripts/verify_quota.py     # day-1 gate: API access + video-gen quota
-pytest -q                          # full suite, no network needed
+pytest -q                          # full suite, no key and no network needed
+python scripts/verify_quota.py     # needs a live key: checks API access + video-gen quota
 uvicorn server.app:create_production_app --factory --port 8099
 ```
 
-**Zero-quota demo mode** (real pipeline + CV on synthetic clips, no video spend):
+**Zero-quota demo mode** (real pipeline + CV on synthetic clips, no video spend, no API key).
+Build the SPA first — `web/dist` is not checked in, and the server mounts the UI only if it
+exists, so without this you get a working API and a blank page:
 
 ```bash
+npm --prefix web install && npm --prefix web run build
 DAILIES_DEMO=1 SPA_DIST=web/dist uvicorn server.app:create_production_app --factory --port 8099
 ```
+
+Then open <http://localhost:8099/>.
 
 **End-to-end UI test** (Playwright drives the whole journey — premise → review gate →
 certified episode — against the demo runtime; boots its own server, zero video quota):
