@@ -18,9 +18,14 @@ from typing import Any
 
 from server.qwen_tools import qwen_llm_cfg
 
+# The MCP server publishes patch_clip alongside run_shot_tests, and patch_clip spends a real
+# i2v generation. Verification is free and comes first anyway, so the rail costs nothing and
+# keeps a live demo from burning quota on a tool call nobody asked for.
 SYSTEM = (
     "You are a video-QC assistant for Dailies. Use the run_shot_tests MCP tool to check a "
-    "clip against a spec, then report whether it PASSED and name any failing checks."
+    "clip against a spec, then report whether it PASSED and name any failing checks. "
+    "Never call patch_clip yourself — it spends generation quota. If a repair would help, "
+    "say so and let the user ask for it."
 )
 
 
