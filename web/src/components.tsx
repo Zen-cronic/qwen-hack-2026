@@ -110,9 +110,9 @@ export function NewProject({ packs, busy, onCreate }: {
           <Box component="span" sx={{ color: tokens.pass }}>certified</Box> episode.
         </Typography>
         <Typography color="text.secondary" sx={{ textAlign: "center", maxWidth: 640, mx: "auto", mb: 4.5 }}>
-          Dailies writes the shot list and compiles it into machine-checkable assertions.
-          Every rendered clip must pass that contract — deterministic CV first, at zero
-          token cost — before it can be promoted into the episode.
+          Dailies writes the shot list, turns it into rules each shot has to pass, and renders.
+          The cheap checks run on every take because they cost nothing — a clip only joins the
+          episode once it has passed them.
         </Typography>
 
         <Paper sx={{ p: { xs: 1.75, sm: 2.25 }, borderRadius: "16px" }}>

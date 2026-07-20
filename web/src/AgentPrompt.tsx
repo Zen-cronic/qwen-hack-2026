@@ -69,7 +69,7 @@ export function AgentPrompt({ busy, onCreate }: {
     <Box sx={{ pt: { xs: 4, sm: 7 }, pb: 3 }}>
       <Box sx={{ maxWidth: 860, mx: "auto" }}>
         <Typography variant="overline" sx={{ color: tokens.accent, letterSpacing: "0.1em", display: "block", textAlign: "center", mb: 1 }}>
-          Agent-directed pipeline
+          write the spec · approve the list · ship what passes
         </Typography>
         <Typography variant="h1" sx={{
           fontSize: "clamp(2rem, 4.5vw, 3.1rem)", letterSpacing: "-0.03em",
@@ -79,9 +79,9 @@ export function AgentPrompt({ busy, onCreate }: {
           <Box component="span" sx={{ color: tokens.accent }}>pipeline</Box>.
         </Typography>
         <Typography color="text.secondary" sx={{ textAlign: "center", maxWidth: 620, mx: "auto", mb: 4 }}>
-          A Qwen agent turns your request into a Dailies pipeline — shot list, deterministic
-          CV and VLM checks, a human review gate, and a certified cut — as a live graph you
-          can watch run.
+          A Qwen agent turns your request into a working pipeline — the shot list, the rules
+          each shot has to pass, a stop for your approval before anything renders, and the
+          finished cut — as a live graph you can watch run.
         </Typography>
 
         <Paper sx={{ p: { xs: 1.75, sm: 2.25 }, borderRadius: "16px" }}>
