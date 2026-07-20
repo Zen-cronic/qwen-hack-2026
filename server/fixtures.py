@@ -78,13 +78,15 @@ _SHOTS = [
     },
     {
         "prompt": PAN_ASKED,
-        "narration": "Tonight the beam sweeps the cliffs, the way it always has.",
+        "narration": "Forty winters I have turned this light. Nobody ever turns back.",
+        "speaker": "the lighthouse keeper",
         "assertions": _BASE_ASSERTIONS + [{"type": "camera_motion", "params": {"direction": "right"}}],
     },
     {
         "prompt": ("A glass bottle holding a rolled paper note, washed up among wet dark rocks "
                    "at dusk, small waves lapping around it. Cinematic, no cuts."),
-        "narration": "Then the sea answers — a bottle among the rocks, waiting.",
+        "narration": "Whoever finds this, I am still out here.",
+        "speaker": "the castaway",
         "assertions": _BASE_ASSERTIONS,
     },
 ]

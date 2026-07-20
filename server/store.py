@@ -103,6 +103,10 @@ class ProjectState(BaseModel):
     # reads as one coherent piece — unified grade/lighting/lens, and recurring subjects
     # held to one appearance. Set once at scripting; see Pipeline._compose_prompt.
     style_descriptor: str = ""
+    # Speaker -> TTS voice, fixed at scripting so a character sounds the same in every
+    # shot they speak in. The script agent names the speaker; the server casts the voice
+    # from a verified roster (server/tts.py CAST_VOICES).
+    cast: dict[str, str] = Field(default_factory=dict)
     status: ProjectStatus = ProjectStatus.QUEUED
     created_ts: float = Field(default_factory=time.time)
     updated_ts: float = Field(default_factory=time.time)

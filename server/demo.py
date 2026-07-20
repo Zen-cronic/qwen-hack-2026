@@ -38,7 +38,8 @@ _DEMO_SHOTS = [
      "assertions": []},
     {"prompt": "the keeper climbs the spiral staircase, camera slowly pans right to follow him",
      "subject": "the lighthouse keeper",
-     "narration": "Every night he climbs the same hundred and eighty steps.",
+     "narration": "Every night I climb. The stairs know my weight by now.",
+     "speaker": "the lighthouse keeper",
      "assertions": [{"type": "camera_motion", "params": {"direction": "right"}},
                     # Tier-0: asked of the still, before this shot costs a single video second.
                     {"type": "subject_present", "params": {"subject": "the lighthouse keeper"}},
@@ -157,19 +158,24 @@ class _DemoGen:
                          from_cache=cached, seconds=0 if cached else 5,
                          cached_seconds=5 if cached else 0, latency_ms=90)
 
-    def narrate(self, text: str) -> SimpleNamespace:
+    def narrate(self, text: str, *, voice: str | None = None) -> SimpleNamespace:
         """Offline narration: a short, quiet tone standing in for a spoken line.
 
         Real audio, not a stub — the episode genuinely carries a track, so the assembler's
         mux/concat path is exercised by the e2e at zero quota. Pitch varies with the text
-        so consecutive shots are audibly distinct.
+        so consecutive shots are audibly distinct, and the voice sets the register, so a
+        cast of characters is audibly a cast even offline.
         """
-        key = self._key(f"{text}|narration", "tts")
+        voice = voice or "narrator"
+        key = self._key(f"{text}|narration|{voice}", "tts")
         path = self.cache_dir / f"{key}.wav"
         cached = path.exists()
         if not cached:
             rate, seconds = 44100, 1.2
-            hz = 220 + (int(hashlib.sha1(text.encode()).hexdigest()[:4], 16) % 6) * 55
+            # Voice picks the register, text picks the note within it — so two characters
+            # never collide, the way they would if pitch came from the line alone.
+            base = 180 + (int(hashlib.sha1(voice.encode()).hexdigest()[:4], 16) % 5) * 90
+            hz = base + (int(hashlib.sha1(text.encode()).hexdigest()[:4], 16) % 6) * 12
             t = np.linspace(0.0, seconds, int(rate * seconds), endpoint=False)
             # Quiet on purpose: this plays under review screenshots and the demo video.
             envelope = np.minimum(1.0, np.minimum(t * 8, (seconds - t) * 8))

@@ -30,7 +30,7 @@ from server.specs import (
     Status,
     parse_assertions,
 )
-from server.tts import narration_for
+from server.tts import build_cast, narration_for, voice_for
 from server.store import (
     ProjectState,
     ProjectStatus,
@@ -51,7 +51,7 @@ TierAFn = Callable[[str, ShotSpec, str], list[AssertionResult]]          # (vide
 TierBFn = Callable[[str, ShotSpec], list[AssertionResult]]               # (video_path, spec) -> results
 RepairFn = Callable[[ShotSpec, list[AssertionResult]], tuple[str, object]]  # (spec, failures) -> (new_prompt, usage)
 PatchVideoFn = Callable[[str, str, str], object]                          # (prompt, model, frame_path) -> WanResult-like
-NarrateFn = Callable[[str], object]                                       # (text) -> TTSResult-like
+NarrateFn = Callable[..., object]                          # (text, *, voice=None) -> TTSResult-like
 AssembleFn = Callable[[list[str], str], str]                             # (clip_paths, out_path) -> episode_path
 
 
@@ -264,6 +264,9 @@ class Pipeline:
             # The shared look is fixed here, once, from the compiled shots — every
             # downstream generation composes it in so the episode stays coherent.
             p.style_descriptor = build_style_descriptor(p.premise, specs)
+            # Casting is fixed here too, for the same reason: one voice per character,
+            # decided once from the whole shot list rather than per shot.
+            p.cast = build_cast(specs)
 
         self._set(set_shots)
 
@@ -466,18 +469,23 @@ class Pipeline:
         """
         if self.deps.narrate_fn is None:
             return None
+        cast = self.store.get(self.pid).cast
         out: list[str | None] = []
         for s in shipped:
             text = narration_for(s.spec)
             if not text:
                 out.append(None)
                 continue
-            res = self.deps.narrate_fn(text)
+            # A character speaks in their own voice in every shot they appear in; anything
+            # unattributed is the narrator. The voice is part of the narration cache key,
+            # so re-casting a character re-synthesizes only that character's lines.
+            voice = voice_for(s.spec, cast)
+            res = self.deps.narrate_fn(text, voice=voice)
             ok = bool(getattr(res, "ok", False))
             self._spend(kind=ResourceKind.AUDIO, model=self.cfg.tts_model, stage="assembling",
                         shot_index=s.spec.index, latency_ms=getattr(res, "latency_ms", 0),
-                        note=("cache" if getattr(res, "from_cache", False)
-                              else f"{getattr(res, 'chars', 0)} chars" if ok
+                        note=(f"{voice}/cache" if getattr(res, "from_cache", False)
+                              else f"{voice}/{getattr(res, 'chars', 0)} chars" if ok
                               else f"FAILED {getattr(res, 'message', '')}"[:180]))
             out.append(getattr(res, "local_path", None) if ok else None)
         return out if any(out) else None

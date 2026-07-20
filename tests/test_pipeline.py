@@ -196,3 +196,52 @@ def test_cache_hit_clips_are_free(tmp_path):
     assert p.status is ProjectStatus.DONE
     assert p.wallet.draft_clips == 0 and p.wallet.final_clips == 0  # replays are free
     assert p.wallet.video_seconds == 0
+
+
+def test_narration_is_spoken_in_the_cast_voice(tmp_path):
+    """The cast fixed at scripting must reach the TTS call itself.
+
+    A voice that is decided and logged but never passed to narrate_fn would leave every
+    character sounding identical while the ledger claimed otherwise — the failure mode
+    worth pinning, since the voice is also part of the narration cache key.
+    """
+    from server.tts import NARRATOR_VOICE
+
+    spoken: list[tuple[str, str]] = []
+
+    class CastHarness(Harness):
+        def script_fn(self, premise, pack, max_shots):
+            return [
+                {"prompt": "shot 0", "narration": "He watched a sea that never answered.",
+                 "assertions": []},
+                {"prompt": "shot 1", "narration": "I have turned this light for forty winters.",
+                 "speaker": "the keeper", "assertions": []},
+            ], _usage()
+
+    def narrate_fn(text, *, voice=None):
+        spoken.append((voice, text))
+        return SimpleNamespace(ok=True, local_path=f"{voice}.wav", from_cache=False,
+                               latency_ms=1, chars=len(text))
+
+    store = Store(tmp_path / "projects")
+    pid = _project(store, max_shots=2)
+    h = CastHarness(max_shots=2)
+    deps = _deps(h, tmp_path)
+    deps.narrate_fn = narrate_fn
+    pipe = Pipeline(store, pid, deps, Config(data_dir=str(tmp_path / "projects")))
+
+    thread = threading.Thread(target=pipe.run)
+    thread.start()
+    assert _wait_status(store, pid, ProjectStatus.AWAITING_REVIEW)
+    store.signal_review(pid)
+    thread.join(timeout=5)
+    assert not thread.is_alive()
+
+    p = store.get(pid)
+    assert p.cast == {"the keeper": p.cast["the keeper"]} and len(p.cast) == 1
+    keeper_voice = p.cast["the keeper"]
+    assert keeper_voice != NARRATOR_VOICE
+    assert spoken == [
+        (NARRATOR_VOICE, "He watched a sea that never answered."),
+        (keeper_voice, "I have turned this light for forty winters."),
+    ]
