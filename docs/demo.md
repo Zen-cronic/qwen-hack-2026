@@ -11,7 +11,7 @@ the Qwen tool/MCP beats spend only a few hundred chat tokens).
 | **User-authored custom checks** — plain-language rules compiled to the closed vocabulary | Workbench "Custom checks" textarea | Innovation, Impact |
 | **`title_card_present`** advisory check (vocab 9 → 10) | Conformance board (draft take) | Innovation |
 | **Human-override buttons** on advisory checks | Conformance board | Impact (calibration-corpus moat) |
-| **MCP server** exposing `run_shot_tests` | Terminal (`python -m server.mcp_server`) | Technical Depth |
+| **MCP server** exposing `run_shot_tests` (reports, free) + `patch_clip` (acts, spends) | Terminal (`python -m server.mcp_server`) | Technical Depth |
 | **Qwen custom tool** (function calling + Qwen-Agent) | `scripts/qwen_tool_demo.py` | Technical Depth |
 | **MCP loop** — a Qwen agent consuming our own MCP server | `scripts/mcp_agent_demo.py` | Technical Depth |
 
@@ -72,14 +72,31 @@ python -m server.mcp_server        # speaks MCP over stdio; Ctrl-C to stop
 python scripts/mcp_agent_demo.py
 ```
 
-*Narrate:* a Qwen agent (MCP client) launches Dailies' `run_shot_tests` MCP server, issues
-`ListTools` + `CallTool`, and reports the verdict — a complete Model Context Protocol round-trip
-where **both ends are ours**. This is the beat the rest of Track 2 can't show: the field
-*generates* video; Dailies exposes its **verification gate** as an MCP tool any agent can call,
-which is exactly the "MCP integration" the rubric names. How every Qwen surface maps to each
-rubric line: [qwen-usage.md](qwen-usage.md).
+The script prints the round-trip as it happens, so the terminal shows the protocol rather than a
+summary of it. Read it top to bottom on camera:
 
-![The Act 3 round-trip, captured: a Qwen agent calls run_shot_tests through Dailies' own MCP server (client + server both ours) and reports the deterministic Tier-A verdict.](mcp-loop.png)
+1. **`ListTools` returns two tools**, not one — `run_shot_tests` (free, deterministic, any mp4)
+   and `patch_clip` (repairs a clip from its last good frame; spends one i2v generation).
+2. **The agent calls the free one**, with a `camera_motion` assertion merged over the
+   `brand_rules` pack — the same closed-vocabulary compile path the workbench uses.
+3. **Dailies answers `FAIL` — camera static, |v|=0.00**, localized to a window, from the
+   deterministic CV layer. Same kill-shot as Act 1, reached by an agent this time.
+4. **It closes by offering the repair it was told not to run** — and names it correctly, as
+   keyframe-to-video generation, which it only knows because `ListTools` handed it `patch_clip`'s
+   description. A gate an agent can read is a gate an agent can act on.
+
+*Narrate:* this is the beat the rest of Track 2 can't show. The field *generates* video; Dailies
+exposes its **verification gate** — report *and* repair — as MCP tools any agent can call, which is
+exactly the "MCP integration" the rubric names, with **both ends ours**. How every Qwen surface
+maps to each rubric line: [qwen-usage.md](qwen-usage.md).
+
+> **Why the agent never fires `patch_clip`:** its system message forbids it (`server/mcp_agent.py`),
+> because that tool spends an i2v generation per call and a live demo shouldn't burn quota on a
+> tool call nobody asked for. Verification is free and comes first anyway, so the rail costs the
+> story nothing — and the repair itself is already shown for free in Act 1, where the workbench
+> runs it on synthetic clips.
+
+![The Act 3 round-trip, captured from a live run: MCP ListTools returns run_shot_tests and patch_clip, the agent calls the free one through Dailies' own MCP server (client + server both ours), and the deterministic Tier-A verdict comes back FAIL — camera static, |v|=0.00.](mcp-loop.png)
 
 ## Rubric coverage in one run
 

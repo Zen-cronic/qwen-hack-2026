@@ -19,9 +19,9 @@ server a Qwen agent consumes** — so any pipeline or agent can gate generated v
 gates code. The full surface, mapped to the judging rubric, is in
 [docs/qwen-usage.md](docs/qwen-usage.md).
 
-![A Qwen agent calling Dailies' run_shot_tests conformance tool through the Model Context Protocol — client and server both ours. The agent issues an MCP CallTool, Dailies' server runs the deterministic Tier-A check and returns a real FAIL (camera static, |v|=0.00), and the agent explains it.](docs/mcp-loop.png)
+![A Qwen agent reaching Dailies' conformance gate through the Model Context Protocol — client and server both ours. MCP ListTools returns two tools: run_shot_tests (free, deterministic, any mp4) and patch_clip (spends one i2v generation). The agent calls the free one with a camera_motion assertion merged over the brand_rules pack, and Dailies returns a real FAIL — camera static, |v|=0.00 — which the agent explains before offering to patch the clip.](docs/mcp-loop.png)
 
-<sub>A real, unedited capture of `scripts/mcp_agent_demo.py`: a Qwen agent gates a clip through Dailies' **own** MCP server — issues an MCP `CallTool`, gets back a deterministic Tier-A verdict, and explains the failure. Chat tokens only, zero video quota.</sub>
+<sub>A real, unedited capture of `scripts/mcp_agent_demo.py`: a Qwen agent lists Dailies' **own** MCP tools, calls the free one, gets a deterministic Tier-A verdict back — and then offers to repair the clip, because MCP told it Dailies can act on a verdict as well as report one. Chat tokens only, zero video quota.</sub>
 
 ## The idea (improvement statement)
 
