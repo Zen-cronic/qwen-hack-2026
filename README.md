@@ -141,6 +141,51 @@ conformance board over a certified episode](dailies-done.png)
 *(The other checkpoint that matters: [the review gate](dailies-review.png) — Tier-0 still
 evidence on screen, before a single video-second is spent.)*
 
+### Wired to Qwen Cloud and Alibaba Cloud
+
+Dailies runs **on** Alibaba Cloud, not merely **against** its APIs: backend compute is a SAS
+instance in `us-west-1`, media durability is OSS, and the run catalog is Postgres. Every row
+below is a file you can open.
+
+**Qwen Cloud — two API shapes, because the models need different ones.** Chat and vision go
+through the **OpenAI-compatible** endpoint (`/compatible-mode/v1`), so the same `openai` client
+carries function calling and structured output. Generation is long-running, so video, image and
+speech go through the **native DashScope task API** — submit, poll, fetch — which the
+OpenAI-compatible shape has no vocabulary for.
+
+| Model | Role in the pipeline | Where |
+|---|---|---|
+| `qwen-plus` | Writes the shot list; compiles plain-language custom checks into the closed DSL; rewrites a failing prompt for a bounded retake; backs the `build_pipeline_graph` tool | `server/script.py`, `server/agent_plan.py` |
+| `qwen-vl-plus` | Tier-0 verdicts on the pre-render still, and Tier-B advisory verdicts on frames | `server/tier0.py`, `server/tier_b.py` |
+| `wan2.1-t2i-plus` | The Tier-0 still — pre-screens static assertions at ~1/25th of video cost | `server/wan.py` |
+| `wan2.1-t2v-turbo` | Draft takes, the cheap tier every shot starts on | `server/wan.py` |
+| `wan2.2-i2v-flash` | Frame-anchored work: the retake after a repair, and promotion of a passing draft — the anchor is what makes a final a *continuation* of the approved take rather than a fresh roll | `server/patch.py`, `server/pipeline.py` |
+| `wan2.2-t2v-plus` | Fallback final, when no frame-anchored model is wired | `server/pipeline.py` |
+| `qwen3-tts-flash` | Narration, one voice per character, cached like video | `server/tts.py` |
+
+Note what the table implies about cost: **the deterministic tier is absent from it.** Tier-A is
+OpenCV (`server/tier_a.py`) and calls nothing, which is the whole reason it can run on every
+take — the Qwen surface is spent on generation and judgment, never on measurement.
+
+**Alibaba Cloud services.**
+
+| Service | What it holds | Notes |
+|---|---|---|
+| **SAS instance** (`us-west-1`) | The entire app — nginx + FastAPI + Postgres via one `docker compose` | Backend compute runs here, not just API calls from elsewhere ([deploy.md](docs/deploy.md)) |
+| **OSS** (private bucket) | Published media, addressed by content hash (`media/<sha1>.mp4`) | Uploads use the **internal** endpoint from the box (free same-region traffic); browsers get a **presigned GET** (~1h). `server/oss.py` |
+| **Postgres 18** | The catalog: finished runs as relational rows — projects, shots, takes, assertion results, ledger | Sidecar container, no public port. `server/db/models.py`, `server/catalog.py` |
+
+The catalog is **additive and flag-gated** (`CATALOG_ENABLED`, default off): live runs stay on the
+in-memory store and atomic `state.json`, and a run is mirrored into Postgres + OSS only once it
+finishes. Publishing tolerates a dead database or bucket and never raises, because a storage
+outage must not fail a run that already passed its gates — the conformance verdict is the
+product, and archiving it is a separate concern with a lower right to fail.
+
+One thing that bit us and is worth stating plainly: media paths are **many-to-one** against
+content. Deterministic runs produce byte-identical episodes, so ~40 project paths collapsed onto
+13 objects — which is why the path→hash mapping lives in its own `media_paths` table rather than
+as a column on the object, where it would keep only the last path and 404 every other one.
+
 ### The closed assertion vocabulary
 
 An assertion is a `type` from a **closed** set plus typed `params`. The compiler

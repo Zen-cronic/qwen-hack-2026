@@ -61,8 +61,14 @@ python scripts/qwen_tool_demo.py
 
 *Narrate:* the exact same conformance engine, exposed as a **Qwen custom tool**. `qwen-plus`
 autonomously decides to call `run_shot_tests` — first via **native function calling**, then via a
-**Qwen-Agent** custom tool — receives the structured report, and explains the `palette_deltae` failure.
-This is "custom skills" satisfied concretely, not asserted.
+**Qwen-Agent** custom tool — receives the structured report, and reads the verdict back in plain
+English. This is "custom skills" satisfied concretely, not asserted.
+
+The clip here **passes**, and that is the useful thing to point at: the model doesn't parrot a
+boolean, it reports the measurements the gate made — `palette_deltae` at **ΔE 28.1 against a 30.0
+bound**, `duration_between` at 5.00s in `[4.0, 6.0]`, and so on. A gate that only says *no* teaches
+you nothing; this one hands back the numbers whichever way the verdict went. The failing path is
+already on screen twice — Tier-A's kill-shot in Act 1, and the MCP `FAIL` in Act 3.
 
 ## Act 3 — The MCP loop (terminal, ~30s)
 
