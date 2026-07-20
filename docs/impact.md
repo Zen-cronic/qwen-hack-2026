@@ -68,7 +68,7 @@ Dailies makes the cost of that shift legible. Every Qwen/Wan call is logged to a
 (`server/metrics.py`), and the wallet reports what a batch **would cost at production list
 prices** ("$X in production") while the hackathon runs on free-tier quota. The wedge is simple:
 as generated-video volume goes up, the human-review bottleneck gets worse, and an independent
-conformance gate gets more valuable — not less.
+test suite gets more valuable — not less.
 
 ## Who it's for (three tiers)
 
@@ -95,8 +95,9 @@ The honest answer is **structural**, not "we'll move faster":
   enterprise trust. But that loop is **locked to the Adobe stack** and today enforces **static
   brand rules**, not cross-model, video-native, time-based assertions.
 
-So the defensible seat is scope, not a slogan: **Dailies is the neutral conformance gate for the
-majority of teams generating *outside* any single vendor's walled garden.** Honest concession:
+So the defensible seat is scope, not a slogan: **Dailies tests the video whoever's model made
+it** — which is the seat for every team generating *outside* one vendor's walled garden.
+Honest concession:
 *inside Adobe's stack, on Adobe's models, Adobe wins.* Our wedge is the multi-model shop.
 
 And the distribution is **adoption-led, not platform-locked** — which is the deeper reason a

@@ -1,14 +1,17 @@
-# Dailies — the neutral conformance gate for AI-generated video
+# Dailies — test your generated video like you test your code
 
 [![CI](https://github.com/Zen-cronic/qwen-hack-2026/actions/workflows/ci.yml/badge.svg)](https://github.com/Zen-cronic/qwen-hack-2026/actions/workflows/ci.yml)
 
-*CI for video shots: assertions compile, the deterministic tier spends zero tokens, failures
-auto-repair or fail the build.* Built on Qwen Cloud for the Global AI Hackathon Series
-(Track 2 — AI Showrunner).
+Write what each shot has to do. Every take gets measured against it before it ships — and the
+ones that miss get re-rendered, not shipped. Built on Qwen Cloud for the Global AI Hackathon
+Series (Track 2 — AI Showrunner).
 
-Dailies takes a premise, writes a shot list, and — before any clip ships — runs each
-generated shot through a **cost-tiered conformance cascade**. A shot that violates its
-contract never earns a final render and never reaches your channel.
+**Write the spec → approve the shot list → ship what passes.**
+*Checked, not hoped · repaired, not re-rolled · any mp4, from any model.*
+
+Give Dailies a premise and it writes the shot list, renders each shot, and measures every take
+against the rules you set. A take that misses gets one bounded repair attempt. A take that
+still misses never reaches your cut.
 
 **Built on Qwen Cloud, end to end.** A `qwen-plus` agent authors each run by function-calling
 `build_pipeline_graph`; **Wan** generates every shot and, when one breaks its contract, a
@@ -29,14 +32,17 @@ AI video fails *in motion*, after you've already paid for it — a gorgeous keyf
 becomes a clip that pans the wrong way, flickers, or drops the character. Existing tools
 maximize output; **nobody tests the product**.
 
-Dailies is the only **standalone, model-agnostic per-shot conformance gate**: authored shot
-specs compile through a closed assertion DSL into a cost-tiered cascade with bounded
-auto-repair. The spine of that cascade is deterministic OpenCV that spends **zero tokens — so
-it runs on every take**; model-graded judgment is the advisory layer on top, never the
-foundation. And because checks read frames, not generator internals, the gate stands outside
-the pipeline it judges: point it at any mp4, from any generator.
+Dailies is the part nobody built: **the tests**. You write what a shot has to do — how long,
+how bright, which way the camera moves, whether the title card is really there — and every take
+is measured against it. The cheap checks are plain OpenCV that spends **zero tokens, so they run
+on every take**; model-graded judgment sits on top as advice, never as the foundation. And
+because the checks read frames rather than generator internals, Dailies stands outside the
+pipeline it judges: point it at any mp4, from any generator.
 
-That claim is shape, not primacy, and it is checkable. Research prototypes (Genflow Ad
+Stated plainly so it can be argued with: Dailies is the only **standalone, model-agnostic
+per-shot conformance gate** — authored shot specs compiled through a closed assertion grammar
+into a cost-tiered cascade with bounded auto-repair. That claim is shape, not primacy, and it is
+checkable. Research prototypes (Genflow Ad
 Studio, VideoRepair) explore VLM-critique loops but don't ship; OpenMontage (~39.8k stars)
 hard-gates its own renders — video-level, self-graded, inside its own pipeline, no assertion
 grammar; Kinocut gates release on MCP quality checkpoints with no shot spec and no repair;
