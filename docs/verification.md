@@ -211,6 +211,16 @@ on the same repaired prompt reached `|v| = 0.745 'right'` and passed.
 whole-clip defect re-rolls instead of anchoring. Stated as a general rule about failure
 windows, not a special case for `camera_motion`.
 
+The same rule reached the **manual** path later, and only because the graph's re-render
+button was finally looked at (Jul 20). `patch.py` had its own `anchor_second`, which clamps
+to `0.0` and anchored there quite happily — so the button offered, and the endpoint
+performed, exactly the move measured above as useless. Worth recording as a process finding
+rather than a bug: the automatic and manual paths computed the anchor independently, so
+fixing one left the other confidently wrong, and no test caught it because both surfaces
+agreed with themselves. `patch_shot` now re-rolls when nothing precedes the defect and
+returns `anchor_s: None` to say so, and the button label drops the second it can no longer
+promise.
+
 **i2v promotion inverts motion.** An anchor frame carries composition, lighting and wardrobe;
 it carries no motion vector. Promoting the approved `|v| = 0.745 'right'` take by anchoring at
 `0.1 s` produced a final that panned the other way — `|v| = 6.15 'left'` — and failed the

@@ -11,6 +11,12 @@ frame-anchored model (wan i2v / kf2v, its own free-tier pool) regenerates from t
 a locus-aware corrected prompt. Then Tier-A re-verifies, and a passing patch becomes the
 shot's final so the episode re-concats for free.
 
+When the failure window opens at t=0 there is no good frame to anchor to — the defect is
+the whole clip — so the patch re-rolls from the corrected prompt instead of continuing
+from its own first frame, which would pin the defect in place. Anchor to preserve, re-roll
+to change (measured in verification.md 3e). That fallback draws the t2v draft pool rather
+than the i2v pool, and `anchor_s` comes back None to say so.
+
 Deliberately scoped: no script call, no Tier-0, no review gate, and no other shot is
 touched. That is the whole point — editing the episode without re-running the pipeline.
 
@@ -145,8 +151,16 @@ def patch_shot(store: Store, pid: str, shot_index: int, deps, cfg, *, model: str
         return PatchOutcome(False, "Nothing to patch — every blocking check on this shot passes.", shot_index)
 
     at = anchor_second(failure)
-    anchor = extract_frame(source, at, ev_dir / "anchor.png")
-    if anchor is None:
+    # Anchor to PRESERVE, re-roll to CHANGE. A window that opens at t=0 spans the whole
+    # clip, so there is no good frame to continue from and anchoring would pin the very
+    # defect the patch exists to remove — measured on real Wan output as |v| 0.005 -> 0.112,
+    # still failing, where a fresh roll on the same corrected prompt reached 0.745 and
+    # passed (verification.md 3e). The retake loop already applies this rule
+    # (Pipeline._anchor_for_retake); without it here the manual path would keep offering
+    # the one move we have evidence does not work.
+    anchored = at > 0.0
+    anchor = extract_frame(source, at, ev_dir / "anchor.png") if anchored else None
+    if anchored and anchor is None:
         return PatchOutcome(False, f"Could not read a frame at {at:.2f}s to anchor the re-render.", shot_index, at)
 
     # Reuse the repair agent: it already phrases the locus and holds creative intent fixed.
@@ -156,21 +170,30 @@ def patch_shot(store: Store, pid: str, shot_index: int, deps, cfg, *, model: str
            tokens_in=getattr(usage, "prompt_tokens", 0),
            tokens_out=getattr(usage, "completion_tokens", 0))
 
-    res = deps.patch_video_fn(prompt, model, anchor)
+    if anchored:
+        res = deps.patch_video_fn(prompt, model, anchor)
+        used_model = model
+    else:
+        # Nothing to preserve, so this is a whole-clip re-roll. Honest caveat: it draws the
+        # t2v draft pool, not the separate i2v pool a frame-anchored patch runs on.
+        res = deps.gen_video_fn(prompt, cfg.draft_model)
+        used_model = cfg.draft_model
     billed = 0 if getattr(res, "from_cache", False) else getattr(res, "seconds", 0)
-    _spend(store, pid, deps, stage="patching", kind=ResourceKind.VIDEO_PATCH, model=model,
+    # Recorded as VIDEO_PATCH however it was rendered: the role is repairing a shipped
+    # shot, and `model` below names the endpoint that actually ran it.
+    _spend(store, pid, deps, stage="patching", kind=ResourceKind.VIDEO_PATCH, model=used_model,
            shot_index=shot_index, video_seconds=billed,
            cached_seconds=getattr(res, "cached_seconds", 0),
            latency_ms=getattr(res, "latency_ms", 0),
            note="cache" if getattr(res, "from_cache", False) else "")
 
-    tk = Take(take_no=patch_no, tier="patch", model=model, prompt=prompt,
+    tk = Take(take_no=patch_no, tier="patch", model=used_model, prompt=prompt,
               status=TakeStatus.DONE if res.ok else TakeStatus.FAILED,
               video_path=res.local_path if res.ok else None)
     if not res.ok:
         store.update(pid, lambda pr: pr.shots[shot_index].takes.append(tk))
         return PatchOutcome(False, f"The re-render did not complete: {getattr(res, 'message', '') or res.status}",
-                            shot_index, at, anchor, billed_seconds=billed)
+                            shot_index, at if anchored else None, anchor, billed_seconds=billed)
 
     results = list(deps.tier_a_fn(res.local_path, spec, str(ev_dir)))
     tk.results = results
@@ -207,6 +230,6 @@ def patch_shot(store: Store, pid: str, shot_index: int, deps, cfg, *, model: str
         ok=bool(tk.passed),
         reason="Patched, re-verified, and back under contract." if tk.passed
                else "The re-render still does not pass — the original clip was kept.",
-        shot_index=shot_index, anchor_s=round(at, 2), anchor_frame=anchor,
+        shot_index=shot_index, anchor_s=round(at, 2) if anchored else None, anchor_frame=anchor,
         video_path=tk.video_path, certified=bool(tk.passed),
         billed_seconds=billed, results=results)

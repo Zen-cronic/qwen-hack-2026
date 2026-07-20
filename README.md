@@ -99,8 +99,12 @@ premise → script + specs (qwen-plus) → compiled assertion checklist
   window gives an anchor: the frame just before the defect. A frame-anchored Wan model
   re-renders the shot from there on a locus-aware prompt, Tier-A re-verifies, and a passing
   patch re-cuts the episode for free. No script call, no Tier-0, no review gate, no other shot.
-  A patch has to earn the slot — if it still fails, the original clip stays. Runs on the
-  i2v/kf2v free-tier pool, separate from the t2v draft/final quota.
+  A patch has to earn the slot — if it still fails, the original clip stays. Anchored
+  re-renders run on the i2v/kf2v free-tier pool, separate from the t2v draft/final quota.
+  When the failure window opens at `0s` there is no good frame to keep — the defect is the
+  whole clip — so the patch re-rolls from the corrected prompt instead of continuing from
+  the very frame it needs to change, and draws t2v quota for that one case. Anchor to
+  preserve, re-roll to change: [measured, not assumed](docs/verification.md).
 
   > **Live receipt** (Jul 19, when promotion still re-rolled on the premium t2v tier — this run is
   > what motivated anchoring promotion too, [verification §3e](docs/verification.md)).

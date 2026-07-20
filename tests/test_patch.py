@@ -101,6 +101,13 @@ def _deps(tmp_path, *, patch_direction: str, assembled: list):
         return SimpleNamespace(status="SUCCEEDED", ok=True, local_path=str(out),
                                from_cache=False, seconds=5, cached_seconds=0, latency_ms=10)
 
+    def gen_reroll(prompt, model, negative_prompt=None):
+        # The whole-clip fallback: no anchor frame is passed, because there isn't one.
+        out = tmp_path / f"reroll_{patch_direction}.mp4"
+        _write_clip(out, patch_direction)
+        return SimpleNamespace(status="SUCCEEDED", ok=True, local_path=str(out),
+                               from_cache=False, seconds=5, cached_seconds=0, latency_ms=10)
+
     def fake_assemble(paths, out):
         assembled.append(list(paths))
         return out
@@ -109,7 +116,7 @@ def _deps(tmp_path, *, patch_direction: str, assembled: list):
     return Deps(
         script_fn=lambda *a: ([], SimpleNamespace(prompt_tokens=0, completion_tokens=0)),
         gen_image_fn=lambda p: None,
-        gen_video_fn=lambda p, m: None,
+        gen_video_fn=gen_reroll,
         tier0_fn=noop,
         tier_a_fn=run_tier_a,
         tier_b_fn=noop,
@@ -131,7 +138,10 @@ def test_patch_promotes_a_clip_that_now_passes(tmp_path):
     out = patch_shot(store, pid, 0, deps, cfg, model="wan2.2-i2v-flash")
 
     assert out.ok, out.reason
-    assert out.anchor_s == 0.0 and Path(out.anchor_frame).exists()
+    # This clip is static THROUGHOUT, so the failure window opens at t=0 and there is no
+    # good frame to continue from. Anchoring there would pin the defect the patch exists
+    # to remove (verification 3e), so the patch re-rolls and reports no anchor.
+    assert out.anchor_s is None and out.anchor_frame is None
     st = store.get(pid).shots[0]
     assert st.certified and st.final_path == out.video_path
     assert [t.tier for t in st.takes] == ["draft", "patch"]
@@ -186,3 +196,33 @@ def test_patch_refuses_cleanly_when_there_is_nothing_to_anchor_to(tmp_path):
     store.update(pid, lambda p: setattr(p.shots[0].takes[0], "video_path", str(good)))
     out = patch_shot(store, pid, 0, deps, cfg, model="wan2.2-i2v-flash")
     assert not out.ok and "Nothing to patch" in out.reason
+
+
+def test_a_mid_clip_failure_anchors_instead_of_re_rolling(tmp_path):
+    """The other half of the rule: when a good frame DOES precede the defect, preserve it.
+
+    Anchoring is the whole point of a patch — it holds the composition Tier-0 approved and
+    draws the separate i2v pool. The fully-static fixture can never reach this branch (its
+    window opens at t=0), so the localization is injected to put the defect mid-clip.
+    """
+    store, pid = _project_with_failed_shot(tmp_path)
+    assembled: list = []
+    deps = _deps(tmp_path, patch_direction="right", assembled=assembled)
+    seen: list[str] = []
+    mid = _result(AssertionType.CAMERA_MOTION, Status.FAIL, {"fail_window_s": [1.5, 3.0]})
+    good = _result(AssertionType.CAMERA_MOTION, Status.PASS, {})
+
+    def tier_a(video_path, spec, evidence_dir):
+        seen.append(video_path)
+        return [mid] if len(seen) == 1 else [good]  # source fails mid-clip, patch passes
+
+    deps.tier_a_fn = tier_a
+    cfg = Config(data_dir=str(tmp_path / "projects"))
+
+    out = patch_shot(store, pid, 0, deps, cfg, model="wan2.2-i2v-flash")
+
+    assert out.ok, out.reason
+    # 1.5 - ANCHOR_LEAD_S: the last frame BEFORE the defect, never the defect itself.
+    assert out.anchor_s == 1.3 and Path(out.anchor_frame).exists()
+    # The frame-anchored model ran, not the t2v re-roll.
+    assert store.get(pid).shots[0].takes[1].model == "wan2.2-i2v-flash"

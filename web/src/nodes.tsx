@@ -160,7 +160,12 @@ export function ShotNode({ data }: NodeProps) {
 // from treating the press as a canvas pan. Patching acts on the shot, so state is local.
 function PatchButton({ data }: { data: DNodeData }) {
   const [patching, setPatching] = useState(false);
-  const anchor = (data.anchorS ?? 0).toFixed(1);
+  // Mirrors server/patch.py: a failure window opening at t=0 spans the whole clip, so
+  // there is no good frame to continue from and the server re-rolls instead of anchoring.
+  // Naming a second here would promise a move the server has measured not to make.
+  const anchorS = data.anchorS ?? 0;
+  const anchored = anchorS > 0;
+  const what = anchored ? `from ${anchorS.toFixed(1)}s` : "this shot";
   const run = async (e: MouseEvent<HTMLButtonElement>) => {
     e.stopPropagation();
     if (patching) return;
@@ -173,7 +178,9 @@ function PatchButton({ data }: { data: DNodeData }) {
         className="nodrag nopan" data-testid="node-patch"
         size="small" variant="outlined" color="inherit" disabled={patching} onClick={run}
         title={data.failLabel ? `not yet true: ${data.failLabel}` : undefined}
-        aria-label={`Re-render shot ${data.shotIndex} from ${anchor} seconds`}
+        aria-label={anchored
+          ? `Re-render shot ${data.shotIndex} from ${anchorS.toFixed(1)} seconds`
+          : `Re-render shot ${data.shotIndex}`}
         sx={{
           fontFamily: mono, fontSize: 9.5, lineHeight: 1.4, py: 0.2, px: 0.9,
           minHeight: 0, width: "100%",
@@ -181,7 +188,7 @@ function PatchButton({ data }: { data: DNodeData }) {
           "&:hover": { borderColor: tokens.fail, bgcolor: alpha(tokens.fail, 0.08) },
         }}
       >
-        {patching ? "re-rendering…" : `⟲ re-render from ${anchor}s`}
+        {patching ? "re-rendering…" : `⟲ re-render ${what}`}
       </Button>
     </Box>
   );
