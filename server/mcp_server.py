@@ -133,7 +133,9 @@ def _build_server():
     """Construct the FastMCP server. Imported lazily so the core stays MCP-free."""
     from mcp.server.fastmcp import FastMCP
 
-    server = FastMCP("dailies")
+    # Quiet by default: a stdio server logs to the client's stderr, so per-request INFO
+    # lines land in whatever terminal launched it. Warnings and errors still surface.
+    server = FastMCP("dailies", log_level="WARNING")
 
     @server.tool()
     def run_shot_tests_tool(
