@@ -86,7 +86,7 @@ Recorded off cached artifacts; the planted kill-shot is pre-validated from hero 
 |---|---|---|
 | 0:00–0:20 | Kill-shot cold open | Gorgeous keyframe ("this passed review") → the 5s clip it became: camera pans the WRONG way → red row: `camera_motion: FAIL — pans left, spec requires right`. VO: "AI video fails in motion — after you've paid for it. Nobody's testing the product." |
 | 0:20–0:40 | Name + claim | "Dailies is CI for AI-generated video." Shot-contract YAML; 3-tier cascade diagram with costs (stills = 1/25th of video, CV = free, VLM = tokens only). |
-| 0:40–1:45 | Pipeline run | Premise → specs + compiled assertion checklist → Tier-0 still kills a doomed prompt cheap → **the one human gate** (approve specs, spend video budget) → drafts render, wallet meter ticking → conformance board: planted failure caught by Tier A → repair prompt-delta → retake passes → certified shots auto-promote to `wan2.2-plus`. |
+| 0:40–1:45 | Pipeline run | Premise → specs + compiled assertion checklist → Tier-0 still kills a doomed prompt cheap → **the one human gate** (approve specs, spend video budget) → drafts render, wallet meter ticking → conformance board: planted failure caught by Tier A → repair prompt-delta → retake passes → certified shots auto-promote to a frame-anchored `wan2.2-i2v-flash` final. |
 | 1:45–2:15 | The measurements | Assertion pass-rate heatmap ("an empirical capability map of wan2.1-turbo"), image→video transfer rate, repair convergence, cost-per-passing-second. "Profiling isn't a chart we added — it's what the pipeline is." |
 | 2:15–2:35 | Certified episode + audience flip | Assembled drama plays, "certified 5/6 shots" → dropdown flip to `brand_rules` pack: "same harness, my employer's brand rules — how a one-person social team ships unattended AI video." |
 | 2:35–2:45 | Close | Architecture diagram → live Alibaba Cloud URL ("re-verifies any cached clip at zero video cost — try it") → GitHub + MIT + "pytest for video prompts". |
@@ -99,16 +99,16 @@ Recorded off cached artifacts; the planted kill-shot is pre-validated from hero 
 - `specs.py` — pydantic ShotSpec/Assertion/AssertionResult; **closed vocabulary, exactly 10 assertion types** (compiler rejects invented ones): `duration_between`, `brightness_range`, `flicker_below`, `scene_cuts`, `camera_motion`, `palette_deltae` (Tier A) · `subject_present` (Tier 0 — on the still, NOT Tier B: "0/B" is how it fell between two tiers and got evaluated by neither, see docs/verification.md §5) · `identity_consistent`, `action_completed`, `title_card_present` (Tier B, advisory).
 - `compiler.py` — pack YAML defaults + LLM dynamic assertions → validated per-shot lists.
 - `tier0.py` — 1 t2i still/shot (`wan2.1-t2i-plus`) + a qwen-vl `subject_present` verdict on that still BEFORE any video spend (~325 tokens/shot; the still is downscaled to 512px first, or the pre-screen costs more than the Tier-B batch it exists to avoid). The verdict is evidence at the human gate, not an automatic block.
-- `tier_a.py` — **never-cut spine, zero tokens**: ffmpeg `fps=8,scale=320` frames → Farneback optical flow (camera direction = −content flow; synthetic-shift unit test), flicker std, HSV-hist scene cuts, k-means palette ΔE, ffprobe duration.
+- `tier_a.py` — **never-cut spine, zero tokens**: OpenCV decode strided to 8 fps and scaled to 320 px → Farneback optical flow (camera direction = −content flow; synthetic-shift unit test), flicker std, HSV-hist scene cuts, k-means palette ΔE, container-derived duration.
 - `tier_b.py` — qwen-vl JSON verdicts on 7 strided frames; **gated on hour-zero smoke test**; NO-GO ⇒ compiles to `inconclusive` + human verdict buttons.
 - `repair.py` — qwen-plus prompt delta from failing assertions; max 1 retake/shot on draft tier.
 - `packs/short_drama.yaml`, `packs/brand_rules.yaml` — presets are data, not code (the audience flip).
 - `wan.py` extended for t2i; ledger/wallet in `metrics.py`; judge caps in `budget.py`.
 - New deps: `fastapi`, `uvicorn[standard]`, `httpx`, `opencv-python-headless`, `numpy`, `pyyaml`.
 
-**State flow:** `queued → scripting → tier0 → awaiting_review` [threading.Event — the ONLY human gate, pre-video-spend] `→ drafting → verifying → repairing → promoting → assembling → done|failed`. Promotion to `wan2.2-plus` automatic up to `final_cap=4`. Verdict overrides never block.
+**State flow:** `queued → scripting → tier0 → awaiting_review` [threading.Event — the ONLY human gate, pre-video-spend] `→ drafting → verifying → repairing → promoting → assembling → done|failed`. Promotion renders a frame-anchored `wan2.2-i2v-flash` final (falling back to `wan2.2-t2v-plus`) automatically up to `final_cap=4`; a shot whose contract asserts `camera_motion` skips promotion and ships the approved take. Verdict overrides never block.
 
-**Routes:** `POST /api/projects {premise, pack, max_shots}` · `GET /api/projects/{id}` (poll payload IS the conformance report: wallet + per-shot takes/assertion results/evidence frames + heatmap/transfer/repair/frontier metrics + episode) · `POST .../review` · `POST .../verdict` · `POST .../assemble` (free re-concat) · `GET /api/packs` · `GET /api/wallet` · `GET /api/media/...`.
+**Routes:** `POST /api/projects {premise, pack, max_shots}` · `GET /api/projects/{id}` (poll payload IS the conformance report: wallet + per-shot takes/assertion results/evidence frames + heatmap/transfer/repair/frontier metrics + episode) · `POST .../review` · `POST .../verdict` · `POST .../assemble` (free re-concat) · `GET /api/packs` · `GET /api/wallet` · `GET /api/media/...` · `GET /api/health` · `POST /api/agent/plan` · `POST .../shots/{i}/patch` · and, under `CATALOG_ENABLED`, `GET /api/catalog/projects`, `GET /api/catalog/projects/{id}`, `POST /api/projects/{id}/publish`.
 
 **Judge mode (`JUDGE_MODE=1`):** per-session fresh-clip caps (2 drafts) enforced by the governor; cached-clip re-verification bypasses caps — **zero video quota**; wallet meter shows it all.
 
@@ -153,7 +153,7 @@ Recorded off cached artifacts; the planted kill-shot is pre-validated from hero 
 | Judge reserve (Jul 10–31; judge mode 2 fresh/session, replays free) | 23 | 4 | ~475 | ~860k |
 
 ## Productization surface (MCP)
-`server/mcp_server.py` ships the **`run_shot_tests`** tool now (deterministic Tier-A, zero-token, any mp4 — install with `pip install -e ".[mcp]"`), proving the packs-as-data path. `compile_shot` / `get_conformance_report` remain roadmap.
+`server/mcp_server.py` ships **two** tools now — **`run_shot_tests`** (deterministic Tier-A, zero-token, any mp4) and **`patch_clip`** (frame-anchored repair; spends one i2v generation) — install with `pip install -e ".[mcp]"`, proving the packs-as-data path. `compile_shot` / `get_conformance_report` remain roadmap.
 
 ## Post-deadline (fork only — repo freezes at submission boundary)
 `compile_shot` / `get_conformance_report` MCP tools, CosyVoice TTS, Wanform-style plan/apply layer, day-job brand packs — all in a clean fork per FAQ rule.
@@ -258,7 +258,7 @@ canvas):**
 - **Stretch:** SSE for sub-poll animation; an agent-path e2e test (deterministic via the demo
   stub); a Remotion `@remotion/player` preview node (free for a solo dev).
 
-**Verify per tier:** pytest (existing 118 + new `agent_plan` units), `tsc --noEmit`, `vite
+**Verify per tier:** pytest (full suite incl. new `agent_plan` units), `tsc --noEmit`, `vite
 build` (+ grep dist CSS for external `url(https:` — React-Flow CSS is self-hosted), Playwright
 e2e (both existing tests green), `e2e:shots` + eyeball. `git check-ignore .env`; a demo run
 bills zero video seconds.

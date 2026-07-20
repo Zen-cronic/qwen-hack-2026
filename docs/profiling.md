@@ -12,8 +12,8 @@ as a benchmark.
   (`server/pipeline.py` — the real cost-tiered cascade, the real ledger, the real bounded
   repair loop) over demo-mode fakes at **zero video quota**. The generators are synthetic, but
   the orchestration, the ledger, the reject-before-spend gate, and the repair convergence are
-  the production code path. Reproduce with `~/.pyenv/versions/.qwen-hack/bin/python
-  scripts/profile_demo.py` (or run the workbench under `DAILIES_DEMO=1` and read
+  the production code path. Reproduce with `python scripts/profile_demo.py`
+  (or run the workbench under `DAILIES_DEMO=1` and read
   `data/demo/ledger.jsonl` + `state.json`).
 - **Modeled (cost design)** numbers are structural: model tiers, free-tier ratios, and the
   nominal list prices in `server/metrics.py` (`_PRICE_PER_*`). They describe the *shape* of
@@ -124,7 +124,7 @@ Tier-A can run on **every** take without a budget conversation.
 
 ## Repair-loop convergence (measured — demo run)
 
-Shot 2 is the planted kill-shot: it asserts a rightward camera pan, the first synthetic draft
+Shot 1 is the planted kill-shot: it asserts a rightward camera pan, the first synthetic draft
 is static, and the loop is expected to converge in one retake.
 
 - Takes per shot: **[2, 3, 2]** — shot 2 has an extra draft (take 0 FAIL → take 1 PASS) plus
@@ -160,7 +160,7 @@ it says nothing; the replay is disclosed in a caption under the chart.
 
 ```bash
 # Measured numbers above (real pipeline + ledger, zero quota):
-~/.pyenv/versions/.qwen-hack/bin/python scripts/profile_demo.py
+python scripts/profile_demo.py
 
 # Or run the workbench in demo mode and read the ledger it writes:
 DAILIES_DEMO=1 SPA_DIST=web/dist uvicorn server.app:create_production_app --factory --port 8099

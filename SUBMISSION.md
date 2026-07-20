@@ -43,8 +43,8 @@ at the approve gate — collectable only from the buyer-side review seat.
 
 **Productization / OSS path.** Assertion packs are *data, not code*, so the engine lifts out as a
 consumable Python package — runnable today, unpublished to PyPI yet: `uvx --from '.[mcp]'
-dailies-mcp` — and an **MCP server** (`run_shot_tests`, shipped in
-`server/mcp_server.py`) that lets any pipeline or agent gate video the way it already gates code.
+dailies-mcp` — and an **MCP server** (`run_shot_tests` to report, `patch_clip` to repair, both
+in `server/mcp_server.py`) that lets any pipeline or agent gate video the way it already gates code.
 It is model-agnostic by construction — checks take frames, not generator internals — so assertion
 packs run as CI regression tests that *outlive any one generator*.
 

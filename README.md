@@ -85,11 +85,12 @@ premise → script + specs (qwen-plus) → compiled assertion checklist
         → Tier-A CV (deterministic, ZERO tokens — the never-cut spine)
           + Tier-B VLM verdicts (qwen-vl, advisory)
         → bounded prompt-repair + retake
-        → promote passing shots (wan2.2-i2v-flash, anchored on the approved frame)
+        → promote passing shots (wan2.2-i2v-flash, anchored on the approved frame;
+          a shot whose contract asserts camera motion ships the approved take instead)
         → narration (qwen3-tts-flash) → ffmpeg assembly → certified episode, with sound
 
         …and afterwards, per shot, without re-running any of the above:
-        → targeted patch (wan2.2-i2v-flash / wan2.1-kf2v-plus)
+        → targeted patch (frame-anchored wan2.2-i2v-flash)
 ```
 
 - **A closed assertion DSL — 10 sentence types** across 3 tiers (`server/specs.py`). A spec is a

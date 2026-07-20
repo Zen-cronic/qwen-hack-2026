@@ -36,7 +36,7 @@ ssh user@box 'cd ~/dailies && docker compose up -d'
 so once `docker compose up` returns healthy the public URL is never up-but-broken.
 
 ```bash
-curl http://<box-ip>/api/health       # -> {"status":"ok","mode":"real"|"demo"}
+curl http://<box-ip>/api/health       # -> {"status":"ok","mode":"real"|"demo"|"fixtures","catalog":"off"}
 curl http://<box-ip>/api/packs        # -> {"packs":[{"name":"short_drama",...}]}
 open http://<box-ip>/                 # the SPA
 docker compose ps                     # app should show (healthy)
@@ -229,7 +229,7 @@ First time only, you can instead run it by hand on the box: `chmod +x deploy/dep
 instead of spending the scarce t2v/i2v quota — `data/` is gitignored, so a fresh clone
 arrives empty.
 ```bash
-curl http://<sas-public-ip>/api/health      # -> {"status":"ok","mode":"real"}
+curl http://<sas-public-ip>/api/health      # -> {"status":"ok","mode":"real","catalog":"off"}
 rsync -avz ./data/cache/ sas-qwen-hack:/root/dailies/data/cache/     # ~81 MB, 33 clips
 ```
 

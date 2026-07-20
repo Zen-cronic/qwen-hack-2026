@@ -172,6 +172,7 @@ no audio/transcript, no OCR, no time-windowing, and no episode-level concept tod
 | Author your own checks in plain language | **BUILT** | Compiled to the validated vocabulary, rejected-before-spend (`server/script.py`) |
 | Reject-before-spend gate, cost-tiered cascade, bounded auto-repair, re-verify-from-cache at $0 | **BUILT** | The "CI" in "CI for generated video" |
 | MCP `run_shot_tests` (gate video like you gate code) | **BUILT** | `server/mcp_server.py`, model-agnostic on any mp4 |
+| MCP `patch_clip` (an agent can repair, not just report) | **BUILT** | Frame-anchored retake + re-verify; reported patched only if it passes (`server/mcp_server.py`) |
 | "Conspicuous title in the *first 3 seconds*" | **ROADMAP** | Needs time-windowed frame selection (checks are whole-clip today) |
 | "Brand mentioned N times in the *outro*" | **ROADMAP** | Needs audio/ASR (Wan is silent) + count semantics + an episode-level window |
 | On-screen-text / logo detection (OCR) | **ROADMAP** | No OCR modality yet |
