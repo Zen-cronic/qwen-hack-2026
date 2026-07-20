@@ -4,15 +4,8 @@ from server.fixtures import PAN_ASKED, PAN_REPAIRED, _fixture_repair, fixture_sh
 from server.specs import ShotSpec
 from server.wan import DRAFT_MODEL, cache_key
 
-# The clips behind these keys cost real free-tier quota (~100s of generation each) and are
-# what makes every later fixture run free. cache_key() is sha1 over the prompt, so editing
-# a prompt -- even to fix a typo -- orphans the paid-for clip and silently re-bills. If
-# this test fails you have changed a cache key: revert the wording, or re-warm on purpose
-# with scripts/warm_fixtures.py and update the hash here.
-#
-# Re-warmed 2026-07-20 when the pack moved from the coastal-dusk storyboard to the corgi one,
-# so the demo video shows the same subject the SPA and demo runtime do. The coastal clips are
-# orphaned by that change; that was the deliberate price of one storyboard across the product.
+# cache_key() is sha1 over the prompt: rewording one orphans its paid-for clip and re-bills.
+# To change a prompt on purpose, re-warm via scripts/warm_fixtures.py and update the hash here.
 PINNED_KEYS = {
     "PAN_ASKED": (PAN_ASKED, "218bba835f9809ce433a0c17bd91f54be4434692"),
     "PAN_REPAIRED": (PAN_REPAIRED, "d7cbcd91c704d90acab49b8eadcfa55aa461fe7b"),
@@ -37,8 +30,7 @@ def test_repair_rewrites_only_the_kill_shot():
 
 
 def test_camera_motion_is_asserted_only_on_the_kill_shot():
-    """The pan is the claim under test. Asserting it on shots we have no reason to expect
-    it on would manufacture failures rather than measure them."""
+    """Asserting the pan on shots we have no reason to expect it on manufactures failures."""
     shots = fixture_shots(3)
     with_cam = [i for i, s in enumerate(shots)
                 if any(a["type"] == "camera_motion" for a in s["assertions"])]
@@ -47,8 +39,7 @@ def test_camera_motion_is_asserted_only_on_the_kill_shot():
 
 
 def test_fixture_shots_are_deep_copies():
-    """compile_shots merges pack defaults into these dicts; sharing them across runs would
-    leak one run's mutations into the next."""
+    """compile_shots merges into these dicts; sharing them leaks one run's mutations."""
     first, second = fixture_shots(3), fixture_shots(3)
     first[0]["assertions"][0]["params"]["min_s"] = 99.0
     assert second[0]["assertions"][0]["params"]["min_s"] == 4.0
@@ -60,19 +51,12 @@ def test_max_shots_truncates():
 
 
 def test_fixture_runtime_wires_real_narration(tmp_path, monkeypatch):
-    """Wan clips are silent, so the episode's sound is a real qwen-tts slate per shot. A
-    refactor that drops narrate_fn would ship a silent demo — pin that it stays wired.
-    Construction is offline (no model call until synthesize runs).
-
-    The stand-in key is what makes this runnable in CI. A wiring test needs no credential,
-    but the fixtures runtime builds a WanClient eagerly and its ctor rejects an empty key —
-    so on a box with no .env this failed on construction, and passed on any developer
-    machine that had one. Same guard as test_vocabulary_coverage.py, for the same reason.
-    """
+    """Wan clips are silent, so dropping narrate_fn ships a silent demo — pin it stays wired."""
     from server.config import settings
     from server.fixtures import build_fixture_runtime
     from server.tts import TTSClient
 
+    # Stand-in key: the fixtures runtime builds a WanClient eagerly and its ctor rejects "".
     monkeypatch.setattr(settings, "QWEN_API_KEY", "sk-test-wiring-only")
     rt = build_fixture_runtime(data_dir=str(tmp_path))
     assert rt.deps.narrate_fn is not None

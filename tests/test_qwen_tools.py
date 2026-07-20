@@ -1,8 +1,4 @@
-"""Qwen custom-tool wrappers around run_shot_tests — logic tested without the LLM.
-
-The model-facing loops (function calling / Qwen-Agent Assistant) hit the live API and
-are exercised by the demo scripts, not here; these tests cover the delegation + schema.
-"""
+"""Qwen custom-tool wrappers around run_shot_tests — delegation and schema, no LLM."""
 
 import json
 

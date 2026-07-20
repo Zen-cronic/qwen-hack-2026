@@ -1,16 +1,5 @@
-"""Gather MEASURED profiling numbers for docs/profiling.md — zero quota.
-
-Runs the REAL pipeline (server/pipeline.py, the metrics ledger, the cost-tiered
-cascade, the bounded repair loop) over demo-mode fakes so nothing hits the network
-or spends video quota. Everything printed here is a real structural output of the
-production code path — call counts per stage, take/repair structure, Tier-A vs
-Tier-B check executions, billed vs cached video-seconds — plus a wall-clock timing
-of the deterministic Tier-A CV stage.
-
-It is NOT a benchmark of absolute latency or dollars: the demo generators return
-fixed synthetic clips, so per-call model latency and cash cost are modeled in
-docs/profiling.md, not measured here. What IS measured: the ledger the pipeline
-actually writes, and the CPU cost of run_tier_a on a real (synthetic) mp4.
+"""Gather MEASURED profiling numbers for docs/profiling.md — the real pipeline over
+demo fakes, zero quota. Not a latency/cost benchmark: those are modeled in the doc.
 
 Run:  ~/.pyenv/versions/.qwen-hack/bin/python scripts/profile_demo.py
 """

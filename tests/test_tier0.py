@@ -1,9 +1,5 @@
 """Tier-0 still screen — fake VL client, real image encoding, zero quota.
-
-The live behaviour these fakes stand in for was verified against qwen-vl-plus on a real
-cached still (docs/verification.md section 5): present subject -> PASS, absent subject ->
-FAIL, 325 tokens per call.
-"""
+Live behaviour verified against qwen-vl-plus in docs/verification.md section 5."""
 
 import base64
 from types import SimpleNamespace

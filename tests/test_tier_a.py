@@ -87,10 +87,8 @@ def test_scene_cuts():
 
 
 def test_camera_motion_synthetic_shift():
-    # Two offset crops of one wide blurred-noise texture. A feature at wide-column k
-    # sits at column (k-shift) in f1 and column k in f2 => content moved RIGHT by
-    # `shift` from f1->f2 => camera panned LEFT. (Blurred noise, not a ramp: Farneback
-    # needs real trackable curvature, which a linear gradient lacks.)
+    # Two offset crops of one wide texture: content moves RIGHT, so the camera panned LEFT.
+    # Blurred noise, not a ramp — Farneback needs trackable curvature.
     h, w, shift = 64, 120, 8
     rng = np.random.default_rng(0)
     wide = (rng.random((h, w + shift)) * 255).astype(np.uint8)
@@ -115,8 +113,7 @@ def test_palette_deltae():
 
 
 def test_lab_conversion_is_true_cie_scale():
-    # White is L*=100, a*=b*=0 in real CIE Lab. The old uint8 path returned
-    # [255, 128, 128] — L* scaled by 2.55, which made "ΔE" overweight lightness.
+    # White is L*=100, a*=b*=0 in real CIE Lab; the old uint8 path overweighted lightness.
     white = _hex_to_lab("#ffffff")
     assert abs(white[0] - 100.0) < 1.0 and abs(white[1]) < 1.0 and abs(white[2]) < 1.0
     # sRGB red, published CIE value (D65): (53.24, 80.09, 67.20).
@@ -127,9 +124,7 @@ def test_lab_conversion_is_true_cie_scale():
 
 
 def test_palette_deltae_lightness_no_longer_dominates():
-    # Regression for the 2.55x lightness overweight: mid-gray footage vs a slightly
-    # lighter gray in the palette is a pure-lightness pair, true ΔE*76 ≈ 10.4. The
-    # broken scale measured ~26 and FAILed a threshold of 15 that should PASS.
+    # Regression for the 2.55x lightness overweight: a pure-lightness pair, true ΔE*76 ≈ 10.4.
     g = np.full((48, 64, 3), 128, np.uint8)
     clip = Clip([g] * 4, [cv2.cvtColor(g, cv2.COLOR_BGR2GRAY)] * 4, 8.0, 5.0, 64, 48)
     status, measured, _ = check_palette_deltae(clip, {"palette": ["#9b9b9b"], "max_delta": 15.0})
@@ -206,10 +201,8 @@ def test_scene_cuts_locus_reports_every_cut_and_the_first_over_budget():
 
 
 def test_camera_motion_locus_finds_the_half_that_misbehaves():
-    # Pan one way for 8 frames, then reverse. The averages cancel to ~static, so the
-    # clip fails a directional contract — and the locus must be the REVERSED half,
-    # not the whole clip. Direction is read off the clip itself so the test can't
-    # silently invert with the flow sign convention.
+    # Pan one way, then reverse: the averages cancel, so the locus must be the reversed
+    # half. Direction is read off the clip so the test can't invert with the flow sign.
     h, w, shift, half = 64, 120, 8, 8
     wide = _blurred_noise(h, w + shift * half)
     fwd = [np.ascontiguousarray(wide[:, i * shift: i * shift + w]) for i in range(half)]

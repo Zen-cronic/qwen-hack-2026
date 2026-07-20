@@ -1,11 +1,5 @@
-"""Hour-zero probe: confirm the text-to-image (Tier-0) endpoint before building tier0.py.
-
-Tier 0 pre-screens a doomed shot with a single still at ~1/25th of video cost, so
-the t2i surface must be confirmed early. Same trick as the Wan video probe: a
-deliberately invalid request (no prompt) exercises endpoint + auth + model routing
-and fails at server-side validation — proving reachability WITHOUT spending an
-image credit. Pass --real to then generate one actual still (1 image credit,
-budgeted in PLAN.md's hour-zero row) and bank the URL.
+"""Confirm the text-to-image (Tier-0) endpoint: an invalid request proves reachability
+without spending an image credit.
 
     python scripts/probe_models.py          # zero-cost reachability probe only
     python scripts/probe_models.py --real    # + generate 1 real still
@@ -51,13 +45,7 @@ def poll(api_key: str, task_id: str, timeout_s: int = 120) -> dict:
 
 def zero_cost_probe(api_key: str) -> bool:
     """Invalid request (no prompt) -> a field-validation rejection confirms reachability.
-
-    Two valid signals depending on how the endpoint validates:
-      (a) async accept (video-style): HTTP 200 -> poll -> FAILED at validation
-      (b) sync validate (image-style): HTTP 400 InvalidParameter about the prompt
-    Either proves endpoint + auth + model routing at zero cost. Only 401/403 (auth)
-    or 404/model-not-found are true failures.
-    """
+    Only 401/403 (auth) or 404/model-not-found are true failures."""
     r = create_task(api_key, {"model": T2I_MODEL, "input": {}})
     print(f"  POST {T2I_URL} -> HTTP {r.status_code}")
     try:

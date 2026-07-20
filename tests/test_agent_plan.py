@@ -1,8 +1,4 @@
-"""Agent pipeline planner — topology, validation, and the deterministic demo stub.
-
-Every path here is exercised without a network call: demo=True and the keyless fallback
-both use the stub, so the suite stays zero-quota and offline like the rest.
-"""
+"""Agent pipeline planner — topology, validation, and the deterministic demo stub."""
 
 import pytest
 from pydantic import ValidationError

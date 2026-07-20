@@ -96,10 +96,8 @@ def test_shot_assertion_overrides_extra_default_of_same_type():
 
 
 def test_compile_shots_carries_narration_through():
-    # ShotSpec has always declared `narration`, but compile_shots built every spec by
-    # hand and omitted it — so the script agent's spoken line could never reach the
-    # episode and every shot fell back to a slate. Unit-testing narration_for() in
-    # isolation did not catch it, because that test constructs a ShotSpec directly.
+    # Regression: compile_shots built specs by hand and dropped narration, so every shot
+    # fell back to a slate.
     pack = load_pack("short_drama")
     specs = compile_shots(
         [{"prompt": "a lighthouse at dusk", "narration": "For thirty years he watched."}], pack

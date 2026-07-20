@@ -50,9 +50,8 @@ class Harness:
         return []
 
     def tier_a_fn(self, video_path, spec, evidence_dir):
-        # Real Tier-A inspects the RENDERED clip, not the spec. The fake video path
-        # encodes the prompt it was generated from, so a repaired retake (new prompt
-        # -> new path without 'BAD') passes where the original failed.
+        # The fake video path encodes its prompt, so a repaired retake passes where the
+        # original failed.
         failing = "BAD" in video_path
         status = Status.FAIL if failing else Status.PASS
         return [AssertionResult(type=AssertionType.SCENE_CUTS, tier=Tier.TIER_A, advisory=False,
@@ -143,20 +142,14 @@ def test_failing_shot_is_repaired_then_certified(tmp_path):
 
 
 def test_final_failing_tier_a_never_ships(tmp_path):
-    """A premium final that regresses on Tier-A must not be certified or assembled.
-
-    The promise is that a shot failing its checks never reaches the channel. _promote
-    re-verifies Tier-A on the final, so that FAIL has to gate certification — recording
-    it on the take is not enough. The passing draft carries the shot instead, matching
-    the fallback the budget and promotion-failure paths already take.
-    """
+    """A premium final that regresses on Tier-A must not ship; the passing draft carries it."""
     store = Store(tmp_path / "projects")
     pid = _project(store, max_shots=1)
     h = Harness(max_shots=1)
     cfg = Config(data_dir=str(tmp_path / "projects"))
 
-    # The draft clears Tier-A; the premium re-render regresses on it. The fake clip path
-    # encodes the model that made it, so keying on final_model isolates the final.
+    # The fake clip path encodes the model that made it, so keying on final_model
+    # isolates the final.
     def tier_a_fn(video_path, spec, evidence_dir):
         failing = cfg.final_model in video_path
         return [AssertionResult(type=AssertionType.SCENE_CUTS, tier=Tier.TIER_A, advisory=False,
@@ -199,12 +192,7 @@ def test_cache_hit_clips_are_free(tmp_path):
 
 
 def test_narration_is_spoken_in_the_cast_voice(tmp_path):
-    """The cast fixed at scripting must reach the TTS call itself.
-
-    A voice that is decided and logged but never passed to narrate_fn would leave every
-    character sounding identical while the ledger claimed otherwise — the failure mode
-    worth pinning, since the voice is also part of the narration cache key.
-    """
+    """The cast fixed at scripting must reach narrate_fn itself, not just the ledger."""
     from server.tts import NARRATOR_VOICE
 
     spoken: list[tuple[str, str]] = []

@@ -1,19 +1,6 @@
 """Vocabulary coverage — every declared assertion type must be evaluated by some tier.
-
-The closed vocabulary is this product's central claim, and test_specs.py can only prove
-the registry HOLDS ten types. It cannot prove any of them is ever checked, because a type
-no tier evaluates simply returns no result -- and at pipeline.py's
-`take.passed = not [r for r in results if not r.advisory and r.status is Status.FAIL]`
-a missing result is indistinguishable from a passing one. A declared-but-unevaluated
-BLOCKING type is therefore a gate that always opens.
-
-That is exactly how subject_present shipped: routed to Tier.TIER0, billed one t2i still
-per shot, and evaluated by nothing -- tier0_fn was `lambda spec, still: []` in all three
-production paths while tier_b.py carried an unreachable branch that made it look wired.
-
-So this test asserts the claim the vocabulary actually makes: each type reaches an
-evaluator that returns a result for it. Fakes stand in for every model call -- zero quota.
-"""
+A type no tier evaluates returns no result, which pipeline.py cannot tell from a pass:
+a declared-but-unevaluated BLOCKING type is a gate that always opens."""
 
 from types import SimpleNamespace
 
@@ -105,13 +92,7 @@ def _tier0_spec():
 
 @pytest.mark.parametrize("mode", ["real", "fixtures", "demo"])
 def test_every_production_path_wires_a_real_tier0(mode, monkeypatch, tmp_path):
-    """The evaluator existing is not the same as the pipeline calling it.
-
-    The original bug was pure wiring: tier_a/tier_b were injected for real while
-    tier0_fn was a stub in all three paths, so a module-level test of Tier-0 would have
-    passed the whole time the gate was open. This asserts the runtime each entrypoint
-    actually builds returns a verdict — the regression that would re-open it.
-    """
+    """The evaluator existing is not the same as the pipeline wiring it — assert the verdict."""
     import server.app as app_mod
     from server.config import settings as cfg_settings
     from server.demo import build_demo_runtime

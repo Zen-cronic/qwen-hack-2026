@@ -1,27 +1,6 @@
-"""Hour-zero probe: is qwen-vl usable for Tier-B semantic verdicts? (PLAN.md, Dailies)
-
-Tier B asks a vision-language model JSON questions about strided video frames
-(subject_present, identity_consistent, action_completed). Before building that,
-we must prove the VLM (a) is callable on this account and (b) actually reads
-pixels rather than hallucinating.
-
-The test: generate two solid-gray images — one bright, one dark — in memory, and
-ask the model to classify each. A model that sees pixels answers correctly for
-both; a model that can't see them (or isn't really multimodal) can't beat a coin
-flip across the pair. We try both call shapes × both model tiers:
-
-  shape "openai"    -> chat.completions with image_url content parts (data URI)
-  shape "dashscope" -> native multimodal-generation endpoint
-
-DECISION (writes to stdout; you pin the winner into .env by hand):
-  GO   -> first (model, shape) that classifies BOTH images correctly.
-          Set VL_MODEL + VL_SHAPE in .env; Jul 7 builds tier_b.py for real.
-  NO-GO-> nothing passes. tier_b.py compiles every Tier-B assertion to
-          `inconclusive` and the UI shows human verdict buttons instead.
-          The never-cut spine (Tier-A deterministic CV) is unaffected.
-
-Cost: a handful of tiny vision calls, ~2-4k tokens total. Zero video quota.
-"""
+"""Tier-B GO/NO-GO probe: can qwen-vl actually read pixels? Classifies one bright and one
+dark solid image across both call shapes and model tiers; the winner is pinned into .env
+by hand as VL_MODEL + VL_SHAPE. NO-GO means Tier-B compiles to `inconclusive`."""
 
 import base64
 import sys

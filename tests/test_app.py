@@ -126,11 +126,7 @@ def test_unknown_pack_400(client):
 
 
 def test_production_factory_demo_mode(tmp_path, monkeypatch):
-    """Boot the EXACT factory the container runs (server.app:create_production_app)
-    in the EXACT mode the public URL runs (DAILIES_DEMO=1), and drive the real demo
-    pipeline — real Tier-A CV + real ffmpeg on synthetic clips — to a certified
-    episode. This is the deploy-proving test: no fakes, zero video quota.
-    """
+    """Deploy-proving: the exact production factory in the exact mode the public URL runs."""
     from server import app as app_mod
     from server import demo as demo_mod
     from server.config import settings
@@ -152,8 +148,7 @@ def test_production_factory_demo_mode(tmp_path, monkeypatch):
     done = _poll(client, pid, "done", timeout=90)        # real cv2 clip writes + ffmpeg assembly
 
     assert done["episode_path"]
-    # Planted kill-shot: shot index 1 asserts a rightward pan; the first synthetic
-    # draft is static -> Tier-A camera_motion FAILs -> repair -> retake pans right.
+    # Planted kill-shot: shot 1 asserts a pan, the first draft is static -> fail, repair, retake.
     killshot = done["shots"][1]
     assert len(killshot["takes"]) >= 2, "expected a retake after the planted Tier-A failure"
     first_cam = next(r for r in killshot["takes"][0]["results"] if r["type"] == "camera_motion")
@@ -162,11 +157,7 @@ def test_production_factory_demo_mode(tmp_path, monkeypatch):
 
 
 def test_media_serves_stored_paths_whatever_data_dir_is(client, tmp_path, monkeypatch):
-    """Regression: the media route stripped a leading "data/" and rejoined onto
-    DATA_ROOT, which 404'd every thumbnail whenever DATA_DIR wasn't literally
-    "data" (the e2e suite runs DATA_DIR=data/e2e). The contract now: the client
-    sends the stored path verbatim; the route resolves it and only requires the
-    result to live under DATA_ROOT."""
+    """Contract: the client sends the stored path verbatim; it need only resolve under DATA_ROOT."""
     import server.app as app_mod
 
     root = (tmp_path / "data" / "e2e").resolve()
@@ -178,10 +169,8 @@ def test_media_serves_stored_paths_whatever_data_dir_is(client, tmp_path, monkey
     # Absolute stored path (scratch runs) — served.
     assert client.get(f"/api/media/{still}").status_code == 200
 
-    # CWD-relative stored path, exactly as the pipeline records it when
-    # DATA_DIR=data/e2e — "data/e2e/…" is the shape the old prefix-stripping
-    # rewrote into data/e2e/e2e/… and 404'd. chdir so relative resolution matches
-    # the server process's view.
+    # CWD-relative stored path, as the pipeline records it under DATA_DIR=data/e2e.
+    # chdir so relative resolution matches the server process's view.
     monkeypatch.chdir(tmp_path)
     assert client.get("/api/media/data/e2e/demo/cache/still.png").status_code == 200
 

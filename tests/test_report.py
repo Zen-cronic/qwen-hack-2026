@@ -16,11 +16,7 @@ def _take(no, tier, prompt, res, passed):
 
 
 def test_convergence_traces_every_take_per_shot():
-    """One point per take, tagged with its shot — the repair loop's trajectory.
-
-    Shot 0 converges (draft FAIL -> draft PASS -> final); shot 1 never does. Reading a
-    shot's row in take order is exactly what the dashboard's convergence chart draws.
-    """
+    """One point per take, tagged with its shot: shot 0 converges, shot 1 never does."""
     p = ProjectState(id="p", premise="x", pack="short_drama", max_shots=2)
     p.shots = [
         ShotState(spec=ShotSpec(index=0, prompt="a"), status=ShotStatus.CERTIFIED, certified=True,
@@ -76,10 +72,7 @@ def test_report_metrics_end_to_end():
 
 
 def test_frontier_survives_a_fully_cached_rerun():
-    """Regression: on a warm re-verify every ledger entry bills 0 seconds, and the
-    frontier used to collapse to a single dot at x=0 — blank in exactly the mode
-    judges re-run. Production cost (billed + cache-replayed) must survive the replay
-    while the wallet keeps billing zero."""
+    """Production cost (billed + cache-replayed) must survive a replay that bills zero."""
     p = ProjectState(id="p", premise="x", pack="short_drama", max_shots=1)
     p.shots = [
         ShotState(spec=ShotSpec(index=0, prompt="a"), status=ShotStatus.CERTIFIED, certified=True,

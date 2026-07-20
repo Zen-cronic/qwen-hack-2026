@@ -1,14 +1,6 @@
-"""Day-1 verify-or-abort gate (PLAN.md, Jul 5).
-
-Checks, in order:
-  1. QWEN_API_KEY works against the sanctioned OpenAI-compatible endpoint.
-  2. A minimal chat completion succeeds and reports token usage (free tier sanity).
-  3. Prints the manual checklist for Wan/HappyHorse video-gen access — the video
-     API surface is UNVERIFIED as of Jul 5; do not assume an endpoint shape.
-
-ABORT RULE (state.md): if video-gen quota can't cover ~a dozen generation
-cycles on the free tier, pivot to DataCrew (Track 3) or skip.
-"""
+"""Day-1 verify-or-abort gate: the key works, a chat completion reports usage, and the
+manual video-gen checklist prints. Abort rule (state.md): if quota can't cover ~a dozen
+generation cycles, pivot to DataCrew (Track 3) or skip."""
 
 import sys
 

@@ -1,12 +1,4 @@
-"""Demo: a Qwen agent calls Dailies' conformance gate THROUGH the Model Context Protocol.
-
-Builds a Qwen-Agent Assistant with Dailies' own MCP server in its mcpServers block, then
-asks it to verify a clip — the model discovers the tools over MCP, picks one, and calls it
-(client + server both ours). Chat tokens only, no video quota.
-
-The transcript is printed as it happens: ListTools, the CallTool the model chose with its
-real arguments, the server's verdict, then the answer. Nothing here is narrated on the
-model's behalf — every line is a message that crossed the protocol.
+"""Demo: a Qwen agent calls Dailies' conformance gate through MCP. Chat tokens only.
 
 Run from the repo root:  python scripts/mcp_agent_demo.py [clip.mp4]
 Requires the [agent] extra (pip install -e ".[agent]") and a QWEN_API_KEY in .env.
@@ -22,14 +14,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # repo root on 
 
 from server.mcp_agent import build_mcp_agent
 
-# The clip asserts a rightward pan and doesn't deliver one: the same kill-shot the
-# workbench catches in Act 1, reaching an agent this time. A gate is only worth watching
-# when it catches something.
+# The clip asserts a rightward pan and doesn't deliver one — the kill-shot from Act 1.
 ASSERTIONS = [{"type": "camera_motion", "params": {"direction": "right"}}]
 PACK = "brand_rules"
 
-# ANSI, so the beat reads on camera. Dim is the protocol's own bookkeeping; the verdict
-# is the only thing that gets a color of its own.
+# ANSI, so the beat reads on camera. Dim is the protocol's own bookkeeping.
 DIM, BOLD, OFF = "\033[2m", "\033[1m", "\033[0m"
 BLUE, GREEN, RED, AMBER, VIOLET = (
     "\033[38;5;75m", "\033[38;5;114m", "\033[38;5;203m", "\033[38;5;179m", "\033[38;5;141m",

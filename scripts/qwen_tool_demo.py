@@ -1,14 +1,8 @@
-"""Demo: run_shot_tests exposed as a Qwen custom tool — two native shapes.
+"""Demo: run_shot_tests as a Qwen custom tool, via native function calling and a
+Qwen-Agent Assistant. Chat tokens only.
 
-Drives qwen-plus to call the Dailies conformance checker as a tool, first via native
-function calling (OpenAI-compatible endpoint) and then via a Qwen-Agent Assistant custom
-tool. Spends only chat tokens — no video quota.
-
-Usage:
-    python scripts/qwen_tool_demo.py [clip.mp4]      # generates a synthetic clip if omitted
-
-Requires a QWEN_API_KEY in .env and the [agent] extra for the Assistant path
-(pip install -e ".[agent]").
+Usage: python scripts/qwen_tool_demo.py [clip.mp4]   # synthetic clip if omitted
+Requires a QWEN_API_KEY in .env and the [agent] extra for the Assistant path.
 """
 
 import sys

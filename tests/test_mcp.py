@@ -1,8 +1,4 @@
-"""MCP run_shot_tests — the productization surface, tested on synthetic clips.
-
-Exercises the core conformance function directly (no `mcp` package required); the
-protocol wrapper is a thin lazy layer over this.
-"""
+"""MCP run_shot_tests — the core conformance function, called directly on synthetic clips."""
 
 import pytest
 

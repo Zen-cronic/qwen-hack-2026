@@ -1,10 +1,4 @@
-"""Catalog layer — the parts that must hold without a database.
-
-Everything here is DB-free on purpose: these guard the two behaviours that are
-easy to break silently and expensive to notice — path normalization (the media
-route's security boundary AND its OSS lookup key) and the availability gate that
-keeps an optional feature from bricking boot.
-"""
+"""Catalog layer, DB-free: path normalization and the availability gate."""
 
 import pytest
 
@@ -58,9 +52,8 @@ class TestAvailabilityGate:
         assert catalog_available() is False
 
     def test_requires_optional_deps(self, flag, monkeypatch):
-        # An image built before the catalog deps existed (a rollback, a stale
-        # layer) must degrade to catalog-off, not raise ModuleNotFoundError at
-        # import time and take the whole app down with it.
+        # An image built before the catalog deps existed must degrade to catalog-off,
+        # not raise ModuleNotFoundError at import time and take the app down.
         flag(True)
         monkeypatch.setattr("server.config._catalog_deps_installed",
                             lambda: False)

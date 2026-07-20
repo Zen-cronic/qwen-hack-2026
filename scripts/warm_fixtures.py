@@ -1,14 +1,5 @@
-"""Warm the real-video fixture cache, then prove the replay costs nothing.
-
-The COLD run generates any missing REAL Wan clips (fresh quota, ~100s per clip). The WARM
-run drives the identical pinned prompts straight afterwards; because the cache is keyed on
-(model, prompt, seed) it should bill ZERO video seconds while producing the same
-certification. That contrast is the mechanism that lets a live demo URL survive judging on
-free-tier quota — measured here rather than asserted.
-
-Everything except the two pinned text stages is real: real Wan clips, real stills, real
-OpenCV, real ffmpeg, real qwen-vl. Shot 1 is the unstaged kill-shot — Wan ignores the
-requested pan, Tier-A catches it for zero tokens, the repaired prompt pans.
+"""Warm the real-video fixture cache (COLD, real quota ~100s per clip), then re-run the
+identical pinned prompts to prove the replay bills ZERO video seconds.
 
 Run: ~/.pyenv/versions/.qwen-hack/bin/python scripts/warm_fixtures.py
 """

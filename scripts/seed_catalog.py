@@ -1,21 +1,9 @@
-"""Backfill the catalog from existing state.json snapshots (plan step 5).
-
-Walks data/projects (source=live) and data/demo/projects (source=demo), parses
-each state.json with the same Pydantic model + terminal rule as Store._restore
-(old drifted snapshots backfill missing fields like cast/speaker; non-terminal
-statuses become failed), then publishes each project — media uploads included
-unless --no-media.
-
-Idempotent by construction: publish_project upserts (publish_rev climbs) and
-OSS uploads are content-addressed skip-if-exists. Re-running converges.
+"""Backfill the catalog from existing state.json snapshots. Idempotent: publishes upsert
+and OSS uploads are content-addressed skip-if-exists, so re-running converges.
 
 Usage:
-    CATALOG_ENABLED=1 python scripts/seed_catalog.py --dry-run
-    CATALOG_ENABLED=1 python scripts/seed_catalog.py
-    ... --only fix96788        one project id
-    ... --no-media             rows only, no OSS uploads
-    ... --dirs data/projects   restrict the walk
-    ... --global-ledger        also import unattributable data/ledger.jsonl strays
+    CATALOG_ENABLED=1 python scripts/seed_catalog.py [--dry-run] [--only PID]
+        [--no-media] [--dirs data/projects] [--global-ledger]
 
 On the box (DB has no public port): docker compose exec app python scripts/seed_catalog.py
 """
@@ -53,9 +41,7 @@ def load_state(f: Path) -> ProjectState | None:
 
 
 def seed_global_ledger(dry_run: bool) -> int:
-    """Optional: import global ledger.jsonl rows with project_id NULL, deduped
-    on the float ts (effectively unique). Embedded per-project ledgers are the
-    attributable record — this only preserves unattributed history."""
+    """Import global ledger.jsonl rows with project_id NULL, deduped on the float ts."""
     from server.metrics import LedgerEntry
 
     src = Path(settings.DATA_DIR) / "ledger.jsonl"

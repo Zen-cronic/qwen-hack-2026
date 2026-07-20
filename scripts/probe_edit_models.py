@@ -1,18 +1,5 @@
-"""Probe the two unused DashScope capabilities: image editing and keyframe->video.
-
-docs/verification.md section 2 banks free quota for qwen-image-edit (100 images) and
-wan2.1-kf2v-plus (200 s / 40 cycles) that server/ has never called. They are the
-backend for a targeted repair: extract the failing frame, edit THAT frame, re-render
-the clip anchored to it -- instead of blind-re-prompting a whole 5 s shot.
-
-Same zero-cost trick as scripts/probe_models.py: a deliberately invalid request
-(empty input) exercises endpoint + auth + model routing and fails at server-side
-validation, so nothing is generated and nothing is billed. The rejection usually
-NAMES the missing field, which means a failed probe also documents the request
-schema -- the point of running this before writing the client.
-
-The endpoint path for each model is itself unknown, so every plausible path is
-tried and classified. Only auth failures and "model not found" are real failures.
+"""Probe the image-edit and keyframe->video endpoints: an empty `input` is rejected at
+validation, so reachability is proven without generating or billing anything.
 
     python scripts/probe_edit_models.py
 """

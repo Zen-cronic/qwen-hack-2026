@@ -1,8 +1,4 @@
-"""Targeted repair: anchor to the last good frame, regenerate, re-verify.
-
-Uses the demo synthesizer for real mp4s and the REAL Tier-A, so the localization the
-patch depends on is genuinely measured rather than hand-fed.
-"""
+"""Targeted repair: anchor to the last good frame, regenerate, re-verify — on real Tier-A."""
 
 from pathlib import Path
 from types import SimpleNamespace
@@ -138,9 +134,8 @@ def test_patch_promotes_a_clip_that_now_passes(tmp_path):
     out = patch_shot(store, pid, 0, deps, cfg, model="wan2.2-i2v-flash")
 
     assert out.ok, out.reason
-    # This clip is static THROUGHOUT, so the failure window opens at t=0 and there is no
-    # good frame to continue from. Anchoring there would pin the defect the patch exists
-    # to remove (verification 3e), so the patch re-rolls and reports no anchor.
+    # Static throughout: the window opens at t=0, so there is no good frame to anchor to
+    # and the patch re-rolls instead.
     assert out.anchor_s is None and out.anchor_frame is None
     st = store.get(pid).shots[0]
     assert st.certified and st.final_path == out.video_path
@@ -188,9 +183,8 @@ def test_patch_refuses_cleanly_when_there_is_nothing_to_anchor_to(tmp_path):
     deps.patch_video_fn = lambda *a: None
     assert not patch_shot(store, pid, 9, deps, cfg, model="wan2.2-i2v-flash").ok
 
-    # A clip that satisfies its contract has nothing to anchor to. Note the source is
-    # re-measured, so emptying the stored results would NOT make this case — the clip
-    # itself has to pass.
+    # The source is re-measured, so the clip itself has to pass — emptying the stored
+    # results would not make this case.
     good = tmp_path / "passing.mp4"
     _write_clip(good, "right")
     store.update(pid, lambda p: setattr(p.shots[0].takes[0], "video_path", str(good)))
@@ -199,12 +193,8 @@ def test_patch_refuses_cleanly_when_there_is_nothing_to_anchor_to(tmp_path):
 
 
 def test_a_mid_clip_failure_anchors_instead_of_re_rolling(tmp_path):
-    """The other half of the rule: when a good frame DOES precede the defect, preserve it.
-
-    Anchoring is the whole point of a patch — it holds the composition Tier-0 approved and
-    draws the separate i2v pool. The fully-static fixture can never reach this branch (its
-    window opens at t=0), so the localization is injected to put the defect mid-clip.
-    """
+    """When a good frame precedes the defect, preserve it. Localization is injected to
+    put the defect mid-clip, which the fully-static fixture can never do."""
     store, pid = _project_with_failed_shot(tmp_path)
     assembled: list = []
     deps = _deps(tmp_path, patch_direction="right", assembled=assembled)

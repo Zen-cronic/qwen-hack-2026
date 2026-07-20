@@ -74,9 +74,7 @@ def test_shotspec_rejects_empty_prompt():
 
 
 def test_result_carries_the_assertion_params():
-    # The UI names a check in plain language ("The ginger street cat is in frame"),
-    # which is impossible from the type alone — the subject, the bounds, and the cut
-    # allowance all live in params. So a result has to carry them.
+    # The UI names a check in plain language, which needs params, not just the type.
     from server.specs import AssertionResult, Status
 
     a = Assertion(type=AssertionType.SUBJECT_PRESENT, params={"subject": "ginger_street_cat"})

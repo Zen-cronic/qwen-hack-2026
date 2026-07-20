@@ -1,9 +1,4 @@
-"""The MCP loop, minus the LLM: spawn Dailies' MCP server over stdio and call it.
-
-Proves `server/mcp_server.py` is a valid MCP server that any MCP client (including
-Qwen-Agent, per server/mcp_agent.py) can launch, discover, and invoke — the client+server
-half of the demo — without spending model tokens.
-"""
+"""The MCP loop, minus the LLM: spawn Dailies' MCP server over stdio and call it."""
 
 import asyncio
 import json

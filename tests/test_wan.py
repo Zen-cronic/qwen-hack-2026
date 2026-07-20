@@ -1,5 +1,4 @@
-"""Wan client flow — mocked HTTP, zero quota. Covers create->poll->download->cache,
-the replay cache hit, and the async-FAILED branch."""
+"""Wan client flow — mocked HTTP, zero quota: create/poll/download/cache and FAILED."""
 
 from pathlib import Path
 
@@ -88,13 +87,8 @@ def test_cache_key_is_stable_and_input_sensitive():
 
 
 def test_video_size_is_chosen_per_model(tmp_path):
-    """The premium final model rejects the draft model's frame size.
-
-    Verified live 2026-07-15: wan2.2-t2v-plus answers 1280*720 with
-    `InvalidParameter: size must be in 1080*1920,1920*1080,...`. Because _promote treats a
-    failed promote as "keep the passing draft", that rejection was invisible — every premium
-    final in the project's history silently never happened. The size must follow the model.
-    """
+    """The premium final model rejects the draft model's frame size (verified live
+    2026-07-15), and _promote hides that rejection — so the size must follow the model."""
     sent: list[dict] = []
 
     def handler(request: httpx.Request) -> httpx.Response:

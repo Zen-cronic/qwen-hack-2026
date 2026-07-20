@@ -1,11 +1,4 @@
-"""The demo runtime end to end — the runtime Act 1 of the demo video actually films.
-
-Everything else pins a piece: test_fixtures pins that the FIXTURES runtime wires
-narrate_fn, test_pipeline pins that the cast voice reaches a fake narrate_fn, and
-test_repair_assemble pins that assemble() with audio_paths emits an audio stream. None
-of them covers the demo runtime producing a sounded cut, which is the one a silent
-regression would embarrass us on camera.
-"""
+"""The demo runtime end to end — the one that must produce a sounded cut on camera."""
 
 import json
 import shutil
@@ -49,12 +42,7 @@ def _run_demo(tmp_path, max_shots=3, timeout=90.0):
 
 
 def test_demo_episode_carries_narration(tmp_path):
-    """Wan clips are silent, so the episode's only sound is the narration track.
-
-    Two assertions, because either alone is a false pass: an audio stream can exist and be
-    the anullsrc silence mux_narration falls back to, and a ledger row can record a
-    synthesis whose file never reached the concat.
-    """
+    """Two assertions, because either alone is a false pass: silent mux, or an unused row."""
     rt, p = _run_demo(tmp_path)
     assert p.status is ProjectStatus.DONE and p.episode_path
 

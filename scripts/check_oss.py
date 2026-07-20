@@ -1,26 +1,10 @@
 """One-shot OSS smoke test — credentials, upload, presign, and range support.
 
-Uploads one cache mp4, presigns a GET, and inspects the response headers.
+`Content-Disposition: attachment` is expected on the default bucket domain (the inline
+override is ignored there) and is treated as a pass: <video>/<img> playback is unaffected.
 
-On the Content-Disposition question (measured 2026-07-20 against a post-2022
-account, us-west-1, default bucket domain): responses always carry
-`Content-Disposition: attachment` and the `response-content-disposition=inline`
-override is silently ignored — the documented workaround does NOT work on the
-default domain (only behind a custom CNAME). That is FINE and this script treats
-it as a pass, because browsers honour Content-Disposition for top-level
-navigation only: verified in headless Chromium, a presigned URL in a plain
-`<video src>` reached readyState 4, decoded 1280x720, and seeked cleanly, and a
-`<img src>` rendered — no CORS attribute needed. What actually matters is a 200
-with the right content-type and `Accept-Ranges: bytes` (seeking), which is what
-this script asserts. Pasting the URL into the address bar WILL download the file;
-that is the header working as designed, not a failure.
-
-Usage:
-    CATALOG_ENABLED=1 OSS_ACCESS_KEY_ID=... OSS_ACCESS_KEY_SECRET=... OSS_BUCKET=... \
-        python scripts/check_oss.py [path/to/file.mp4]
-
-Run it twice: once from the dev machine (public endpoint), once on the SAS box
-with OSS_INTERNAL_ENDPOINT set (proves free same-region upload path).
+Usage: CATALOG_ENABLED=1 OSS_ACCESS_KEY_ID=... OSS_ACCESS_KEY_SECRET=... OSS_BUCKET=... \
+    python scripts/check_oss.py [path/to/file.mp4]
 """
 
 from __future__ import annotations
