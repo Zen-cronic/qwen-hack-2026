@@ -80,7 +80,7 @@ flowchart TB
             hardfail["blocking Tier-A FAIL"]:::reject
             repair["bounded auto-repair<br/><i>qwen-plus</i>"]:::stage
             promote["promote (frame-anchored)<br/><i>wan2.2-i2v-flash</i>"]:::stage
-            narrate["narration<br/><i>qwen3-tts-flash</i>"]:::stage
+            narrate["narration, one voice per character<br/><i>qwen3-tts-flash</i>"]:::stage
             assemble["assembly + mux<br/><i>ffmpeg</i>"]:::stage
 
             script --> compile
