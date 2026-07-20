@@ -33,6 +33,39 @@ TTS_URL = f"{settings.DASHSCOPE_BASE_URL}/api/v1/services/aigc/multimodal-genera
 DEFAULT_VOICE = "Cherry"
 DEFAULT_MODEL = "qwen3-tts-flash"
 
+# A closed voice roster, for the same reason assertions have a closed vocabulary: an
+# unlicensed voice is a 400 ("does not exist or is not licensed for use"), which would
+# degrade that shot to silence. The script agent names a SPEAKER; the server picks the
+# voice. The agent cannot emit an invalid one because it never emits one.
+# Every name below was probed live against this account (docs/verification.md section 3f).
+NARRATOR_VOICE = DEFAULT_VOICE
+CAST_VOICES = ("Ethan", "Serena", "Dylan", "Jada", "Ryan", "Katerina", "Elias", "Chelsie")
+
+
+def build_cast(specs) -> dict[str, str]:
+    """Map each speaking character to a distinct voice, by order of first appearance.
+
+    Ordinal assignment rather than a hash of the name: a hash can collide and hand two
+    characters the same voice with nothing to signal it. Order of first appearance is
+    just as deterministic (the shot list is fixed before narration runs), so a re-run
+    casts identically and every narration cache key still hits.
+
+    Past the end of the roster voices repeat — a wrap is honest reuse, and a cast that
+    large is not something a ~5-shot dailies reel produces.
+    """
+    cast: dict[str, str] = {}
+    for spec in specs:
+        who = (getattr(spec, "speaker", None) or "").strip()
+        if who and who not in cast:
+            cast[who] = CAST_VOICES[len(cast) % len(CAST_VOICES)]
+    return cast
+
+
+def voice_for(spec, cast: dict[str, str] | None) -> str:
+    """The voice this shot is spoken in — the character's, or the narrator's."""
+    who = (getattr(spec, "speaker", None) or "").strip()
+    return (cast or {}).get(who, NARRATOR_VOICE)
+
 
 @dataclass
 class TTSResult:

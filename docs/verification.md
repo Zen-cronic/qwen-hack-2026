@@ -227,6 +227,42 @@ itself. Both findings cost one clip each to discover (10 s of the 600 s budget) 
 reproducible from the run's `state.json`, which stores every take's `fail_window_s` and
 measured flow magnitude.
 
+## 3f. The voice roster — probed, because it cannot be listed (Jul 20)
+
+Narration shipped with one hardcoded voice, so every character sounded the same. Giving a
+cast distinct voices needs to know which voices this account may actually use, and the API
+will not say: an unknown voice returns
+
+```
+400 InvalidParameter: Invalid voice specified, the requested voice does not exist
+                      or is not licensed for use—please select a supported voice.
+```
+
+That message enumerates nothing, and *"not licensed for use"* means availability is an
+account property, not a model property — so the roster has to be probed, not read. Probing
+20 candidate names against `qwen3-tts-flash` on this key returned **200 with an audio URL
+for all 20**:
+
+`Cherry` · `Ethan` · `Nofish` · `Jennifer` · `Ryan` · `Katerina` · `Elias` · `Jada` ·
+`Dylan` · `Sunny` · `Li` · `Marcus` · `Roy` · `Peter` · `Rocky` · `Kiki` · `Eric` ·
+`Serena` · `Chelsie` · `Aiden`
+
+**The design follows the same rule as the assertion DSL: the model names a speaker, the
+server casts the voice.** `server/tts.py` pins a closed `CAST_VOICES` roster drawn from the
+probed list, and the script agent emits only a `speaker` — a character name. It cannot emit
+an invalid voice because it never emits a voice at all, which is the identical principle
+that keeps a malformed assertion (`parse_assertions`) and a malformed graph
+(`build_pipeline_graph` takes run parameters, not topology) out of the system. Worth stating
+because the failure it prevents is quiet: an unlicensed voice degrades that shot to silence
+rather than failing the run, so a certified episode would just have a hole in it.
+
+Casting is by **order of first appearance**, fixed once at scripting into `ProjectState.cast`,
+not by hashing the character's name. A hash can collide and give two characters one voice
+with nothing to signal it; an ordinal is equally deterministic — the shot list is fixed
+before narration runs — so a re-run casts identically and every narration cache key still
+hits. That last part is load-bearing: the cache key is `sha1(model|voice|text)`, so unstable
+casting would silently re-synthesize every line on a replay that should have been free.
+
 ## 4. First real end-to-end run (Jul 15) — what the synthetic clips hid
 
 Sections 1–3b verify the API in isolation, and spend almost nothing doing it — which is

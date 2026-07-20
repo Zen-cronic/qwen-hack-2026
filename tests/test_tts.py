@@ -115,3 +115,37 @@ def test_an_over_long_explicit_line_is_also_trimmed():
     text = narration_for(s)
     assert len(text.split()) <= 13, text
     assert text.endswith(".")
+
+
+def test_cast_assigns_a_distinct_voice_per_speaker():
+    from server.tts import CAST_VOICES, NARRATOR_VOICE, build_cast, voice_for
+
+    specs = [_spec("a", speaker="the keeper"), _spec("b"), _spec("c", speaker="the castaway"),
+             _spec("d", speaker="the keeper")]
+    cast = build_cast(specs)
+    # Two speakers, two voices, and neither of them is the narrator's.
+    assert len(set(cast.values())) == 2
+    assert NARRATOR_VOICE not in cast.values()
+    assert set(cast.values()) <= set(CAST_VOICES)
+    # A character keeps their voice across every shot they speak in.
+    assert voice_for(specs[0], cast) == voice_for(specs[3], cast)
+    # Anything unattributed is the narrator.
+    assert voice_for(specs[1], cast) == NARRATOR_VOICE
+
+
+def test_cast_is_deterministic_by_first_appearance():
+    # The voice is part of the narration cache key, so an unstable casting order would
+    # silently re-synthesize every line on a re-run that should have been free.
+    from server.tts import build_cast
+
+    specs = [_spec("a", speaker="the keeper"), _spec("b", speaker="the castaway")]
+    assert build_cast(specs) == build_cast(specs)
+    # Order of first appearance decides, so a reversed shot list casts differently —
+    # which is correct: it is a different episode.
+    assert build_cast(specs) != build_cast(list(reversed(specs)))
+
+
+def test_a_blank_speaker_is_not_cast():
+    from server.tts import build_cast
+
+    assert build_cast([_spec("a", speaker="  "), _spec("b", speaker=None)]) == {}
