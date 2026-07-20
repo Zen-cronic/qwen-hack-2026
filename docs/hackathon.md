@@ -40,5 +40,7 @@ Native async video/image task API shares the `dashscope-intl.aliyuncs.com` host 
 ## Verified model roster (this project)
 
 Chat `qwen-plus` · VLM `qwen-vl-plus` · draft video `wan2.1-t2v-turbo` ·
-final video `wan2.2-t2v-plus` · stills `wan2.1-t2i-plus`. Live-tested — see
+final + repair video `wan2.2-i2v-flash` (frame-anchored; `wan2.2-t2v-plus` is the fallback
+when no anchored model is wired) · narration `qwen3-tts-flash` ·
+stills `wan2.1-t2i-plus`. Live-tested — see
 [verification.md](verification.md). The console roster governs over the FAQ doc IDs.

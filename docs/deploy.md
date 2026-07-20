@@ -45,12 +45,23 @@ docker compose ps                     # app should show (healthy)
 ## Modes
 
 - **Real mode (default), `JUDGE_MODE=1`:** judges may trigger real generation up to the
-  fresh-clip cap per session — 2 drafts and 2 premium promotions (`server/budget.py`);
+  fresh-clip cap per session — 2 drafts and 2 fresh **t2v** finals (`server/budget.py`);
   cached replays are free and uncapped. Past the cap the run still completes: the passing
-  draft is certified in place of the premium final. Watch the judge-reserve quota.
+  draft is certified in place of the final. Watch the judge-reserve quota.
   Pay-as-you-go must stay enabled in the Model Studio console ("Stop When Free Quota Is
   Used Up" **off**), or voucher credit can't be spent and billable calls hard-fail once
   the per-model free grant runs out.
+
+  > **Promotion sits outside the governor — know this before leaving the URL unattended.**
+  > `governed_gen_video` wraps `gen_video_fn` only, and promotion now renders through
+  > `patch_video_fn` (frame-anchored `wan2.2-i2v-flash`, `server/app.py`), which is
+  > deliberately unwrapped so anchored work draws on the separate i2v pool rather than
+  > competing with drafts. The consequence is that `fresh_final_cap` does not bound a live
+  > run. What bounds it is the per-project `final_cap` (4) plus the motion-contract skip:
+  > a 3-shot run spends **2** fresh i2v clips on promotion, plus one per anchored repair,
+  > against a **50 s = 10-clip** i2v pool. That is a handful of uncached judge runs, not an
+  > unbounded drain — but it is not the 2-clip ceiling the governor implies either. For a
+  > URL left unattended, prefer `DAILIES_DEMO=1`.
 - **Demo mode, `DAILIES_DEMO=1`:** the whole pipeline runs on synthetic clips — real Tier-A
   CV + real assembly, **zero video quota**. Safest for a public URL that must survive the
   Jul 10–31 judging window. Set it in `.env` or the compose environment.
@@ -140,7 +151,7 @@ First time only, you can instead run it by hand on the box: `chmod +x deploy/dep
 ./deploy/deploy-prod.sh`.
 
 **5. Confirm live, then seed the replay cache** so judge runs replay real footage for free
-instead of spending the nearly-exhausted premium quota — `data/` is gitignored, so a fresh clone
+instead of spending the scarce t2v/i2v quota — `data/` is gitignored, so a fresh clone
 arrives empty.
 ```bash
 curl http://<sas-public-ip>/api/health      # -> {"status":"ok","mode":"real"}

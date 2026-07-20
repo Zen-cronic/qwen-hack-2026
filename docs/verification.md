@@ -193,6 +193,40 @@ Narration is cached by `sha1(model|voice|text)`, so a judge-mode replay re-narra
 free, and a failed voice call degrades that shot to silence rather than failing a
 certified run.
 
+## 3e. What an anchor frame carries — and what it doesn't (Jul 19)
+
+Frame-anchoring was extended from targeted repair (3c) to the *retake* and *promotion* paths,
+to stop draft/repair/final from being three independent rolls that drift apart. Running it on
+real Wan output falsified the extension in two specific places, and both are now encoded in
+`server/pipeline.py` rather than left as prompt advice. The governing rule the measurements
+produced: **anchor to preserve, re-roll to change.**
+
+**i2v cannot repair a whole-clip defect.** Shot 1 asserts `camera_motion: right`; its first
+draft came back static — `|v| = 0.005` against `STATIC_FLOW_THRESH = 0.4` — with Tier-A
+localising the failure to `fail_window_s [0.0, 5.33]`, i.e. the entire clip. Anchoring the
+retake at the only frame before the window (frame 0) pinned the very staticness the retake
+existed to fix: the anchored retake measured `|v| = 0.112`, still a FAIL. A fresh `t2v` roll
+on the same repaired prompt reached `|v| = 0.745 'right'` and passed.
+→ `Pipeline._anchor_for_retake` returns `None` when the failure window opens at `t = 0`, so a
+whole-clip defect re-rolls instead of anchoring. Stated as a general rule about failure
+windows, not a special case for `camera_motion`.
+
+**i2v promotion inverts motion.** An anchor frame carries composition, lighting and wardrobe;
+it carries no motion vector. Promoting the approved `|v| = 0.745 'right'` take by anchoring at
+`0.1 s` produced a final that panned the other way — `|v| = 6.15 'left'` — and failed the
+re-verify. The shot still certified, because `_promote` already falls back to the passing
+draft when a final regresses on Tier-A; the fallback absorbed the defect silently, which is
+precisely why the ledger, not the outcome, is the thing worth reading.
+→ `Pipeline.asserts_camera_motion` skips promotion entirely for a shot with a motion contract.
+The clip that satisfied the contract is the clip that ships — the most consistent final
+available, and one generation cheaper.
+
+Net: shots **without** a motion contract get a frame-anchored `wan2.2-i2v-flash` final that is
+visually continuous with the take the human approved; shots **with** one ship the approved take
+itself. Both findings cost one clip each to discover (10 s of the 600 s budget) and are
+reproducible from the run's `state.json`, which stores every take's `fail_window_s` and
+measured flow magnitude.
+
 ## 4. First real end-to-end run (Jul 15) — what the synthetic clips hid
 
 Sections 1–3b verify the API in isolation, and spend almost nothing doing it — which is

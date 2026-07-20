@@ -37,12 +37,20 @@ probabilistic work only runs on candidates the cheap deterministic work already 
 | **Tier-A CV** | OpenCV | **ZERO tokens**; ~0.3s CPU/clip | **every take** (drafts + finals) | measured |
 | Tier-B VLM | `qwen-vl-plus` | advisory tokens (strided frames) | **drafts only**, never finals | modeled |
 | Bounded auto-repair | `qwen-plus` | chat tokens | only on a blocking Tier-A FAIL | modeled |
-| Final (promote) | `wan2.2-t2v-plus` | free tier **10 × 5s**; list $0.30/s | per certified shot, up to `final_cap` | modeled |
+| Final (promote) | `wan2.2-i2v-flash`, frame-anchored | free tier **10 × 5s** (i2v pool, separate from t2v) | per certified shot **without** a motion contract, up to `final_cap` | modeled |
 
 Two ratios are load-bearing and both are encoded in `server/metrics.py`: a Tier-0 still is
-**1/25** the price of a 5s draft (`$0.02 / ($0.10 × 5)`), and a premium final second costs
+**1/25** the price of a 5s draft (`$0.02 / ($0.10 × 5)`), and a `video_final` second is priced
 **3×** a draft second (`$0.30 / $0.10`). Free-tier quota mirrors the intent — 40 cheap turbo
-takes to iterate against, 10 premium plus finals to certify (`.env.example`).
+takes to iterate against, 10 finals to certify (`.env.example`).
+
+**The ledger prices the role, not the endpoint** — read the final row with that in mind.
+Promotion renders frame-anchored on `wan2.2-i2v-flash` so the certified clip is continuous with
+the take the human approved ([verification §3e](verification.md)), but it is still recorded as
+`video_final` and still costed at the `wan2.2-t2v-plus` list rate. The reported final spend is
+therefore an **upper bound**: a like-for-like flash-tier price would read lower. The cascade's
+guarantee is unaffected — it only requires each rung to be no dearer than the rung it guards —
+but no number in this doc should be read as a measured price for i2v.
 
 The cascade only pays off if each rung is genuinely cheaper than the one it guards, and that
 is a property you can get wrong by accident: the t2i models return 1024×1024, VLM image
@@ -64,10 +72,18 @@ pipeline actually wrote:
 | `tier0` / image (`wan2.1-t2i-plus`) | 3 | 3 stills | once per shot, pre-video |
 | `drafting` / video_draft (`wan2.1-t2v-turbo`) | 4 | 20 video-s | per take (1 was a retake) |
 | `repairing` / chat (`qwen-plus`) | 1 | 90 in + 30 out tokens | per blocking failure |
-| `promoting` / video_final (`wan2.2-t2v-plus`) | 3 | 15 video-s | per certified shot |
+| `promoting` / video_final (`wan2.2-i2v-flash`) | 2 | 10 video-s | per certified shot without a motion contract |
+| `assembling` / audio (`qwen3-tts-flash`) | 3 | 3 narration lines | once per shipped shot |
 
-Batch totals (wallet): **4 draft clips, 3 finals, 3 stills, 360 tokens, 35 billed video-seconds**,
-which the nominal list prices model at **~$6.56**. All 3 shots certified.
+Batch totals (wallet): **4 draft clips, 2 finals, 3 stills, 360 tokens, 30 billed video-seconds**,
+which the nominal list prices model at **~$5.06**. All 3 shots certified.
+
+The `promoting` row bills **2 calls for 3 certified shots**, and the gap is the point. Shot 1 is
+the kill-shot: it asserts `camera_motion: right`, and an anchor frame cannot carry a motion
+vector — measured, by watching an approved rightward pan promote into a leftward one
+([§3e](verification.md)). So that shot certifies the take that actually satisfied the contract
+and skips promotion entirely. Verification does not only reject bad output here; it removes a
+generation the run would otherwise have paid for.
 
 Read the `tier0` row precisely: demo mode substitutes a deterministic zero-token stand-in for
 the subject check, so this batch bills 3 stills and no VLM tokens for that stage. It is not
@@ -126,8 +142,8 @@ Re-running the *identical* spec against the content-addressed cache:
 
 | | Cold run | Warm run (cache hits) |
 |---|---|---|
-| Billed video-seconds | 35 | **0** |
-| Modeled list cost | ~$6.56 | **~$0.0002** (residual chat tokens only) |
+| Billed video-seconds | 30 | **0** |
+| Modeled list cost | ~$5.06 | **~$0.0002** (residual chat tokens only) |
 | Shots certified | 3 | 3 |
 
 Identical `(model, prompt, seed)` requests replay from disk with `video_seconds = 0`, so the

@@ -39,7 +39,11 @@ DAILIES_DEMO=1 SPA_DIST=web/dist uvicorn server.app:create_production_app --fact
    **Approve & generate**. *Narrate:* the one human checkpoint, before any video tokens.
 3. **The kill-shot (unchanged, still the spine).** Shot 1 asserts a rightward camera pan; the first
    draft is static → Tier-A CV catches it → bounded auto-repair retakes → the second draft pans right
-   → it passes and promotes.
+   → it passes and ships as-is. *Narrate:* shots 0 and 2 promote to a frame-anchored final that
+   continues from the frame you approved; shot 1 does not, because an anchor carries composition but
+   not motion — we measured an approved rightward pan promoting into a leftward one. So the clip that
+   satisfied the motion contract is the clip that ships, one generation cheaper
+   ([verification §3e](verification.md)).
 4. **The conformance board — what's new.** Click a shot's **draft take**. Alongside the deterministic
    Tier-A checks, the custom **`title_card_present`** advisory appears with **mark pass / mark fail**
    buttons. *Narrate:* every human override here is a labeled machine-vs-human datum — the calibration

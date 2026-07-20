@@ -27,7 +27,7 @@ flowchart TB
 
     dailies["Dailies<br/><i>Software System</i><br/>Compiles specs to a closed assertion DSL and runs each<br/>generated shot through a cost-tiered conformance<br/>cascade with bounded auto-repair"]:::system
 
-    qwen["Qwen Cloud<br/><i>External System</i><br/>qwen-plus (chat/repair), qwen-vl-plus (VLM),<br/>wan2.1-t2v-turbo / wan2.2-t2v-plus / wan2.1-t2i-plus<br/>via OpenAI-compat /v1 + native async task API"]:::external
+    qwen["Qwen Cloud<br/><i>External System</i><br/>qwen-plus (chat/repair), qwen-vl-plus (VLM),<br/>wan2.1-t2v-turbo / wan2.2-i2v-flash / wan2.1-t2i-plus<br/>via OpenAI-compat /v1 + native async task API"]:::external
     mcphost["MCP client host<br/><i>External System</i><br/>A Qwen agent / Claude that gates video<br/>by calling run_shot_tests over MCP"]:::external
 
     stakeholder -->|"authors a machine-checkable spec"| dailies
@@ -79,7 +79,7 @@ flowchart TB
             tierB["Tier-B VLM (advisory)<br/><i>qwen-vl-plus</i>"]:::stage
             hardfail["blocking Tier-A FAIL"]:::reject
             repair["bounded auto-repair<br/><i>qwen-plus</i>"]:::stage
-            promote["promote<br/><i>wan2.2-t2v-plus</i>"]:::stage
+            promote["promote (frame-anchored)<br/><i>wan2.2-i2v-flash</i>"]:::stage
             narrate["narration<br/><i>qwen3-tts-flash</i>"]:::stage
             assemble["assembly + mux<br/><i>ffmpeg</i>"]:::stage
 
@@ -123,7 +123,7 @@ flowchart TB
         end
     end
 
-    qwen["Qwen Cloud<br/><i>External System</i><br/>qwen-plus · qwen-vl-plus · qwen3-tts-flash ·<br/>wan2.1-t2v-turbo / wan2.2-t2v-plus / wan2.1-t2i-plus"]:::external
+    qwen["Qwen Cloud<br/><i>External System</i><br/>qwen-plus · qwen-vl-plus · qwen3-tts-flash ·<br/>wan2.1-t2v-turbo / wan2.2-i2v-flash / wan2.1-t2i-plus"]:::external
     mcphost["MCP client host<br/><i>External System</i><br/>A Qwen agent / Claude"]:::external
     disk["Storage volume<br/><i>local /data, bind-mounted</i><br/>state.json · ledger.jsonl · cache/sha1.mp4 or .png"]:::external
 
@@ -186,6 +186,11 @@ Reading it as the request flows:
   promote → assembly`. Two paths are red: a sentence outside the closed DSL is a **compile
   error rejected before any spend**, and a **blocking Tier-A FAIL** is the only thing that
   triggers a (budget-bounded) retake. Advisory Tier-B verdicts never block promotion.
+  **Promotion is frame-anchored**: the certified final continues from the take the human
+  approved (`wan2.2-i2v-flash`) rather than re-rolling from noise, so takes of one shot share
+  a look. A shot whose contract asserts camera motion skips promotion and ships the approved
+  take, because an anchor frame carries composition but not motion — measured, not assumed
+  ([verification §3e](verification.md)).
 - **Metrics ledger** (`server/metrics.py`, `server/report.py`) records every Qwen/Wan call and
   derives the frontier / heatmap / repair-convergence numbers the dashboard charts.
 - **Store + snapshots** (`server/store.py`) is the "database": in-memory state mutated under an

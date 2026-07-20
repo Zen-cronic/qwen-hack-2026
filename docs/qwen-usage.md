@@ -50,7 +50,7 @@ Seven model roles across four API families, plus both integration frameworks the
 
 | Surface | Transport / entry | Models | What is non-trivial |
 |---|---|---|---|
-| **Wan video** | native async `…/video-generation/video-synthesis`, `…/image2video/video-synthesis`, `…/text2image/image-synthesis` + `/tasks/{id}` | `wan2.1-t2v-turbo` (draft), `wan2.2-t2v-plus` (final), `wan2.2-i2v-flash`·`wan2.1-i2v-turbo`·`wan2.1-kf2v-plus` (repair), `wan2.1-t2i-plus` (still) | async poll with terminal-status branching; per-model frame-size negotiation; frame-anchored i2v via inline data-URI (no OSS upload); content-addressed replay cache |
+| **Wan video** | native async `…/video-generation/video-synthesis`, `…/image2video/video-synthesis`, `…/text2image/image-synthesis` + `/tasks/{id}` | `wan2.1-t2v-turbo` (draft), `wan2.2-i2v-flash` (frame-anchored final + repair)·`wan2.1-i2v-turbo`·`wan2.1-kf2v-plus`, `wan2.2-t2v-plus` (t2v final fallback), `wan2.1-t2i-plus` (still) | async poll with terminal-status branching; per-model frame-size negotiation; frame-anchored i2v via inline data-URI (no OSS upload); content-addressed replay cache |
 | **Qwen-VL** | compat chat + `image_url` parts | `qwen-vl-plus` | two verifier tiers (1 still / 7 strided frames); JSON verdicts; per-shot token accounting; degrade-to-`INCONCLUSIVE` |
 | **Qwen chat + function calling** | compat chat + `tools` | `qwen-plus` | two tool-call loops — `run_shot_tests` and plan-authoring `build_pipeline_graph` (`tool_choice="auto"`), transcript captured as evidence |
 | **Qwen-TTS** | native `…/multimodal-generation/generation` | `qwen3-tts-flash` | per-shot narration, `voice` required, same replay cache |
@@ -149,10 +149,12 @@ accounting and caching through every call (`server/wan.py`).
   branch on the *polled* `task_status` (`SUCCEEDED`/`FAILED`/`CANCELED`/`UNKNOWN`/timeout).
   This encodes a verified platform gotcha: **HTTP 200 on create does not mean valid** —
   validation surfaces asynchronously on the first poll ([verification.md §3](verification.md)).
-- **A cost ladder, not one model** — cheap `wan2.1-t2v-turbo` drafts, premium `wan2.2-t2v-plus`
-  promotes only on a passing draft, with **per-model frame-size negotiation** (`wan2.2-t2v-plus`
-  rejects `1280*720`; the size is part of the cache key, so a wrong guess both fails the request
-  and poisons the cache).
+- **A cost ladder, not one model** — cheap `wan2.1-t2v-turbo` drafts; promotion happens only on
+  a passing draft and renders as a frame-anchored `wan2.2-i2v-flash` continuation of it, so the
+  certified clip inherits the look the human approved instead of re-rolling from noise
+  (`wan2.2-t2v-plus` remains the t2v fallback when no anchored model is wired). All of it runs
+  through **per-model frame-size negotiation** (`wan2.2-t2v-plus` rejects `1280*720`; the size is
+  part of the cache key, so a wrong guess both fails the request and poisons the cache).
 - **Frame-anchored repair** — the novel component. `generate_video_from_frame` sends the anchor
   frame **inline as a base64 `data:` URI**, so a repair can hold a composition that lives only
   on this box with no OSS upload step; the frame bytes salt the cache key so two repairs of one

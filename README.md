@@ -8,7 +8,7 @@ auto-repair or fail the build.* Built on Qwen Cloud for the Global AI Hackathon 
 
 Dailies takes a premise, writes a shot list, and — before any clip ships — runs each
 generated shot through a **cost-tiered conformance cascade**. A shot that violates its
-contract never costs premium tokens and never reaches your channel.
+contract never earns a final render and never reaches your channel.
 
 **Built on Qwen Cloud, end to end.** A `qwen-plus` agent authors each run by function-calling
 `build_pipeline_graph`; **Wan** generates every shot and, when one breaks its contract, a
@@ -79,7 +79,7 @@ premise → script + specs (qwen-plus) → compiled assertion checklist
         → Tier-A CV (deterministic, ZERO tokens — the never-cut spine)
           + Tier-B VLM verdicts (qwen-vl, advisory)
         → bounded prompt-repair + retake
-        → promote passing shots (wan2.2-t2v-plus)
+        → promote passing shots (wan2.2-i2v-flash, anchored on the approved frame)
         → narration (qwen3-tts-flash) → ffmpeg assembly → certified episode, with sound
 
         …and afterwards, per shot, without re-running any of the above:
@@ -102,7 +102,9 @@ premise → script + specs (qwen-plus) → compiled assertion checklist
   A patch has to earn the slot — if it still fails, the original clip stays. Runs on the
   i2v/kf2v free-tier pool, separate from the t2v draft/final quota.
 
-  > **Live receipt.** On run `3e1f628d4acf`, the premium `wan2.2-t2v-plus` render of shot 0
+  > **Live receipt** (Jul 19, when promotion still re-rolled on the premium t2v tier — this run is
+  > what motivated anchoring promotion too, [verification §3e](docs/verification.md)).
+  > On run `3e1f628d4acf`, the premium `wan2.2-t2v-plus` render of shot 0
   > drifted the camera left (`|v|=0.92`) against a `camera_motion: static` contract, so the gate
   > rejected it and the pipeline shipped the turbo draft instead. Tier-A placed the drift at
   > **0.4s–3.6s**; a patch anchored at **0.2s** re-rendered from the premium frame and came back
