@@ -22,11 +22,15 @@ import { mono, tokens } from "./theme";
 import { packLabel } from "./vocabulary";
 import type { PipelinePlan, PlanTranscriptEntry } from "./types";
 
-// The first one is prefilled, so it is the request most visitors actually run. It asks for
-// the rightward pan that the demo storyboard's shot 1 then fails to deliver (server/demo.py),
-// which is how a cold click lands on the kill-shot instead of a clean green run.
+// The first one is prefilled, so it is the request most visitors actually run — which makes
+// its custom check a choice about what the charts show. It asks for a title card (advisory)
+// rather than a pan, because a pan applies to EVERY shot: all three then fail take 0, nothing
+// promotes to a final, and the cost-quality frontier collapses to a single dot. The kill-shot
+// does not need the help — shot 1's camera_motion is in the storyboard (server/demo.py), so it
+// fires either way, and leaving the pan out of the custom check is what keeps the frontier
+// readable. Same reasoning as web/e2e/demo-flow.spec.ts.
 const SAMPLE_REQUESTS = [
-  "a corgi pulls off a heist at the farmers' market, 3 shots — camera pans right to follow",
+  "a corgi pulls off a heist at the farmers' market, 3 shots — must end on a title card",
   "a 3-shot noir chase that must end on a title card",
   "a 2-shot brand promo — stay on our palette, camera pans right",
 ];
