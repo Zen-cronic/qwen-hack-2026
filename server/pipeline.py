@@ -22,7 +22,14 @@ from typing import Callable
 from server.compiler import compile_shots, load_pack
 from server.metrics import LedgerWriter, ResourceKind
 from server.patch import anchor_second, extract_frame, localized_failure
-from server.specs import Assertion, AssertionResult, ShotSpec, Status, parse_assertions
+from server.specs import (
+    Assertion,
+    AssertionResult,
+    AssertionType,
+    ShotSpec,
+    Status,
+    parse_assertions,
+)
 from server.tts import narration_for
 from server.store import (
     ProjectState,
@@ -135,6 +142,18 @@ def build_style_descriptor(premise: str, specs: list[ShotSpec]) -> str:
 PROMOTE_ANCHOR_S = 0.1
 
 
+def asserts_camera_motion(spec: ShotSpec) -> bool:
+    """Whether this shot's contract pins camera motion.
+
+    An anchor frame carries composition but NOT motion, so an i2v promotion has to
+    re-invent the move — and on real Wan output it INVERTED it: an approved rightward pan
+    (|v|=0.745, 'right') promoted to |v|=6.15 'left' and failed Tier-A. When motion is
+    contractual the approved take is already the most consistent final, so it ships as-is
+    rather than spending a clip on a mechanism that cannot preserve the property under test.
+    """
+    return any(a.type is AssertionType.CAMERA_MOTION for a in spec.assertions)
+
+
 class Pipeline:
     def __init__(self, store: Store, project_id: str, deps: Deps, cfg: Config | None = None):
         self.store = store
@@ -201,8 +220,17 @@ class Pipeline:
         failure = localized_failure(results)
         if failure is None:
             return None
+        at = anchor_second(failure)
+        # Anchor to PRESERVE, re-roll to CHANGE. If the defect starts at t=0 there is no
+        # good frame before it, and i2v works by holding the anchor's composition — so
+        # anchoring would pin the very thing the retake has to fix. Measured on real Wan
+        # output: a clip static throughout (fail_window [0.0, 5.33], |v|=0.005) retaken via
+        # i2v from frame 0 still measured |v|=0.112 against a 0.4 threshold, while a fresh
+        # t2v roll on the motion-forward repair prompt reaches |v|~1.47.
+        if at <= 0.0:
+            return None
         out = Path(self._evidence_dir(idx, take_no)) / "retake_anchor.png"
-        return extract_frame(video_path, anchor_second(failure), out)
+        return extract_frame(video_path, at, out)
 
     # stages
 
@@ -369,6 +397,14 @@ class Pipeline:
         # seed can't do this — it doesn't transfer across models; the frame does. Fall back
         # to a t2v final when no frame-anchored model is wired (e.g. the fixtures runtime).
         spec = p.shots[idx].spec
+        # Motion is contractual here and an anchor frame cannot carry it (see
+        # asserts_camera_motion): ship the take that actually passed instead of spending a
+        # generation that can only re-invent the move — which is also the most consistent
+        # final we can give, since it IS the approved take.
+        if self.deps.patch_video_fn is not None and asserts_camera_motion(spec):
+            self._set(lambda p: _certify(p, idx, p.shots[idx].latest_take.video_path))
+            return
+
         anchor = None
         if self.deps.patch_video_fn is not None:
             out = Path(self._evidence_dir(idx, 99)) / "final_anchor.png"
