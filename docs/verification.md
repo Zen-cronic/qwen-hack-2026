@@ -324,20 +324,28 @@ the code you wrote; fixtures test the assumption you made. This bug lived in the
 ### 4.3 Reject-before-spend, auditable from the filesystem
 
 The fixture run asks Wan for a rightward pan on shot 1 and gets back a static shot — a real
-instruction-following failure, not a staged one. The repair loop's real trajectory:
+instruction-following failure, not a staged one. The repair loop's real trajectory
+(re-measured 2026-07-20 on the corgi pack):
 
 | Take | Tier | Measured | Verdict |
 |---|---|---|---|
-| 0 | draft (720p) | `camera static, \|v\|=0.34` (want `right`) | **FAIL** — blocking |
-| 1 | draft (720p) | `camera right, \|v\|=1.47` | PASS |
-| 2 | final (1080p) | `camera right, \|v\|=2.43` | PASS — certified |
+| 0 | draft (720p) | `camera static, \|v\|=0.028` (want `right`) | **FAIL** — blocking |
+| 1 | draft (720p) | `camera right, \|v\|=4.871` | PASS — certified |
 
 Tier-A caught it for **zero tokens** — optical flow, no VLM call.
 
-The cache is the receipt. Four prompts were drafted at `1280*720`; only **three** have a
-matching `1920*1080` final. The missing one is `PAN_ASKED` — the exact draft that failed
-Tier-A. Nothing suppressed it; the pipeline never promotes a draft that didn't pass, so
-those 5 s of premium quota were never spent. The absence of that one cache entry *is* the
+Two details worth reading off that table rather than around it.
+
+**The retake is a fresh t2v roll, not a frame-anchored i2v one.** Tier-A localized the failure
+to `fail_window_s: [0.0, 5.33]` — the whole clip. A camera that never moves has no *last good
+frame* to continue from, so `_anchor_for_retake` returns None and the pipeline falls back to
+re-rolling from the repaired prompt. The anchor path is for failures with a before; this
+failure has none.
+
+**Shot 1 never promotes.** Shots 0 and 2 each spend a second generation on a frame-anchored
+`wan2.2-i2v-flash` final; shot 1 ships the draft that satisfied the contract. Four drafts,
+**two** promotions — and the missing third is exactly the shot whose first take failed. Nothing
+suppressed it; the pipeline never promotes a draft that didn't pass. That absence is the
 architecture working, and it is checkable with `ls`.
 
 ### 4.4 Quota consumed to date

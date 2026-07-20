@@ -27,6 +27,11 @@ npm --prefix web install && npm --prefix web run build   # -> web/dist
 
 # Workbench in zero-quota demo mode (or `docker compose up -d --build` for the :80 topology):
 DAILIES_DEMO=1 SPA_DIST=web/dist uvicorn server.app:create_production_app --factory --port 8099
+
+# Same pipeline against REAL warmed Wan clips, also free once the cache is warm. This is what
+# the recorded film uses: demo mode's clips are synthetic gradients, which is fine for proving
+# the orchestration and wrong for showing a judge what the gate actually looks at.
+DAILIES_FIXTURES=1 SPA_DIST=web/dist uvicorn server.app:create_production_app --factory --port 8099
 ```
 
 ## Act 1 — The workbench (browser, ~90s)
@@ -56,7 +61,8 @@ DAILIES_DEMO=1 SPA_DIST=web/dist uvicorn server.app:create_production_app --fact
 ## Act 2 — Qwen custom tool (terminal, ~30s)
 
 ```bash
-python scripts/qwen_tool_demo.py
+# Point it at the real kill-shot, not the synthetic stand-in the script falls back to.
+python scripts/qwen_tool_demo.py data/cache/<kill-shot>.mp4
 ```
 
 *Narrate:* the exact same conformance engine, exposed as a **Qwen custom tool**. `qwen-plus`
@@ -64,11 +70,11 @@ autonomously decides to call `run_shot_tests` — first via **native function ca
 **Qwen-Agent** custom tool — receives the structured report, and reads the verdict back in plain
 English. This is "custom skills" satisfied concretely, not asserted.
 
-The clip here **passes**, and that is the useful thing to point at: the model doesn't parrot a
-boolean, it reports the measurements the gate made — `palette_deltae` at **ΔE 28.1 against a 30.0
-bound**, `duration_between` at 5.00s in `[4.0, 6.0]`, and so on. A gate that only says *no* teaches
-you nothing; this one hands back the numbers whichever way the verdict went. The failing path is
-already on screen twice — Tier-A's kill-shot in Act 1, and the MCP `FAIL` in Act 3.
+Pass the clip explicitly. With no argument both terminal acts fall back to a *synthetic* clip
+from `server/demo.py`, which puts a generated gradient on screen in a film about testing
+generated video. Handed the real kill-shot it reports what the gate actually measured —
+`palette_deltae` at **ΔE 57.2 against a 30.0 bound** — and the point to make is that the model
+does not parrot a boolean, it reads back the number and the threshold it was judged against.
 
 ## Act 3 — The MCP loop (terminal, ~30s)
 

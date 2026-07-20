@@ -9,9 +9,13 @@ from server.wan import DRAFT_MODEL, cache_key
 # a prompt -- even to fix a typo -- orphans the paid-for clip and silently re-bills. If
 # this test fails you have changed a cache key: revert the wording, or re-warm on purpose
 # with scripts/warm_fixtures.py and update the hash here.
+#
+# Re-warmed 2026-07-20 when the pack moved from the coastal-dusk storyboard to the corgi one,
+# so the demo video shows the same subject the SPA and demo runtime do. The coastal clips are
+# orphaned by that change; that was the deliberate price of one storyboard across the product.
 PINNED_KEYS = {
-    "PAN_ASKED": (PAN_ASKED, "8017c2f56bbb499ba4b416aace8c9c2e223c7034"),
-    "PAN_REPAIRED": (PAN_REPAIRED, "8e193dace9b7f98c1920f8f24661e04f6792d65e"),
+    "PAN_ASKED": (PAN_ASKED, "218bba835f9809ce433a0c17bd91f54be4434692"),
+    "PAN_REPAIRED": (PAN_REPAIRED, "d7cbcd91c704d90acab49b8eadcfa55aa461fe7b"),
 }
 
 

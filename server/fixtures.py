@@ -9,12 +9,13 @@ content-addressed cache hit: the clips are generated once, and every run afterwa
 replays them for free. Pinned stages call no model, so they bill nothing and the ledger
 says so.
 
-The kill-shot is not staged, which is the whole point. Shot 1 asks for a rightward pan;
-Wan returns a beautiful, plausible, STATIC shot — measured |v|=0.34 against a 0.4 static
-threshold, corroborated by phase correlation at dx=-0.02px across the entire clip. Tier-A
-catches it for zero tokens, the repaired prompt actually pans (|v|=1.47, detected
-"right"), and the retake certifies. A human skimming that first clip would have shipped
-it; that is the product's thesis, executed on real generated video.
+The kill-shot is not staged, which is the whole point. Shot 1 asks for a rightward pan; Wan
+returns a beautiful, plausible, STATIC shot — |v|=0.028 against a 0.4 threshold. Tier-A
+catches it for zero tokens, the repaired prompt actually pans, and the retake certifies. A
+human skimming that first clip would have shipped it; that is the product's thesis, executed
+on real generated video.
+(The measured numbers live in docs/verification.md, which is regenerated from a real run
+rather than transcribed here — a docstring cannot be re-measured.)
 
 Audio: Wan clips are silent, so the episode's sound is a real qwen-tts (CosyVoice) slate
 per shot (server/tts.py), synthesized during the warm and replayed from cache afterwards —
@@ -39,24 +40,43 @@ from server.store import Store
 from server.tier_a import run_tier_a
 from server.wan import WanClient
 
-PREMISE = "a lonely lighthouse keeper who discovers a message in a bottle"
+PREMISE = "a corgi pulls off a bread heist at a crowded farmers' market"
 
-# Shot 1, take 0. Asks politely for a pan; Wan ignores the camera instruction and returns
-# a static shot. Verbatim on purpose — this exact string is the cache key for the clip
-# that fails, so it must never be "tidied".
+# Corgi, not coastal dusk, and the reason is the same one server/demo.py gives: a lighthouse
+# at dusk hands `subject_present` a frame with exactly one thing in it. A short dog at knee
+# height in a moving crowd is the case where the VLM can be WRONG — shoppers are subject
+# distractors, and drifting ears and markings are a real test of `identity_consistent`. The
+# low subject also motivates the pan the shot then fails to deliver.
+
+# Shot 1, take 0. A sincere request for a rightward pan that Wan does not honour: the camera
+# does not move at all, measured at |v|=0.028 against a 0.4 static threshold. Verbatim on
+# purpose — this exact string is the cache key for the clip that fails, so it must never be
+# "tidied".
+#
+# The wording was arrived at by measurement, not taste. An earlier version ended "...the
+# camera pans steadily to the right, FOLLOWING THE DOG", and that one PASSED at
+# camera_dx=+2.85: a subject moving laterally hands the model every reason to track, so the
+# ask became self-fulfilling and the check had nothing left to catch. A failure is only worth
+# showing if it is unstaged, which means the prompt must be a genuine request over a scene
+# with no inherent lateral motion — the condition the coastal pack had, not the outcome.
+# Chosen over a sibling candidate that panned the wrong way (dx=-4.07): that one is more
+# dramatic, but in a frame full of moving shoppers a reader can wonder whether the crowd
+# moved rather than the camera. 0.028 admits no such argument.
 PAN_ASKED = (
-    "A lighthouse on a rocky cliff at dusk. The camera pans steadily to the right "
-    "across the cliff face, revealing the sea. Cinematic, continuous shot, no cuts."
+    "A farmers' market bread stall at golden hour, wicker baskets of loaves, a corgi waiting "
+    "quietly at the baker's feet with a roll in its mouth. The camera pans steadily to the "
+    "right along the stalls, revealing the length of the market. Cinematic, continuous shot, "
+    "no cuts."
 )
 
 # Shot 1, take 1 — what the repair stage rewrites the above into. Front-loads the camera
 # move and forces lateral translation ("sliding in from the right edge of frame"), which
 # is what actually shifts the frame rather than merely describing a shift.
 PAN_REPAIRED = (
-    "Aerial tracking shot flying fast to the right along a rocky coastline at dusk. "
-    "The camera sweeps laterally rightward at speed, cliffs rushing past the frame, "
-    "a lighthouse sliding in from the right edge of frame. Strong continuous "
-    "left-to-right camera movement, no cuts."
+    "Fast lateral tracking shot moving right along a farmers' market aisle at knee height. "
+    "The camera sweeps rightward at speed, market stalls and shoppers' legs rushing past "
+    "the frame, a corgi carrying a bread roll sliding in from the right edge of frame. "
+    "Strong continuous left-to-right camera movement, no cuts."
 )
 
 # Checks every shot carries. These are the four that behave identically on synthetic and
@@ -71,22 +91,30 @@ _BASE_ASSERTIONS = [
 
 _SHOTS = [
     {
-        "prompt": ("A weathered lighthouse keeper stands at a rain-streaked window at dusk, "
-                   "looking out at a grey sea. Warm lamp light on his face. Cinematic, no cuts."),
-        "narration": "For thirty years he watched a sea that never answered.",
+        "prompt": ("A crowded Saturday farmers' market at golden hour, shoppers browsing wooden "
+                   "stalls piled with bread and vegetables. Warm morning light. Cinematic, "
+                   "locked-off camera, no cuts."),
+        "narration": "Nine in the morning at the market. Two hundred customers, and one of them is not a customer.",
         "assertions": _BASE_ASSERTIONS,
     },
     {
         "prompt": PAN_ASKED,
-        "narration": "Forty winters I have turned this light. Nobody ever turns back.",
-        "speaker": "the lighthouse keeper",
-        "assertions": _BASE_ASSERTIONS + [{"type": "camera_motion", "params": {"direction": "right"}}],
+        "narration": "Nobody ever looks down. That has always been the entire plan.",
+        "speaker": "the corgi",
+        # The subject checks ride the kill-shot on purpose: Tier-0 asks them of the still,
+        # before this shot costs a single video second, and they are asked of the one frame
+        # in the pack where a crowd gives the VLM a way to be wrong.
+        "assertions": _BASE_ASSERTIONS + [
+            {"type": "camera_motion", "params": {"direction": "right"}},
+            {"type": "subject_present", "params": {"subject": "the corgi"}},
+            {"type": "identity_consistent", "params": {"subject": "the corgi"}},
+        ],
     },
     {
-        "prompt": ("A glass bottle holding a rolled paper note, washed up among wet dark rocks "
-                   "at dusk, small waves lapping around it. Cinematic, no cuts."),
-        "narration": "Whoever finds this, I am still out here.",
-        "speaker": "the castaway",
+        "prompt": ("Close-up of a corgi dropping a bread roll at a baker's feet on cobblestones, "
+                   "warm morning light, the baker's hands reaching down to take it. Cinematic, "
+                   "no cuts."),
+        "narration": "The roll always comes back. That is the arrangement.",
         "assertions": _BASE_ASSERTIONS,
     },
 ]
@@ -123,6 +151,7 @@ def build_fixture_runtime(data_dir: str | None = None):
 
     from server.app import Runtime  # imported here to avoid a cycle at module load
     from server.config import settings
+    from server.script import compile_custom_rules
     from server.tier_b import TierBVerifier
     from server.tier0 import Tier0Verifier
     from server.tts import TTSClient
@@ -145,6 +174,14 @@ def build_fixture_runtime(data_dir: str | None = None):
         tier_a_fn=run_tier_a,               # REAL deterministic CV, now on REAL video
         tier_b_fn=TierBVerifier(llm, model=settings.VL_MODEL),  # REAL qwen-vl on real frames
         repair_fn=_fixture_repair,
+        # REAL qwen-plus compiling the user's plain-language rule into the closed vocabulary.
+        # Wired here because this runtime is what the demo capture films: the request typed
+        # on camera ends "must end on a title card", and with no compiler that rule was
+        # accepted by the UI and then silently dropped — a check the viewer is told about and
+        # never sees. title_card_present is Tier-B advisory, so a fail is honest and costs
+        # the run nothing; only the two text stages above stay pinned, for cache reasons.
+        custom_rule_fn=lambda rules: compile_custom_rules(
+            rules, client=llm, model=settings.QWEN_CHAT_MODEL),
         assemble_fn=assemble,               # REAL ffmpeg
         ledger=LedgerWriter(root / "ledger.jsonl"),
         # Frame-anchored i2v — what makes a retake continue from the draft it fixes and the
