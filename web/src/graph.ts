@@ -169,7 +169,9 @@ export function deriveNodes(project: Project): DNode[] {
       data: {
         kind: "shot", label: `Shot ${i}`, status: g, shotIndex: i,
         model: t?.model, thumb: shot ? shotThumb(shot) : null,
-        caption: t?.tier === "final" ? "premium take" : t ? "draft take" : "generate",
+        // "final", not "premium": promotion is a frame-anchored i2v continuation now, and
+        // the node header already names the model right above this line.
+        caption: t?.tier === "final" ? "final take" : t ? "draft take" : "generate",
       },
     });
     const target = shot ? patchTarget(shot) : undefined;
