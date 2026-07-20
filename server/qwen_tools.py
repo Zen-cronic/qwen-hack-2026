@@ -1,15 +1,7 @@
-"""Expose the Dailies conformance checker as a first-class Qwen tool ("custom skill").
+"""Expose the Dailies conformance checker as a Qwen tool, in two shapes: native
+function-calling (RUN_SHOT_TESTS_TOOL) and a Qwen-Agent BaseTool.
 
-Two native shapes, one underlying function:
-  1. Native function calling on the OpenAI-compatible endpoint — `RUN_SHOT_TESTS_TOOL`
-     is the JSON-Schema tool spec; `call_with_function_calling()` runs the tool-call loop
-     against qwen-plus (no extra dependency beyond `openai`).
-  2. A Qwen-Agent custom tool — `register_qwen_agent_tool()` registers a `BaseTool`
-     subclass via `@register_tool`, wired into an `Assistant` by `build_conformance_agent()`
-     (needs the optional `[agent]` extra: pip install -e ".[agent]").
-
-The shared logic (`run_shot_tests_json`) imports neither `openai` nor `qwen_agent`, so it
-is unit-testable on its own; the model-facing wrappers import lazily.
+`run_shot_tests_json` must import neither `openai` nor `qwen_agent` — the wrappers do so lazily.
 """
 
 from __future__ import annotations
@@ -60,11 +52,7 @@ _QWEN_AGENT_PARAMS = [
 
 
 def run_shot_tests_json(params: str | dict[str, Any]) -> str:
-    """Parse LLM-supplied tool arguments (JSON string or dict) and return a JSON report.
-
-    This is the single call site both tool shapes delegate to. Invalid assertions are
-    rejected by the closed-vocabulary validator inside run_shot_tests, before anything runs.
-    """
+    """Parse LLM-supplied tool arguments (JSON string or dict) and return a JSON report."""
     args = json.loads(params) if isinstance(params, str) else dict(params)
     report = run_shot_tests(
         args["video_path"],
@@ -82,11 +70,7 @@ _SYSTEM = (
 
 
 def call_with_function_calling(user_message: str, *, model: str | None = None, max_rounds: int = 4):
-    """Run a native function-calling loop against qwen-plus over the OpenAI-compatible endpoint.
-
-    Returns (final_text, transcript) where transcript records each tool call + result — a
-    verifiable, self-contained demonstration of a Qwen custom tool. Spends only chat tokens.
-    """
+    """Run a native function-calling loop against qwen-plus. Returns (final_text, transcript)."""
     from openai import OpenAI
 
     client = OpenAI(api_key=settings.QWEN_API_KEY, base_url=settings.QWEN_BASE_URL)

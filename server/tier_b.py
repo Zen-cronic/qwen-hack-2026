@@ -1,19 +1,7 @@
-"""Tier-B — qwen-vl semantic verdicts on strided frames. ADVISORY only.
+"""Tier-B — qwen-vl semantic verdicts on strided frames. ADVISORY only: a FAIL never blocks.
 
-GO per the hour-zero smoke test (qwen-vl-plus reads pixels). Tier-B answers the
-questions deterministic CV can't: is this the SAME character across the clip
-(identity_consistent), did the described ACTION actually complete (action_completed),
-is a title card visible (title_card_present). Every Tier-B assertion is advisory — a
-FAIL is surfaced to the human but never blocks promotion, because a VLM judgment
-is softer evidence than a pixel measurement.
-
-subject_present is NOT here: it is Tier-0, asked of the pre-render still by tier0.py,
-where a rejection is still cheap. This module once carried a _question branch for it
-that ASSERTION_META made unreachable — the tier filter below never selects it — which
-is precisely what disguised the check as wired while nothing ran it.
-
-NO-GO fallback (if the smoke test had failed): swap this stage for one that returns
-INCONCLUSIVE for every Tier-B assertion, and the UI shows human verdict buttons.
+subject_present is NOT here — it belongs to Tier-0 (server/tier0.py); the tier filter below
+would never select it anyway.
 """
 
 from __future__ import annotations
@@ -64,8 +52,7 @@ _VERDICT_MAP = {"pass": Status.PASS, "fail": Status.FAIL, "inconclusive": Status
 
 
 class TierBVerifier:
-    """Injected as the pipeline's tier_b_fn. Exposes pop_last_usage() so the
-    pipeline can log VLM tokens without changing the stage's return shape."""
+    """Injected as the pipeline's tier_b_fn; pop_last_usage() is the contract Pipeline._pop_usage reads."""
 
     def __init__(self, client, model: str = "qwen-vl-plus", n_frames: int = 7, max_tokens: int = 200):
         self.client = client

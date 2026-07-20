@@ -1,28 +1,7 @@
-"""Targeted repair — re-render one shot anchored to its own footage.
+"""Targeted repair — re-render one shot anchored to its own footage, without re-running the pipeline.
 
-The retake loop in pipeline.py answers a failure by re-prompting the WHOLE shot and
-generating five fresh seconds from noise. That discards everything the take already got
-right — the composition Tier-0 approved, the palette that passed, the subject that was
-recognizable — and it spends the t2v draft/final quota the judge reserve protects.
-
-A patch does the narrow thing instead. Tier-A localizes the failure to a frame window
-(server/tier_a.py), the last good frame BEFORE that window becomes the anchor, and a
-frame-anchored model (wan i2v / kf2v, its own free-tier pool) regenerates from there on
-a locus-aware corrected prompt. Then Tier-A re-verifies, and a passing patch becomes the
-shot's final so the episode re-concats for free.
-
-When the failure window opens at t=0 there is no good frame to anchor to — the defect is
-the whole clip — so the patch re-rolls from the corrected prompt instead of continuing
-from its own first frame, which would pin the defect in place. Anchor to preserve, re-roll
-to change (measured in verification.md 3e). That fallback draws the t2v draft pool rather
-than the i2v pool, and `anchor_s` comes back None to say so.
-
-Deliberately scoped: no script call, no Tier-0, no review gate, and no other shot is
-touched. That is the whole point — editing the episode without re-running the pipeline.
-
-A patch is never silently accepted. If the patched clip fails re-verification the
-original clip stays the final, and the failed attempt is still recorded as a take, so
-the trail shows what was tried.
+Anchor to preserve, re-roll to change: a failure window opening at t=0 has no good frame, so
+the patch re-rolls and `anchor_s` is None. A failed re-verification never replaces the original.
 """
 
 from __future__ import annotations
@@ -37,8 +16,7 @@ from server.metrics import ResourceKind
 from server.specs import AssertionResult, ShotSpec, Status
 from server.store import ShotStatus, Store, Take, TakeStatus
 
-# Step back slightly from the window edge: the measured boundary is where the defect is
-# already visible, so the frame just before it is the last one worth keeping.
+# Step back from the window edge: the boundary is where the defect is already visible.
 ANCHOR_LEAD_S = 0.2
 
 
@@ -66,9 +44,7 @@ class PatchOutcome:
 
 
 def _spend(store: Store, pid: str, deps, **kw) -> None:
-    """Record to the process-wide ledger AND the project's own copy, mirroring
-    Pipeline._spend. The wallet meter reads the project copy, so recording only to the
-    writer leaves a patch invisible in the UI even though the audit trail has it."""
+    """Record to the process-wide ledger AND the project's own copy (the wallet reads the copy)."""
     entry = deps.ledger.record(**kw)
 
     def mut(p) -> None:
@@ -79,11 +55,7 @@ def _spend(store: Store, pid: str, deps, **kw) -> None:
 
 
 def localized_failure(results: list[AssertionResult]) -> AssertionResult | None:
-    """The first blocking failure that Tier-A could place in time.
-
-    Advisory failures are excluded on purpose: Tier-B flags, it never blocks, so
-    spending a generation to chase one would invert the tier contract.
-    """
+    """The first blocking failure Tier-A could place in time; advisory ones never qualify."""
     for r in results:
         if r.advisory or r.status is not Status.FAIL:
             continue
@@ -99,8 +71,8 @@ def anchor_second(r: AssertionResult) -> float:
 
 
 def extract_frame(video_path: str, at_s: float, out_path: str | Path) -> str | None:
-    """Full-resolution frame at `at_s`. Not from the Tier-A Clip: that one is decimated
-    to 320px wide for analysis, and a 320px anchor would re-render the shot at 320px."""
+    """Full-resolution frame at `at_s`. Never source this from the Tier-A Clip — it is
+    decimated to 320px, and a 320px anchor re-renders the shot at 320px."""
     cap = cv2.VideoCapture(str(video_path))
     cap.set(cv2.CAP_PROP_POS_MSEC, at_s * 1000.0)
     ok, frame = cap.read()
@@ -136,28 +108,18 @@ def patch_shot(store: Store, pid: str, shot_index: int, deps, cfg, *, model: str
     patch_no = len(st.takes)
     ev_dir = Path(cfg.data_dir) / pid / "evidence" / f"shot{shot_index}" / f"patch{patch_no}"
 
-    # Re-measure the clip rather than trusting the results stored beside it. Tier-A gained
-    # failure localization after runs were already on disk, and those takes carry no window
-    # at all — re-verifying is deterministic CV on a file we already have, so it costs
-    # nothing and it is the only way to patch a run that predates the feature. It also
-    # keeps a patch honest if the checks themselves have changed since the take was cut.
+    # Re-measure rather than trust stored results: free deterministic CV, and old takes carry
+    # no failure window at all.
     fresh = list(deps.tier_a_fn(source, spec, str(ev_dir / "reverify")))
-    # A fresh measurement is authoritative WHENEVER it produced one. Falling back to the
-    # stored results on a clean re-verify would let a stale recorded failure justify
-    # patching a clip that now passes. Stored results are only for the case where Tier-A
-    # returned nothing at all — an unreadable clip, or a spec with no Tier-A assertions.
+    # A fresh measurement is authoritative WHENEVER it produced one; stored results are only
+    # for the case where Tier-A returned nothing at all.
     failure = localized_failure(fresh) if fresh else localized_failure(take.results if take else [])
     if failure is None:
         return PatchOutcome(False, "Nothing to patch — every blocking check on this shot passes.", shot_index)
 
     at = anchor_second(failure)
-    # Anchor to PRESERVE, re-roll to CHANGE. A window that opens at t=0 spans the whole
-    # clip, so there is no good frame to continue from and anchoring would pin the very
-    # defect the patch exists to remove — measured on real Wan output as |v| 0.005 -> 0.112,
-    # still failing, where a fresh roll on the same corrected prompt reached 0.745 and
-    # passed (verification.md 3e). The retake loop already applies this rule
-    # (Pipeline._anchor_for_retake); without it here the manual path would keep offering
-    # the one move we have evidence does not work.
+    # Anchor to PRESERVE, re-roll to CHANGE: a window opening at t=0 has no good frame, and
+    # anchoring would pin the defect. Mirrors Pipeline._anchor_for_retake.
     anchored = at > 0.0
     anchor = extract_frame(source, at, ev_dir / "anchor.png") if anchored else None
     if anchored and anchor is None:
@@ -174,13 +136,11 @@ def patch_shot(store: Store, pid: str, shot_index: int, deps, cfg, *, model: str
         res = deps.patch_video_fn(prompt, model, anchor)
         used_model = model
     else:
-        # Nothing to preserve, so this is a whole-clip re-roll. Honest caveat: it draws the
-        # t2v draft pool, not the separate i2v pool a frame-anchored patch runs on.
+        # Whole-clip re-roll — this draws the t2v draft pool, not the i2v pool.
         res = deps.gen_video_fn(prompt, cfg.draft_model)
         used_model = cfg.draft_model
     billed = 0 if getattr(res, "from_cache", False) else getattr(res, "seconds", 0)
-    # Recorded as VIDEO_PATCH however it was rendered: the role is repairing a shipped
-    # shot, and `model` below names the endpoint that actually ran it.
+    # Recorded as VIDEO_PATCH however it was rendered — the role, not the endpoint.
     _spend(store, pid, deps, stage="patching", kind=ResourceKind.VIDEO_PATCH, model=used_model,
            shot_index=shot_index, video_seconds=billed,
            cached_seconds=getattr(res, "cached_seconds", 0),
@@ -215,11 +175,7 @@ def patch_shot(store: Store, pid: str, shot_index: int, deps, cfg, *, model: str
         paths = [s.final_path for s in shipped]
         if paths:
             out = str(Path(cfg.data_dir) / pid / "episode.mp4")
-            # Re-narrate through the pipeline's own path so the re-cut keeps its sound.
-            # Re-concatenating without audio_paths silently ships a SILENT replacement —
-            # the narration the first assemble muxed would vanish the moment a shot is
-            # patched. Every line was already synthesized, so it replays from cache: this
-            # stays free (no tokens, no video seconds). Mirrors the /assemble endpoint.
+            # Must re-narrate through the pipeline's path, or the re-cut silently ships silent.
             from server.pipeline import Pipeline
             audio = Pipeline(store, pid, deps, cfg)._narrate(shipped)
             episode = (deps.assemble_fn(paths, out, audio_paths=audio) if audio

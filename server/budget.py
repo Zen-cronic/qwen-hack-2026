@@ -1,10 +1,6 @@
-"""Judge-mode budget governor — the thing that keeps the live URL alive Jul 10–31.
+"""Judge-mode budget governor — caps FRESH (billable) generations per process.
 
-During judging the deployed app is public and each judge run could otherwise burn
-scarce clip quota. In judge mode the governor caps FRESH (billable) generations per
-process, while cached-clip replays bypass the cap entirely and cost zero video quota
-(that's the whole point of the content-addressed cache). Outside judge mode it's a
-pass-through. The wallet meter still shows every call, free or not.
+Cached replays bypass the cap entirely; outside judge mode this is a pass-through.
 """
 
 from __future__ import annotations
@@ -16,13 +12,7 @@ from server.wan import WanClient, WanResult, video_size_for
 
 
 class BudgetGovernor:
-    # The final cap was 0 while the premium pool was free-tier-only: with no financial
-    # buffer, the correct number of billable promotions a stranger could trigger was none.
-    # It is 2 now that pay-as-you-go is on with voucher credit behind it — promotion plus
-    # the Tier-A re-verify that follows it is the run's most instructive moment, and a
-    # judge on a novel premise should get to see it. Exhausting the cap is not a failure
-    # path: Pipeline._promote certifies the passing draft instead (same branch as a
-    # refused API call or a final that regresses on Tier-A).
+    # Exhausting a cap is not a failure path: Pipeline._promote certifies the passing draft.
     def __init__(self, *, judge_mode: bool | None = None,
                  fresh_draft_cap: int = 2, fresh_final_cap: int = 2):
         self.judge_mode = settings.JUDGE_MODE if judge_mode is None else judge_mode
@@ -50,16 +40,13 @@ class BudgetGovernor:
 
 
 def governed_gen_video(wan: WanClient, governor: BudgetGovernor, *, final_model: str):
-    """Wrap WanClient.generate_video with the governor. Returns a GenVideoFn:
-    (prompt, model, negative_prompt=None) -> WanResult. A cached request is always
-    allowed (free); a fresh one is refused with a synthetic FAILED result once the
-    judge-mode cap is hit, so the pipeline records it and moves on."""
+    """Wrap WanClient.generate_video with the governor, returning a GenVideoFn. Cached requests
+    are always allowed; a capped fresh one is refused with a synthetic FAILED result."""
 
     def gen(prompt: str, model: str, negative_prompt: str | None = None) -> WanResult:
         tier = "final" if model == final_model else "draft"
-        # Ask the model what size it uses — the size is part of the cache key, so hardcoding
-        # 1280*720 here looked up the wrong key for premium finals and reported every cached
-        # final as "fresh". In judge mode (fresh_final_cap=0) that refused free replays.
+        # Must ask the model for its size — it is part of the cache key, so a hardcoded one
+        # looks up the wrong key and reports cached clips as fresh.
         cached = wan.is_cached("video", model, prompt, None, video_size_for(model), negative_prompt)
         if not cached and not governor.allow_fresh(tier):
             return WanResult(status="FAILED", kind="video", code="JudgeCap",

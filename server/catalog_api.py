@@ -1,11 +1,4 @@
-"""Catalog read surface + explicit publish knob.
-
-Included by create_app ONLY when CATALOG_ENABLED — with the flag off these
-routes don't exist (404), and the import never runs. The existing live-run poll
-endpoint (GET /api/projects/{pid}) is untouched; the catalog detail endpoint
-returns the same poll-payload shape (raw_state verbatim) plus publish metadata,
-so anything that can render a live run can render a published one.
-"""
+"""Catalog read surface + explicit publish knob. Included by create_app only when CATALOG_ENABLED."""
 
 from __future__ import annotations
 
@@ -41,8 +34,7 @@ def catalog_project(pid: str):
 
 @router.post("/projects/{pid}/publish")
 def publish(pid: str, request: Request):
-    """Publish (or republish) a live project into the catalog — the operator
-    knob for post-DONE mutations: verdict overrides, patches, re-assembly."""
+    """Publish (or republish) a live project into the catalog."""
     _require_pool()
     store = request.app.state.runtime.store
     if store.get(pid) is None:

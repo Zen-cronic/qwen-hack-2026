@@ -1,25 +1,7 @@
-"""Wan video + t2i client with a content-addressed replay cache.
+"""Wan video + t2i client over the async DashScope task API, with a content-addressed replay cache.
 
-API surface VERIFIED live (docs/verification.md, zero quota spent to verify):
-
-  POST {DASHSCOPE}/api/v1/services/aigc/video-generation/video-synthesis
-  POST {DASHSCOPE}/api/v1/services/aigc/text2image/image-synthesis
-    headers: Authorization: Bearer <key>, Content-Type: json, X-DashScope-Async: enable
-    body: {"model", "input": {"prompt", "negative_prompt"?}, "parameters": {...}}
-    -> 200 {"output": {"task_id", "task_status": "PENDING"}}
-  GET {DASHSCOPE}/api/v1/tasks/{task_id}   (poll ~15s)
-    -> video: output.video_url ; image: output.results[0].url
-       both are signed OSS URLs that EXPIRE ~24h -> download immediately.
-
-Gotchas baked in here:
-  * HTTP 200 on create does NOT mean valid — validation surfaces as task_status
-    FAILED on the poll (output.code / output.message). We branch on POLLED status.
-  * wan2.1/2.2 clips are a fixed 5s; every video call costs exactly CLIP_SECONDS.
-
-Replay cache: a clip/still is addressed by sha1(model|prompt|seed|size|negative).
-Identical inputs return the cached file for FREE — this is what lets judge-mode
-re-verify cached clips at zero video quota, and what makes repair retries (which
-change the prompt, hence the key) generate fresh while replays stay free.
+Two invariants: HTTP 200 on create does NOT mean valid (branch on the POLLED status), and
+result URLs are signed and expire, so download immediately.
 """
 
 from __future__ import annotations
@@ -51,11 +33,7 @@ POLL_TIMEOUT_SECONDS = 600
 
 TERMINAL_STATUSES = {"SUCCEEDED", "FAILED", "CANCELED", "UNKNOWN"}
 
-# Accepted frame sizes differ PER MODEL, and getting it wrong is not a soft failure — the
-# task is rejected outright with InvalidParameter. Verified live 2026-07-15: wan2.2-t2v-plus
-# refuses 1280*720 and answers "size must be in 1080*1920,1920*1080,1440*1440,1632*1248,
-# 1248*1632,480*832,832*480,624*624". Both entries below are 16:9, so the premium tier is
-# the same framing at 1080p — not a different crop.
+# Accepted frame sizes differ PER MODEL; a wrong one is rejected with InvalidParameter.
 DEFAULT_VIDEO_SIZE = "1280*720"                 # wan2.1-t2v-turbo (drafts)
 VIDEO_SIZE_BY_MODEL = {
     "wan2.2-t2v-plus": "1920*1080",             # premium finals; rejects 1280*720
@@ -63,16 +41,14 @@ VIDEO_SIZE_BY_MODEL = {
 
 
 def video_size_for(model: str) -> str:
-    """The frame size a given video model accepts. Callers must not hardcode this: the size
-    is part of the cache key, so a wrong guess both breaks the request and poisons cache
-    lookups for that model."""
+    """The frame size a given video model accepts. Never hardcode this — the size is part of
+    the cache key, so a wrong guess breaks the request and poisons cache lookups."""
     return VIDEO_SIZE_BY_MODEL.get(model, DEFAULT_VIDEO_SIZE)
 
 
 IMAGE2VIDEO_URL = f"{DASHSCOPE_BASE_URL}/api/v1/services/aigc/image2video/video-synthesis"
 
-# Frame-anchored video models: which endpoint serves each, and what it calls the input
-# image. Both spellings are verified live — docs/verification.md section 3c.
+# Frame-anchored video models: which endpoint serves each, and its input-image field name.
 FRAME_ANCHORED: dict[str, tuple[str, str]] = {
     "wan2.2-i2v-flash": (VIDEO_SYNTHESIS_URL, "img_url"),
     "wan2.1-i2v-turbo": (VIDEO_SYNTHESIS_URL, "img_url"),
@@ -82,9 +58,7 @@ FRAME_ANCHORED: dict[str, tuple[str, str]] = {
 
 def cache_key(model: str, prompt: str, seed: int | None, size: str,
               negative_prompt: str | None, salt: str = "") -> str:
-    # `salt` is appended only when non-empty, so every key minted before frame-anchored
-    # generation existed is byte-identical — a warm cache must not be invalidated by
-    # adding a component to the address.
+    # `salt` must stay append-only-when-non-empty, or every pre-existing cache key changes.
     raw = f"{model}|{prompt}|{seed}|{size}|{negative_prompt or ''}"
     if salt:
         raw += f"|{salt}"
@@ -92,12 +66,8 @@ def cache_key(model: str, prompt: str, seed: int | None, size: str,
 
 
 def frame_data_uri(path: str | os.PathLike[str]) -> str:
-    """A local frame as a base64 `data:` URI.
-
-    The DashScope video endpoints read these in place of an HTTP URL, which is the only
-    reason a repair can anchor to a frame that exists solely on this box — there is no
-    public URL for it and no OSS upload step (docs/verification.md section 3c).
-    """
+    """A local frame as a base64 `data:` URI — the DashScope video endpoints accept these
+    in place of an HTTP URL, so a local-only anchor frame needs no upload."""
     p = Path(path)
     mime = "image/png" if p.suffix.lower() == ".png" else "image/jpeg"
     return f"data:{mime};base64," + base64.b64encode(p.read_bytes()).decode("ascii")
@@ -115,10 +85,8 @@ class WanResult:
     from_cache: bool = False
     latency_ms: int = 0
     seconds: int = 0            # billed video seconds (0 for images / cache hits)
-    cached_seconds: int = 0     # seconds a cache replay REPRESENTS (billed on a prior
-                                # run) — the wallet ignores this; the frontier needs it
-                                # so a warm re-verify still shows what each shot cost
-                                # to produce instead of collapsing to zero
+    cached_seconds: int = 0     # seconds a cache replay represents (billed on a prior run);
+                                # the wallet ignores this, the frontier uses it
 
     @property
     def ok(self) -> bool:
@@ -146,8 +114,7 @@ class WanClient:
 
     def is_cached(self, kind: str, model: str, prompt: str, seed: int | None,
                   size: str, negative_prompt: str | None) -> bool:
-        """Whether this exact request already has a cached file — lets the judge-mode
-        governor tell a free replay from a fresh (billable) generation before spending."""
+        """Whether this exact request already has a cached file (a free replay vs a billable one)."""
         ext = "mp4" if kind == "video" else "png"
         key = cache_key(model, prompt, seed, size, negative_prompt)
         return (self.cache_dir / f"{key}.{ext}").exists()
@@ -209,8 +176,7 @@ class WanClient:
         if extra_input:
             body["input"].update(extra_input)
         params: dict = {"prompt_extend": True, "watermark": False}
-        # A frame-anchored call takes its dimensions from the anchor image; sending an
-        # explicit size alongside one is how you get InvalidParameter for no reason.
+        # A frame-anchored call takes its size from the anchor; sending one is InvalidParameter.
         if size:
             params["size"] = size
         if seed is not None:
@@ -247,9 +213,7 @@ class WanClient:
         size: str | None = None,
         negative_prompt: str | None = None,
     ) -> WanResult:
-        # Default the size FROM the model. It used to default to 1280*720 for every model,
-        # which meant every wan2.2-t2v-plus promote was rejected with InvalidParameter —
-        # silently, because _promote treats a failed promote as "keep the passing draft".
+        # The size must be defaulted FROM the model, never to a constant.
         model = model or DRAFT_MODEL
         return self._generate(
             kind="video",
@@ -272,17 +236,8 @@ class WanClient:
         model: str,
         negative_prompt: str | None = None,
     ) -> WanResult:
-        """Re-render a shot anchored to a real frame of its own footage.
-
-        This is the targeted repair: instead of re-rolling the whole shot from noise on
-        a revised prompt, hold the composition that already passed and regenerate from
-        there. Runs on the i2v/kf2v quota, which is separate from the t2v draft and
-        final reserve.
-
-        The anchor is sent inline as a data URI — the frame lives only on this box, so
-        there is no URL to give. Its bytes salt the cache key, because two repairs of
-        one shot differ by anchor, not by prompt, and would otherwise collide.
-        """
+        """Re-render a shot anchored to a real frame of its own footage, on the i2v/kf2v quota.
+        The anchor's bytes salt the cache key, since two repairs of one shot differ by anchor."""
         try:
             endpoint, field = FRAME_ANCHORED[model]
         except KeyError:

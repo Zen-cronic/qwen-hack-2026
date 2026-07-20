@@ -1,9 +1,6 @@
 """FastAPI app — the poll payload IS the conformance report.
 
-create_app(runtime) takes an injected Runtime so tests drive the whole HTTP +
-pipeline flow with fakes (zero quota); create_production_app() wires the real
-Qwen/Wan stages from the environment. Run in prod with:
-    uvicorn server.app:create_production_app --factory
+Prod entrypoint: uvicorn server.app:create_production_app --factory
 """
 
 from __future__ import annotations
@@ -70,14 +67,11 @@ def create_app(runtime: Runtime) -> FastAPI:
 
     @app.get("/api/health")
     def health():
-        # Readiness probe for the compose healthcheck: returns 200 only once the
-        # runtime (opencv/numpy imports, store, deps) is fully wired. Lets `web`
-        # gate on `app` being ready instead of merely started.
+        # Readiness probe for the compose healthcheck — 200 only once the runtime is wired.
         mode = "demo" if settings.DAILIES_DEMO else "fixtures" if settings.DAILIES_FIXTURES else "real"
         payload = {"status": "ok", "mode": mode, "catalog": "off"}
         if catalog_available():
-            # Bounded: a dead DB costs one 5s stall per 30s window (db.RETRY_COOLDOWN_S),
-            # well inside the healthcheck's retries budget; the probe itself stays 200.
+            # Bounded: a dead DB costs one 5s stall per db.RETRY_COOLDOWN_S window.
             from server import db
             payload["catalog"] = "ok" if db.catalog_ready() else "unreachable"
         return payload
@@ -123,8 +117,7 @@ def create_app(runtime: Runtime) -> FastAPI:
 
     @app.post("/api/projects/{pid}/shots/{shot_index}/patch")
     def patch(pid: str, shot_index: int):
-        # Edit one shot without re-running the pipeline: anchor to the last good frame
-        # before the located failure, regenerate, re-verify Tier-A, re-concat for free.
+        # Edit one shot without re-running the pipeline.
         _require(pid)
         out = patch_shot(rt().store, pid, shot_index, rt().deps, rt().cfg,
                          model=rt().cfg.patch_model)
@@ -139,9 +132,7 @@ def create_app(runtime: Runtime) -> FastAPI:
         if not shipped:
             raise HTTPException(400, "no certified shots to assemble")
         out = str(Path(rt().cfg.data_dir) / pid / "episode.mp4")
-        # Narrate through the pipeline's own path so a re-cut episode keeps its sound —
-        # re-concatenating without it would silently ship a silent replacement. Lines
-        # already synthesized replay from cache, so this stays a free operation.
+        # Must narrate through the pipeline's path, or a re-cut silently ships without sound.
         pipe = Pipeline(rt().store, pid, rt().deps, rt().cfg)
         audio = pipe._narrate(shipped)
         paths = [s.final_path for s in shipped]
@@ -152,9 +143,7 @@ def create_app(runtime: Runtime) -> FastAPI:
 
     @app.post("/api/agent/plan")
     def agent_plan(req: PlanReq):
-        # The Qwen agent authors the run: it calls build_pipeline_graph with the run
-        # parameters, and the server expands them into the canonical graph. Demo/fixtures
-        # (and a keyless box) use a deterministic stub so the flow is hermetic and free.
+        # The agent calls build_pipeline_graph with run params; the server expands the graph.
         demo = settings.DAILIES_DEMO or settings.DAILIES_FIXTURES
         packs = available_packs(rt().cfg.packs_dir)
         plan, transcript = plan_from_message(req.message, demo=demo, packs=packs)
@@ -180,17 +169,8 @@ def create_app(runtime: Runtime) -> FastAPI:
 
     @app.get("/api/media/{path:path}")
     def media(path: str):
-        # The client sends the stored path verbatim (CWD-relative or absolute —
-        # exactly how the pipeline recorded it). resolve() rebases it the same way,
-        # and the DATA_ROOT containment check is the one real security boundary.
-        # The old version stripped a "data/" prefix and rejoined onto DATA_ROOT,
-        # which silently 404'd every thumbnail whenever DATA_DIR wasn't literally
-        # "data" (e2e uses data/e2e).
-        #
-        # Local-first ladder: live runs serve bytes exactly as before; only when
-        # the local file is gone does the catalog answer with a 302 to a presigned
-        # OSS URL (signed inline, ~1h TTL — never stored). Traversal attempts fail
-        # the catalog's normalizer too, so they never reach the DB.
+        # The client sends the stored path verbatim; the DATA_ROOT containment check below is
+        # the one real security boundary. Local first, then a 302 to a presigned OSS URL.
         fp = Path(path).resolve()
         local_ok = False
         try:
@@ -204,16 +184,13 @@ def create_app(runtime: Runtime) -> FastAPI:
             from server import catalog
             url = catalog.presigned_url_for_path(path)
             if url:
-                # max-age well under the presign TTL: reuse trims redirect churn,
-                # expiry never outlives the signature.
+                # max-age must stay well under the presign TTL.
                 return RedirectResponse(url, status_code=302,
                                         headers={"Cache-Control": "private, max-age=600"})
         raise HTTPException(404)
 
     if catalog_available():
-        # Import inside the branch: with the flag off (or the optional deps
-        # absent) the app boots — and demo runs — without ever touching
-        # psycopg/OSS code paths.
+        # Import inside the branch so the app boots without psycopg/OSS when the flag is off.
         from server.catalog_api import router as catalog_router
         app.include_router(catalog_router)
 
@@ -260,12 +237,10 @@ def build_runtime() -> Runtime:
         assemble_fn=assemble,
         ledger=ledger,
         custom_rule_fn=lambda rules: compile_custom_rules(rules, client=llm, model=chat_model),
-        # Ungoverned on purpose: the judge-mode cap rations the t2v draft/final pool, and
-        # a frame-anchored repair spends a different one (docs/verification.md section 3c).
+        # Ungoverned on purpose: frame-anchored repair spends a pool the judge cap doesn't ration.
         patch_video_fn=lambda prompt, model, frame: wan.generate_video_from_frame(
             prompt, frame, model=model),
-        # Narration is a finish, not a contract: a failed voice call yields silence
-        # for that shot and the certified episode still ships (Pipeline._narrate).
+        # Narration is a finish, not a contract: a failed voice call yields silence.
         narrate_fn=tts.synthesize,
     )
     return Runtime(store=Store(str(DATA_ROOT / "projects")), deps=deps, cfg=cfg, governor=governor)
@@ -284,9 +259,7 @@ def create_production_app() -> FastAPI:
         from server.demo import build_demo_runtime
         app = create_app(build_demo_runtime())
     elif settings.DAILIES_FIXTURES:
-        # Real Wan clips, pinned prompts — free once the cache is warm. Checked before the
-        # live runtime because it IS the live runtime, minus the two non-deterministic
-        # text stages that would otherwise miss the cache and re-bill every run.
+        # Must be checked before the live runtime — it IS the live runtime with pinned text stages.
         from server.fixtures import build_fixture_runtime
         app = create_app(build_fixture_runtime())
     else:

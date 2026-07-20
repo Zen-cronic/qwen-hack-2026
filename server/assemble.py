@@ -1,17 +1,7 @@
 """ffmpeg assembly — concat certified clips into one episode. Local, zero tokens.
 
-Each input is scaled+padded to a common frame and re-encoded, so clips that differ
-in resolution (a draft-tier fallback beside promoted finals) still concatenate
-cleanly. This is the AssembleFn the pipeline injects.
-
-Audio: wan t2v/i2v return silent clips, so sound comes from a narration track
-synthesized per shot (server/tts.py) and passed in alongside. Pass `audio_paths` to get
-an episode with sound; omit it and the output is video-only exactly as before.
-
-Every segment must carry an audio stream for concat to work — a graph mixing silent and
-sounded inputs fails outright — so a shot with no narration gets generated silence
-rather than nothing. The narration is padded to the clip's length and truncated at it,
-so a long line can never stretch a 5-second shot.
+Every segment must carry an audio stream: concat fails outright on a graph mixing silent
+and sounded inputs, so a shot with no narration gets generated silence.
 """
 
 from __future__ import annotations
@@ -44,9 +34,7 @@ def _run(cmd: list[str], what: str) -> None:
 def mux_narration(clip_path: str, audio_path: str | None, out_path: str) -> str:
     """Give one clip exactly one audio stream: the narration, or silence.
 
-    `apad` before `-shortest` is the load-bearing pair. Without the pad, a narration
-    shorter than the clip makes -shortest cut the VIDEO down to the audio's length,
-    silently shortening the shot and breaking its duration contract.
+    `apad` before `-shortest` is load-bearing — without it, short narration truncates the VIDEO.
     """
     out = Path(out_path)
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -73,9 +61,8 @@ def assemble(clip_paths: list[str], out_path: str, *, width: int = 1280, height:
     out.parent.mkdir(parents=True, exist_ok=True)
     n = len(clip_paths)
 
-    # Give every segment sound BEFORE concatenating. Doing it per-clip keeps the concat
-    # graph the same shape it has always been; trying to mix sounded and silent inputs
-    # inside one filter_complex fails on the first silent one.
+    # Must give every segment sound BEFORE concatenating; one filter_complex over mixed
+    # sounded/silent inputs fails on the first silent one.
     if audio_paths is not None:
         if len(audio_paths) != n:
             raise AssembleError(f"audio_paths has {len(audio_paths)} entries for {n} clips")
@@ -98,7 +85,7 @@ def assemble(clip_paths: list[str], out_path: str, *, width: int = 1280, height:
         concat = "".join(f"[v{i}]" for i in range(n)) + f"concat=n={n}:v=1:a=0[outv]"
         cmd += ["-filter_complex", norm + concat, "-map", "[outv]"]
     else:
-        # Resample every track to one rate/layout first; concat refuses mismatched inputs.
+        # Must resample every track to one rate/layout — concat refuses mismatched inputs.
         norm += "".join(f"[{i}:a]aresample={SAMPLE_RATE},aformat=channel_layouts=stereo[a{i}];"
                         for i in range(n))
         concat = ("".join(f"[v{i}][a{i}]" for i in range(n))

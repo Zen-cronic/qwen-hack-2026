@@ -1,14 +1,7 @@
-"""Demo-mode runtime — the whole pipeline offline, zero quota.
+"""Demo-mode runtime (DAILIES_DEMO=1) — the whole pipeline offline on synthetic clips, zero quota.
 
-Real Tier-A CV and real ffmpeg assembly run on SYNTHETIC clips generated locally,
-so the SPA and Playwright e2e exercise genuine behavior without spending video
-quota. It also plants the kill-shot: shot 1 asserts a rightward camera pan, but
-the first synthetic draft is static (simulating the model failing to move the
-camera) -> Tier-A catches it -> repair injects a [retake] directive -> the second
-synthetic draft actually pans right -> it passes and promotes. That's the demo's
-spine, reproducible with no network.
-
-Enable with DAILIES_DEMO=1 (see server.app.create_production_app).
+Shot 1 plants the kill-shot: the first draft is static, Tier-A catches it, repair injects a
+[retake] directive, and the second draft pans right and promotes.
 """
 
 from __future__ import annotations
@@ -32,14 +25,6 @@ from server.wan import WanResult
 _FOURCC = cv2.VideoWriter_fourcc(*"mp4v")
 
 # Fixed storyboard; shot 1 is the planted kill-shot (asserts a right pan).
-#
-# A corgi in a crowded market, deliberately, because the subject checks have to be hard to
-# be worth watching. Coastal-dusk cinematics are the house style of every video-gen demo,
-# and they hand `subject_present` a frame with exactly one thing in it. A short dog at knee
-# height in a moving crowd is the case where the check can be WRONG: shoppers are subject
-# distractors, and a breed with drifting ears and markings is a real test of
-# `identity_consistent`. The low subject also motivates the pan the shot then fails to
-# deliver — the camera has to travel to keep a corgi in frame.
 _DEMO_SHOTS = [
     {"prompt": "establishing wide shot of a Saturday farmers' market at golden hour, shoppers browsing the stalls, still locked-off camera",
      "narration": "Nine in the morning at the market. Two hundred customers, and one of them is not a customer.",
@@ -49,7 +34,7 @@ _DEMO_SHOTS = [
      "narration": "Nobody ever looks down. That has always been the entire plan.",
      "speaker": "the corgi",
      "assertions": [{"type": "camera_motion", "params": {"direction": "right"}},
-                    # Tier-0: asked of the still, before this shot costs a single video second.
+                    # Tier-0: asked of the still, before this shot costs a video second.
                     {"type": "subject_present", "params": {"subject": "the corgi"}},
                     {"type": "identity_consistent", "params": {"subject": "the corgi"}}]},
     {"prompt": "close-up of the corgi dropping the bread roll at the baker's feet, warm morning light, the baker's hands reaching down to take it",
@@ -74,21 +59,11 @@ def _direction_from_prompt(prompt: str) -> str:
 
 
 def _texture(h: int, w_total: int) -> np.ndarray:
-    """Designed slate instead of raw noise, with every measured property preserved.
-
-    Three layers, each load-bearing for a Tier-A check:
-    - vertical dusk gradient in the brand palette — constant along x, so a sliding
-      crop window keeps the same mean luma (flicker-safe) and the dominant colors
-      sit near packs/brand_rules.yaml's palette; overall mean ~105, inside every
-      pack's brightness bounds;
-    - seeded luma grain (blurred) — Farneback needs trackable structure; a clean
-      gradient sliding horizontally reads as zero flow and would un-kill the
-      planted kill-shot;
-    - a faint tiled label, baked into the wide texture so it pans WITH the content
-      (a fixed overlay would dilute the mean flow toward static).
-    """
+    """Designed slate. All three layers are load-bearing for Tier-A: the gradient is constant
+    along x (flicker-safe), the grain gives Farneback trackable structure, and the label is
+    baked into the wide texture so it pans WITH the content."""
     rng = np.random.default_rng(7)
-    stops = [(0.0, (250, 247, 245)), (0.45, (255, 95, 11)), (1.0, (22, 17, 14))]  # BGR #f5f7fa -> #0b5fff -> #0e1116, bright top to dark base
+    stops = [(0.0, (250, 247, 245)), (0.45, (255, 95, 11)), (1.0, (22, 17, 14))]  # BGR, bright top to dark base
     ys = np.linspace(0.0, 1.0, h)
     col = np.zeros((h, 3), np.float32)
     for c in range(3):
@@ -138,9 +113,7 @@ class _DemoGen:
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
     def _key(self, prompt: str, model: str) -> str:
-        # v2 salt: the key hashes only model|prompt, not clip content, so changing
-        # the synthesis (gray noise -> designed slates) must bust pre-existing
-        # caches or a warm data dir would replay the old look forever.
+        # The "v2" salt busts pre-existing caches; bump it whenever the synthesis changes.
         return hashlib.sha1(f"v2|{model}|{prompt}".encode()).hexdigest()[:16]
 
     def gen_video(self, prompt: str, model: str, negative_prompt: str | None = None) -> WanResult:
@@ -154,8 +127,7 @@ class _DemoGen:
                          cached_seconds=5 if cached else 0, latency_ms=120)
 
     def gen_patch(self, prompt: str, model: str, frame_path: str) -> WanResult:
-        """Frame-anchored repair, offline. The anchor's bytes join the cache key exactly
-        as they do in wan.py, so two patches of one shot address different clips."""
+        """Frame-anchored repair, offline. The anchor's bytes join the cache key as in wan.py."""
         p = Path(frame_path)
         salt = hashlib.sha1(p.read_bytes()).hexdigest()[:12] if p.exists() else "noanchor"
         key = self._key(f"{prompt}|patch|{salt}", model)
@@ -168,25 +140,17 @@ class _DemoGen:
                          cached_seconds=5 if cached else 0, latency_ms=90)
 
     def narrate(self, text: str, *, voice: str | None = None) -> SimpleNamespace:
-        """Offline narration: a short, quiet tone standing in for a spoken line.
-
-        Real audio, not a stub — the episode genuinely carries a track, so the assembler's
-        mux/concat path is exercised by the e2e at zero quota. Pitch varies with the text
-        so consecutive shots are audibly distinct, and the voice sets the register, so a
-        cast of characters is audibly a cast even offline.
-        """
+        """Offline narration: real audio — a short quiet tone standing in for a spoken line."""
         voice = voice or "narrator"
         key = self._key(f"{text}|narration|{voice}", "tts")
         path = self.cache_dir / f"{key}.wav"
         cached = path.exists()
         if not cached:
             rate, seconds = 44100, 1.2
-            # Voice picks the register, text picks the note within it — so two characters
-            # never collide, the way they would if pitch came from the line alone.
+            # Voice picks the register, text picks the note within it, so voices never collide.
             base = 180 + (int(hashlib.sha1(voice.encode()).hexdigest()[:4], 16) % 5) * 90
             hz = base + (int(hashlib.sha1(text.encode()).hexdigest()[:4], 16) % 6) * 12
             t = np.linspace(0.0, seconds, int(rate * seconds), endpoint=False)
-            # Quiet on purpose: this plays under review screenshots and the demo video.
             envelope = np.minimum(1.0, np.minimum(t * 8, (seconds - t) * 8))
             samples = (0.08 * envelope * np.sin(2 * np.pi * hz * t) * 32767).astype("<i2")
             with wave.open(str(path), "wb") as w:
@@ -212,9 +176,7 @@ def _demo_script(premise, pack, max_shots):
 
 
 def _demo_custom_rules(rules):
-    """Offline keyword compiler for the demo: maps a few plain phrases to assertions
-    (title card, camera pans <dir>). Unrecognized phrases are omitted — mirroring the
-    real compiler's 'omit rather than invent' rule — so the flow stays zero-quota."""
+    """Offline keyword compiler for the demo; unrecognized phrases are omitted, never invented."""
     out: list[dict] = []
     for r in rules:
         s = r.lower()
@@ -244,11 +206,8 @@ def _demo_tier_b(video_path, spec: ShotSpec):
 
 
 def _demo_tier0(spec: ShotSpec, still_path: str):
-    """Deterministic Tier-0 verdicts on the pre-render still, zero tokens.
-
-    Demo mode passes Tier-0 on purpose: the planted kill-shot is Tier-A camera_motion,
-    and a second failure at the review gate would blur which tier caught what.
-    """
+    """Deterministic Tier-0 verdicts on the pre-render still, zero tokens. Always passes, so
+    the planted Tier-A kill-shot is the only failure at the review gate."""
     return [
         AssertionResult.for_assertion(
             a, Status.PASS,
@@ -273,8 +232,7 @@ def build_demo_runtime(data_dir: str | None = None) -> "object":
     from server.app import Runtime  # imported here to avoid a cycle at module load
     from server.config import settings
 
-    # Follow DATA_DIR so demo output lands where the media route serves from and on
-    # the mounted volume — not a CWD-relative dir the container never exposes.
+    # Must follow DATA_DIR so demo output lands where the media route serves from.
     root = Path(data_dir) if data_dir is not None else Path(settings.DATA_DIR) / "demo"
     gen = _DemoGen(root / "cache")
     cfg = Config(data_dir=str(root / "projects"))

@@ -1,14 +1,6 @@
-"""Close the MCP loop: a Qwen agent that consumes Dailies' own MCP server.
+"""A Qwen agent that consumes Dailies' own MCP server over stdio. Needs the `[agent]` extra.
 
-`build_mcp_agent()` returns a Qwen-Agent `Assistant` configured with Dailies'
-`run_shot_tests` MCP server (`server/mcp_server.py`, launched over stdio) in its
-`mcpServers` block — so a Qwen model calls the conformance tool *through* the Model
-Context Protocol. Both ends are ours: the client (Qwen-Agent) and the server
-(`server.mcp_server`). Needs the optional `[agent]` extra.
-
-Run the whole loop live with `scripts/mcp_agent_demo.py` (chat tokens only, no video).
-The MCP server subprocess is `python -m server.mcp_server`, so run from the repo root
-(where `server` is importable).
+Run from the repo root — the server subprocess is `python -m server.mcp_server`.
 """
 
 from __future__ import annotations
@@ -18,9 +10,7 @@ from typing import Any
 
 from server.qwen_tools import qwen_llm_cfg
 
-# The MCP server publishes patch_clip alongside run_shot_tests, and patch_clip spends a real
-# i2v generation. Verification is free and comes first anyway, so the rail costs nothing and
-# keeps a live demo from burning quota on a tool call nobody asked for.
+# The patch_clip rail below is deliberate: that tool spends a real i2v generation.
 SYSTEM = (
     "You are a video-QC assistant for Dailies. Use the run_shot_tests MCP tool to check a "
     "clip against a spec, then report whether it PASSED and name any failing checks. "

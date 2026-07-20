@@ -1,12 +1,7 @@
 """The script agent — premise -> shots + dynamic assertions, in one qwen-plus call.
 
-The allowed-assertions section of the prompt is generated from ASSERTION_META, so
-what we TELL the model it may emit can never drift from what the compiler will
-actually accept. The model returns strict JSON; we parse defensively (some
-OpenAI-compatible backends wrap JSON in code fences or ignore response_format).
-
-Returns (raw_shots, usage) — raw_shots feed compiler.compile_shots, usage feeds
-the metrics ledger. No assertion validation happens here; that's the compiler's job.
+The allowed-assertions prompt section is generated from ASSERTION_META so it cannot drift
+from the compiler. Returns (raw_shots, usage); validation is the compiler's job, not this one's.
 """
 
 from __future__ import annotations
@@ -91,12 +86,7 @@ def compile_custom_rules(
     temperature: float = 0.0,
     max_tokens: int = 800,
 ) -> tuple[list[dict[str, Any]], Any]:
-    """Compile user-authored plain-language QC rules into raw assertion dicts.
-
-    Mirrors script_and_specs: constrained to the closed vocabulary via the SAME
-    _vocabulary_doc(), returns raw dicts (validation is the compiler's job, via
-    parse_assertions). Rules needing an unsupported modality are omitted, not faked.
-    """
+    """Compile user-authored plain-language QC rules into raw assertion dicts (unvalidated)."""
     numbered = "\n".join(f"{i+1}. {r}" for i, r in enumerate(rules))
     resp = client.chat.completions.create(
         model=model,

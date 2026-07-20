@@ -1,10 +1,6 @@
 """Repair agent — turn measured assertion failures into a revised prompt (qwen-plus).
 
-Bounded auto-repair is the loop that makes unattended generation deployable: a shot
-that fails QC gets ONE revised prompt informed by exactly what was measured, then a
-single retake. Creative intent is held fixed (same subject/scene/action); only the
-render-controlling details change. Returns (new_prompt, usage) — the pipeline logs
-the usage and regenerates.
+Returns (new_prompt, usage); creative intent is held fixed, only render details change.
 """
 
 from __future__ import annotations
@@ -24,7 +20,7 @@ _SYSTEM = (
     'Output STRICT JSON only: {"prompt": "<revised prompt>"}.'
 )
 
-# Locus keys are phrased in prose below; a raw frame index is noise to a prompt writer.
+# Locus keys are phrased in prose by _locus_phrase, so they are excluded from `measured`.
 _LOCUS_KEYS = ("fail_window_s", "worst_frame", "worst_frame_s", "fail_span_frames")
 
 

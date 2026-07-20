@@ -1,18 +1,6 @@
 """Catalog publishing — completed runs land in Postgres, media lands in OSS.
 
-The catalog is additive: live runs stay on the in-memory Store + atomic
-state.json; publish_project() mirrors a finished ProjectState into relational
-rows (media referenced by content sha1 + OSS key) so the fleet of runs is
-queryable and its media durable. safe_publish() is the only symbol the pipeline
-or API call — it checks the flag, tolerates a dead DB/OSS, and never raises.
-
-Path discipline: state.json stores media paths VERBATIM (CWD-relative like
-"data/cache/ab.mp4", or absolute from a foreign machine in old snapshots).
-normalize_media_path() maps any of those onto one canonical DATA_ROOT-relative
-form, which is what media_paths keys on and what the media route looks up when
-the local file is gone. Paths are many-to-one against media_objects: byte-identical
-episodes from deterministic runs share one content hash across ~40 project paths,
-so the path->hash mapping needs its own table, not a column on the object.
+safe_publish() is the only entrypoint pipeline/API callers use; it never raises.
 """
 
 from __future__ import annotations
@@ -39,12 +27,7 @@ MIME_BY_EXT = oss.MIME_BY_EXT
 
 def normalize_media_path(p: str | None) -> str | None:
     """Verbatim stored path -> canonical DATA_ROOT-relative posix form, or None.
-
-    Handles the three shapes found in real snapshots: CWD-relative
-    ("data/cache/ab.mp4"), absolute under this machine's DATA_ROOT, and absolute
-    under a FOREIGN machine's data dir (old snapshots) — mapped via the last
-    "/data/" segment. Traversal attempts fail both branches and return None.
-    """
+    Traversal attempts fail both branches and return None."""
     if not p:
         return None
     try:
@@ -70,10 +53,7 @@ def local_file_for(path: str | None) -> Path | None:
 
 def publish_project(state: ProjectState, *, source: str = "live",
                     upload_media: bool = True, media_scope: str = "full") -> dict[str, Any]:
-    """Upsert one project into the catalog. Idempotent: republish bumps
-    publish_rev and replaces child rows; content-addressed uploads are skipped
-    when the object already exists. Missing local files never fail a publish —
-    their rows simply carry no sha1/OSS link."""
+    """Upsert one project into the catalog. Idempotent; missing local files never fail a publish."""
     pool = db.get_pool()
     if pool is None:
         return {"published": False, "reason": "catalog db unavailable"}
@@ -112,8 +92,7 @@ def publish_project(state: ProjectState, *, source: str = "live",
                 "raw_state": Jsonb(raw_state),
             },
         )
-        # Children: delete + reinsert under the one transaction is the honest
-        # idempotency mechanism — no multi-table conflict-target gymnastics.
+        # Children: delete + reinsert under the one transaction is the idempotency mechanism.
         conn.execute("DELETE FROM shots WHERE project_id = %s", (state.id,))
         conn.execute("DELETE FROM cast_members WHERE project_id = %s", (state.id,))
         conn.execute("DELETE FROM ledger_entries WHERE project_id = %s", (state.id,))
@@ -184,8 +163,7 @@ def publish_project(state: ProjectState, *, source: str = "live",
 
 
 def safe_publish(store: Store, pid: str, *, source: str = "live") -> dict[str, Any] | None:
-    """The ONLY publish entrypoint for pipeline/API callers: flag-gated,
-    swallows everything, never raises into the caller."""
+    """The ONLY publish entrypoint for pipeline/API callers: flag-gated, never raises."""
     if not catalog_available():
         return None
     try:
@@ -272,9 +250,7 @@ def presigned_url_for_path(path: str) -> str | None:
 
 
 def _collect_media(state: ProjectState, media_scope: str) -> list[tuple[str, str]]:
-    """(verbatim_path, kind) for every media reference in the state.
-    media_scope="minimal" drops draft-take videos (the first cut when upload
-    time matters); episode/finals/stills/evidence always ship."""
+    """(verbatim_path, kind) for every media reference; media_scope="minimal" drops draft takes."""
     out: list[tuple[str, str]] = []
     if state.episode_path:
         out.append((state.episode_path, "episode"))
@@ -295,8 +271,7 @@ def _collect_media(state: ProjectState, media_scope: str) -> list[tuple[str, str
 
 def _register_media(pool, media: list[tuple[str, str]],
                     upload_media: bool) -> tuple[dict[str, str], int, int]:
-    """Hash + upsert media_objects (+ optional OSS upload) for every existing
-    file. Returns ({verbatim_path: sha1}, uploaded_count, missing_count)."""
+    """Hash + upsert media_objects (+ optional OSS upload). Returns ({path: sha1}, uploaded, missing)."""
     sha_by_path: dict[str, str] = {}
     sha_by_norm: dict[str, str] = {}
     uploaded = 0
@@ -330,8 +305,7 @@ def _register_media(pool, media: list[tuple[str, str]],
                 """,
                 (sha1, kind, mime, len(data), oss_key, oss_key),
             )
-            # Every path that resolves to these bytes gets its own row: byte-identical
-            # episodes across deterministic runs share one object but keep their paths.
+            # Every path resolving to these bytes gets its own row (many paths, one object).
             conn.execute(
                 "INSERT INTO media_paths (local_path, sha1) VALUES (%s, %s)"
                 " ON CONFLICT (local_path) DO UPDATE SET sha1 = EXCLUDED.sha1",

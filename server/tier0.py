@@ -1,27 +1,7 @@
-"""Tier-0 — the pre-render still screen. The cheapest rejection the pipeline can make.
+"""Tier-0 — a VLM screen of the pre-render still, before any video spend.
 
-The pipeline already pays for one t2i still per shot before any video spend. Tier-0 is
-what makes that spend worth making: it asks a VLM whether the shot's subject actually
-survived the prompt, on the still, while a rejection still costs ~1/25th of a clip and
-the human gate is one step away. A prompt that cannot even render its subject as a
-single frame will not render it as motion, and finding that out here is the difference
-between spending an image and spending a premium clip.
-
-Why this module exists at all: the still was being generated and billed while tier0_fn
-was `lambda spec, still: []` in every production path, so subject_present -- a BLOCKING
-assertion -- was evaluated by nothing. Nothing failed loudly, because at
-`take.passed = not [r for r in results if not r.advisory and r.status is Status.FAIL]`
-a check that returns no result and a check that passes are the same empty list.
-
-What a FAIL here does, precisely: nothing gates on tier0_results. The pipeline stores them
-and the UI renders them at the one human checkpoint, where a person decides whether to
-release video budget -- so a Tier-0 verdict is EVIDENCE AT THAT GATE, not an automatic
-block. subject_present carries advisory=False, which is blocking-class and would block if
-it ever reached a take's results; it does not today. Saying more than that here would
-repeat the mistake this module was written to fix.
-
-Errors therefore degrade to INCONCLUSIVE, never FAIL: a broken VL call must not fabricate
-a rejection, and an undecidable shot belongs in front of the human rather than in a verdict.
+Nothing gates on tier0_results: they are evidence at the human review gate, not an automatic
+block. Errors degrade to INCONCLUSIVE, never FAIL — never fabricate a rejection.
 """
 
 from __future__ import annotations
@@ -34,11 +14,8 @@ import cv2
 from server.script import _extract_json
 from server.specs import Assertion, AssertionResult, AssertionType, ShotSpec, Status, Tier
 
-# The t2i models return ~1024x1024. VLM image tokens scale with pixel count, so sending
-# the still at source resolution would make the "1/25th of a clip" pre-screen cost more
-# than the seven frames Tier-B sends for the whole video — inverting the entire reason
-# Tier-0 runs first. Tier-B judges identity at FRAME_WIDTH=320; one still can afford more
-# detail than one of seven frames and still cost a fraction of that batch.
+# VLM image tokens scale with pixel count, so the ~1024px still must be downscaled or the
+# pre-screen costs more than the Tier-B batch it exists to avoid.
 STILL_WIDTH = 512
 
 _INSTRUCT = (
@@ -58,9 +35,7 @@ def _question(a: Assertion) -> str:
 
 
 def still_to_data_uri(path: str, width: int = STILL_WIDTH) -> str | None:
-    """The still, downscaled to `width`, as a PNG data URI. None if it is missing or
-    unreadable — the pipeline hands us a path the generator wrote, and a t2i failure
-    leaves that path absent rather than raising here."""
+    """The still, downscaled to `width`, as a PNG data URI; None if missing or unreadable."""
     p = Path(path)
     if not p.is_file() or p.stat().st_size == 0:
         return None
@@ -77,9 +52,7 @@ def still_to_data_uri(path: str, width: int = STILL_WIDTH) -> str | None:
 
 
 class Tier0Verifier:
-    """Injected as the pipeline's tier0_fn. Exposes pop_last_usage() so the pipeline
-    logs the VLM tokens this stage spends — the same contract TierBVerifier uses, so
-    _pop_usage picks it up with no pipeline special-casing."""
+    """Injected as the pipeline's tier0_fn; pop_last_usage() is the contract Pipeline._pop_usage reads."""
 
     def __init__(self, client, model: str = "qwen-vl-plus", max_tokens: int = 200):
         self.client = client
@@ -134,11 +107,8 @@ class Tier0Verifier:
 
 
 def inconclusive_verifier(spec: ShotSpec, still_path: str) -> list[AssertionResult]:
-    """NO-GO fallback, mirroring tier_b's: every Tier-0 assertion -> inconclusive.
-
-    Used when no VL model is available. Returning INCONCLUSIVE rather than [] is the
-    whole lesson of this module: an empty list silently certifies, a verdict does not.
-    """
+    """NO-GO fallback: every Tier-0 assertion -> inconclusive. Must never return [] — an
+    empty list silently certifies, a verdict does not."""
     return [
         AssertionResult.for_assertion(a, Status.INCONCLUSIVE,
                                       detail="Tier-0 disabled — awaiting human verdict",

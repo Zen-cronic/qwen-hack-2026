@@ -1,15 +1,7 @@
 """Runtime state + thread-safe Store.
 
-Concurrency contract (locked in state.md): a single background pipeline thread
-mutates a project's state while the SPA polls `GET /api/projects/{id}` every 2.5s.
-So:
-  * every mutation runs inside `update()` under an RLock, then writes an ATOMIC
-    snapshot (temp file + os.replace) — a poll never sees a half-written state;
-  * `get()` returns a deep copy, so a reader can serialize at leisure without the
-    pipeline mutating the object under it.
-
-The review gate is a `threading.Event` per project — the ONE human checkpoint,
-sitting between tier0 and video spend. Events are runtime-only (not serialized).
+Concurrency contract: every mutation runs inside `update()` under an RLock and writes an ATOMIC
+snapshot; `get()` returns a deep copy. The review gate is a per-project threading.Event.
 """
 
 from __future__ import annotations
@@ -99,13 +91,9 @@ class ProjectState(BaseModel):
     pack: str
     max_shots: int
     custom_checks: list[str] = Field(default_factory=list)  # user-authored plain-language rules
-    # A shared "visual bible" composed into every shot's generation prompt so the episode
-    # reads as one coherent piece — unified grade/lighting/lens, and recurring subjects
-    # held to one appearance. Set once at scripting; see Pipeline._compose_prompt.
+    # Shared "visual bible" composed into every generation prompt; set once at scripting.
     style_descriptor: str = ""
-    # Speaker -> TTS voice, fixed at scripting so a character sounds the same in every
-    # shot they speak in. The script agent names the speaker; the server casts the voice
-    # from a verified roster (server/tts.py CAST_VOICES).
+    # Speaker -> TTS voice, fixed at scripting from the roster in server/tts.py.
     cast: dict[str, str] = Field(default_factory=dict)
     status: ProjectStatus = ProjectStatus.QUEUED
     created_ts: float = Field(default_factory=time.time)
@@ -130,19 +118,8 @@ class Store:
         self._restore()
 
     def _restore(self) -> None:
-        """Read the snapshots back at boot.
-
-        They used to be write-only: every change was atomically persisted and then dropped
-        on restart, so a finished run 404'd from its own state.json while the deployment
-        diagram promised "cache + state persist across restarts". The cache did; state
-        didn't — and a push to main redeploys the box, so each release silently discarded
-        every run a viewer had made.
-
-        A restored run is inert: the pipeline thread that drove it is gone. Terminal runs
-        are the ones worth keeping; anything caught mid-flight can never advance again, so
-        it is marked failed rather than left to poll forever. A corrupt or half-written
-        snapshot is skipped instead of taking the process down at boot.
-        """
+        """Read the snapshots back at boot. A restored run is inert (its thread is gone), so a
+        non-terminal one is marked failed; a corrupt snapshot is skipped, never fatal."""
         for f in sorted(self._dir.glob("*/state.json")):
             try:
                 p = ProjectState.model_validate_json(f.read_text())

@@ -1,15 +1,7 @@
 """The assertion compiler: pack defaults + per-shot dynamic assertions -> ShotSpecs.
 
-A pack (packs/{name}.yaml) supplies baseline Tier-A checks every shot inherits. The
-script agent proposes shot-specific assertions on top (a camera move, a subject to
-track, an action beat). `compile_shots` merges them and — crucially — runs the whole
-result through the closed-vocabulary validator, so an LLM that invents an assertion
-type or malforms params fails HERE, before any video token is spent. That rejection
-is the "CI" in "CI for generated video".
-
-Merge rule: a shot-specific assertion overrides a pack default of the SAME type
-(a shot can tighten the default duration window); defaults of other types carry
-through; any additional shot assertions are appended.
+Merge rule: a shot-specific assertion overrides a pack default of the SAME type. Everything
+runs through the closed-vocabulary validator here, before any video spend.
 """
 
 from __future__ import annotations
@@ -58,13 +50,8 @@ def merge_assertions(defaults: list[Assertion], dynamic: list[Assertion]) -> lis
 def compile_shots(
     raw_shots: list[dict], pack: Pack, extra_defaults: list[Assertion] | None = None
 ) -> list[ShotSpec]:
-    """Validate + merge raw shot dicts (from the script agent) into ShotSpecs.
-
-    `extra_defaults` are project-scoped, user-authored assertions applied to EVERY
-    shot (like the pack's defaults), so precedence is shot-specific > user-custom >
-    pack-default. Raises ValueError on the first shot with a missing prompt or an
-    invalid assertion — the pipeline catches this to re-prompt the script agent once.
-    """
+    """Validate + merge raw shot dicts into ShotSpecs. Precedence: shot-specific >
+    `extra_defaults` (user-authored, every shot) > pack default."""
     base_defaults = merge_assertions(pack.defaults, extra_defaults or [])
     specs: list[ShotSpec] = []
     for i, rs in enumerate(raw_shots):

@@ -1,17 +1,7 @@
-"""Catalog database access — one lazy psycopg pool, degraded-by-default.
+"""Catalog database access — one lazy psycopg pool, degraded-by-default (get_pool() never raises).
 
-The contract mirrors the demo-cannot-break rule: get_pool() returns None (never
-raises) when the catalog is disabled, DATABASE_URL is blank, or Postgres is
-unreachable — callers treat None as "catalog unavailable" and no-op. The pool is
-sync (psycopg 3): every route in server/app.py is a plain def and the pipeline
-runs on a threading.Thread, so an async driver would only add loop-bridging.
-
-Schema is authored as SQLAlchemy models (server/db/models.py) and versioned by
-Alembic (`alembic revision --autogenerate`); the first successful pool open runs
-`upgrade head` programmatically, so a fresh sidecar becomes usable without a
-manual migration step. `alembic upgrade head` from the repo root does the same
-by hand. SQLAlchemy stays a schema/migration concern only — runtime queries go
-through this psycopg pool.
+Schema is authored in server/db/models.py and versioned by Alembic; the first pool open runs
+`upgrade head`. Runtime queries go through this psycopg pool, never SQLAlchemy.
 """
 
 from __future__ import annotations
@@ -56,8 +46,7 @@ def get_pool() -> ConnectionPool | None:
                 min_size=1,
                 max_size=4,
                 open=False,
-                # A dead DB costs one bounded stall on the first catalog call,
-                # never a boot failure and never an unbounded hang.
+                # Bounded: a dead DB must never hang a caller or fail boot.
                 timeout=5,
             )
             pool.open(wait=True, timeout=5)

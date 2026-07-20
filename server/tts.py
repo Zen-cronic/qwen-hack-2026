@@ -1,20 +1,7 @@
-"""Narration track — qwen3-tts-flash, with the same replay cache the video path uses.
+"""Narration track — qwen3-tts-flash on the SYNCHRONOUS multimodal-generation route, cached
+by sha1(model|voice|text).
 
-Wan's t2v/i2v models return silent clips, so a certified episode was silent too. This
-synthesizes one narration line per shot and hands it to the assembler.
-
-The endpoint is the SYNCHRONOUS multimodal-generation route, not the async task API the
-video models use (docs/verification.md section 3d):
-
-    POST {DASHSCOPE}/api/v1/services/aigc/multimodal-generation/generation
-      body: {"model", "input": {"text", "voice"}}
-      -> 200 {"output": {"audio": {"url", "expires_at", ...}}}
-
-`voice` is REQUIRED — omitting it is a 400, not a default. The URL is a signed OSS link
-that expires, so it is downloaded immediately and the file persisted, exactly like video.
-
-Cached by sha1(model|voice|text): re-narrating an unchanged line is free, which keeps a
-judge-mode replay at zero spend even though narration is a per-run text call.
+`voice` is REQUIRED (omitting it is a 400), and the result URL expires, so download at once.
 """
 
 from __future__ import annotations
@@ -33,26 +20,15 @@ TTS_URL = f"{settings.DASHSCOPE_BASE_URL}/api/v1/services/aigc/multimodal-genera
 DEFAULT_VOICE = "Cherry"
 DEFAULT_MODEL = "qwen3-tts-flash"
 
-# A closed voice roster, for the same reason assertions have a closed vocabulary: an
-# unlicensed voice is a 400 ("does not exist or is not licensed for use"), which would
-# degrade that shot to silence. The script agent names a SPEAKER; the server picks the
-# voice. The agent cannot emit an invalid one because it never emits one.
-# Every name below was probed live against this account (docs/verification.md section 3f).
+# Closed roster: an unlicensed voice is a 400. Every name below was probed live against
+# this account — do not add one unverified.
 NARRATOR_VOICE = DEFAULT_VOICE
 CAST_VOICES = ("Ethan", "Serena", "Dylan", "Jada", "Ryan", "Katerina", "Elias", "Chelsie")
 
 
 def build_cast(specs) -> dict[str, str]:
-    """Map each speaking character to a distinct voice, by order of first appearance.
-
-    Ordinal assignment rather than a hash of the name: a hash can collide and hand two
-    characters the same voice with nothing to signal it. Order of first appearance is
-    just as deterministic (the shot list is fixed before narration runs), so a re-run
-    casts identically and every narration cache key still hits.
-
-    Past the end of the roster voices repeat — a wrap is honest reuse, and a cast that
-    large is not something a ~5-shot dailies reel produces.
-    """
+    """Map each speaking character to a voice by order of first appearance — deterministic,
+    so a re-run casts identically and every narration cache key still hits."""
     cast: dict[str, str] = {}
     for spec in specs:
         who = (getattr(spec, "speaker", None) or "").strip()
@@ -143,9 +119,8 @@ class TTSClient:
                          chars=len(text))
 
 
-# Conversational TTS runs ~2.6 words/second, so a 5-second shot holds ~13 words. The
-# assembler truncates audio at the clip length, so anything past this budget is not
-# "extra" — it is a sentence that gets cut off mid-word in the finished episode.
+# The assembler truncates audio at the clip length, so anything over this budget is cut
+# off mid-word in the finished episode.
 WORDS_PER_SECOND = 2.6
 
 
@@ -158,13 +133,7 @@ def _fit(text: str, budget: int) -> str:
 
 
 def narration_for(spec) -> str:
-    """What this shot says out loud, trimmed to what fits inside it.
-
-    Prefers an explicit `narration` from the script agent — a written line that carries
-    the story — and falls back to describing the shot, which is what a spoken slate does
-    on a real dailies reel. Both paths are budget-trimmed: the assembler truncates audio
-    at the clip length, so an over-long line is not extra, it is a sentence cut mid-word.
-    """
+    """What this shot says out loud, budget-trimmed: the agent's `narration`, else a spoken slate."""
     budget = max(4, int(getattr(spec, "duration_s", 5) * WORDS_PER_SECOND))
     explicit = (getattr(spec, "narration", None) or "").strip()
     if explicit:

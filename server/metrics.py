@@ -1,18 +1,6 @@
-"""Metrics ledger — the novelty lives here (see README novelty statement).
+"""Metrics ledger — every Qwen/Wan call appends a LedgerEntry (stage, model, spend, latency).
 
-Every Qwen/Wan call appends a LedgerEntry: stage, model, token/quota consumption,
-and latency. The dashboard reads this to chart the cost-quality frontier and answer
-"what does a minute of finished video cost, and where is the next token best spent?"
-
-Two consumers:
-  * per-project entries feed the conformance report (frontier scatter, cost/second)
-  * a process-wide append-only JSONL (data/ledger.jsonl) is the audit trail — the
-    "no call escapes unlogged" guarantee — and backs the persistent wallet meter.
-
-Prices below are NOMINAL public list prices used only to tell the at-scale Impact
-story ("this batch would cost $X in production"). The hackathon runs on free-tier
-quota, where the real cash cost is $0; quota *units* (clips, images, tokens) are
-what the wallet actually rations.
+Prices here are NOMINAL list-price estimates, not free-tier cost; the wallet rations quota units.
 """
 
 from __future__ import annotations
@@ -54,8 +42,7 @@ class LedgerEntry(BaseModel):
     tokens_out: int = 0
     images: int = 0
     video_seconds: int = 0
-    cached_seconds: int = 0          # seconds a cache replay represents (billed on a
-                                     # prior run); never counted by the wallet
+    cached_seconds: int = 0          # billed on a prior run; never counted by the wallet
     latency_ms: int = 0
     shot_index: int | None = None
     note: str = ""
@@ -71,8 +58,7 @@ class LedgerEntry(BaseModel):
 
     @property
     def modeled_usd(self) -> float:
-        """est_usd plus what this entry's cache-replayed seconds cost when they WERE
-        billed — the production cost of the artifact, not this run's marginal cost.
+        """est_usd plus this entry's cache-replayed seconds — production cost, not marginal.
         The frontier charts this; the wallet never does."""
         c = self.est_usd + _PRICE_PER_VIDEO_SECOND.get(self.kind, 0.0) * self.cached_seconds
         return round(c, 6)
@@ -98,8 +84,7 @@ class Wallet(BaseModel):
             w.tokens_out += e.tokens_out
             w.images += e.images
             w.video_seconds += e.video_seconds
-            # A clip counts against quota only if it was actually billed (seconds > 0);
-            # cache-hit replays are logged with video_seconds=0 and stay free.
+            # A clip counts against quota only if it was actually billed (seconds > 0).
             if e.video_seconds > 0:
                 if e.kind is ResourceKind.VIDEO_DRAFT:
                     w.draft_clips += 1
@@ -113,9 +98,7 @@ class Wallet(BaseModel):
 
 
 class LedgerWriter:
-    """Thread-safe recorder. The pipeline runs in a background thread, so record()
-    is called off the main loop; the lock guards both the in-memory list and the
-    JSONL append."""
+    """Thread-safe recorder — the lock guards both the in-memory list and the JSONL append."""
 
     def __init__(self, jsonl_path: str | os.PathLike[str] | None = None):
         self._lock = threading.Lock()

@@ -1,12 +1,4 @@
-"""Centralized settings — single source of truth for env-driven config.
-
-Follows the pydantic-settings pattern: one BaseSettings subclass, one module-level
-`settings` singleton that everything imports (`from server.config import settings`).
-Values resolve from OS env vars first, then the repo-root `.env` (via env_file),
-then the defaults below. Every field HAS a default so importing this module never
-crashes when a full .env is absent (demo mode, tests, fresh checkouts); real-mode
-code that needs a secret (QWEN_API_KEY) fails clearly at call time instead.
-"""
+"""Centralized settings — the env-driven `settings` singleton. Every field has a default."""
 
 from functools import lru_cache
 from importlib.util import find_spec
@@ -22,9 +14,7 @@ class Settings(BaseSettings):
     @field_validator("JUDGE_MODE", "DAILIES_DEMO", "CATALOG_ENABLED", mode="before")
     @classmethod
     def _blank_bool_is_off(cls, v: object) -> object:
-        # An unset compose var (`${VAR:-}`) or a blank .env line arrives as "".
-        # Treat that as off, not a hard error — pydantic-settings >=2.13 refuses to
-        # parse an empty string into a bool, which would crash boot on the deploy path.
+        # Required: pydantic-settings >=2.13 refuses "" -> bool and would crash boot.
         return False if isinstance(v, str) and v.strip() == "" else v
 
     # Qwen Cloud access
@@ -51,7 +41,6 @@ class Settings(BaseSettings):
     DAILIES_FIXTURES: bool = False    # REAL Wan clips with pinned prompts; free once the cache is warm
 
     # Catalog layer (optional, off by default) — Postgres sidecar + OSS media.
-    # Live runs stay on the in-memory + state.json path; completed runs publish here.
     CATALOG_ENABLED: bool = False
     DATABASE_URL: str = ""            # postgresql://dailies:...@db:5432/dailies
     OSS_ACCESS_KEY_ID: str = ""       # least-privilege RAM user, not the account key
@@ -73,11 +62,5 @@ def _catalog_deps_installed() -> bool:
 
 
 def catalog_available() -> bool:
-    """CATALOG_ENABLED *and* the optional deps actually importable.
-
-    The flag alone is not enough to gate on: an image built before the catalog
-    deps were added (a rollback, a stale layer, a venv that never got them) would
-    otherwise raise ModuleNotFoundError at import time and take the whole app
-    down. A misconfigured optional feature must degrade to off, never brick boot.
-    """
+    """CATALOG_ENABLED *and* the optional deps importable — a missing dep must degrade to off, not brick boot."""
     return bool(settings.CATALOG_ENABLED) and _catalog_deps_installed()

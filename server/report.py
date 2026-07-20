@@ -1,16 +1,5 @@
-"""Derived conformance metrics — the dashboard's numbers, computed from ProjectState.
-
-GET /api/projects/{id} returns the raw project plus this `metrics` block. Nothing
-here spends anything; it's pure aggregation over takes + the ledger:
-  * heatmap        — pass/fail/inconclusive per assertion type = an empirical
-                     capability map of the draft model
-  * frontier       — per-shot (cost, quality) scatter points
-  * convergence    — every take as a point, so the repair loop's trajectory per shot is
-                     readable: a failing take followed by a passing one is a convergence
-  * repair         — retakes and how many repaired shots then certified
-  * transfer_rate  — of shots with a Tier-0 still, how many passed on the FIRST
-                     draft (image -> video transfer)
-  * cost_per_passing_second — the headline unit-economics number
+"""Derived conformance metrics — pure aggregation over takes + the ledger, returned as the
+`metrics` block of GET /api/projects/{id}.
 """
 
 from __future__ import annotations
@@ -33,10 +22,7 @@ def _drafts(s: ShotState) -> list[Take]:
 
 
 def _repair_attempts(s: ShotState) -> list[Take]:
-    """Every attempt the system made AFTER the first draft to satisfy the contract:
-    extra drafts from the retake loop, plus targeted patches. Both are the same act —
-    answering a measured failure with another render — so counting only retakes would
-    under-report a shot that was fixed by a patch instead."""
+    """Every attempt after the first draft: retake-loop drafts plus targeted patches."""
     return _drafts(s)[1:] + [t for t in s.takes if t.tier == "patch"]
 
 
@@ -60,11 +46,8 @@ def build_report_metrics(p: ProjectState) -> dict:
     for d in heatmap.values():
         d["pass_rate"] = round(d["pass"] / d["total"], 3) if d["total"] else 0.0
 
-    # Two cost views per shot, both true: what THIS run billed (cache replays are
-    # free — the wallet's number) and what the shot's artifacts cost to PRODUCE
-    # (billed + cache-replayed seconds). The frontier charts production cost;
-    # otherwise a warm re-verify collapses every shot to x=0 and the chart says
-    # nothing in exactly the mode judges re-run it in.
+    # Two cost views per shot: what THIS run billed, and what the artifacts cost to PRODUCE
+    # (billed + cache-replayed). The frontier charts production cost.
     sec_by_shot: dict[int, int] = {}
     usd_by_shot: dict[int, float] = {}
     prod_sec_by_shot: dict[int, int] = {}
@@ -78,9 +61,7 @@ def build_report_metrics(p: ProjectState) -> dict:
                                           + e.video_seconds + e.cached_seconds)
         prod_usd_by_shot[e.shot_index] = prod_usd_by_shot.get(e.shot_index, 0.0) + e.modeled_usd
 
-    # Only shots with at least one take: before drafting, a shot has no cost story
-    # and no quality — plotting it would paint "not certified at zero cost" dots at
-    # the review gate for work that simply hasn't happened yet.
+    # Only shots with at least one take — before drafting there is no cost or quality to plot.
     frontier = [{
         "shot": s.spec.index,
         "cost_seconds": sec_by_shot.get(s.spec.index, 0),
@@ -92,8 +73,7 @@ def build_report_metrics(p: ProjectState) -> dict:
         "certified": s.certified,
     } for s in shots if s.takes]
 
-    # Every take, in order, as one point. Reading a shot's row left to right gives the
-    # repair loop's trajectory: a failing take followed by a passing one is a convergence.
+    # Every take, in order, as one point — a shot's row is the repair loop's trajectory.
     convergence = [{
         "shot": s.spec.index,
         "take": t.take_no,

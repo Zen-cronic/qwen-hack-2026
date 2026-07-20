@@ -1,18 +1,6 @@
-"""MCP server — gate generated video the way you gate code.
+"""MCP server exposing the Dailies conformance engine. Run: python -m server.mcp_server
 
-Exposes the Dailies conformance engine as an MCP tool so any pipeline or agent can
-run shot tests against an authored spec. This is the "packs-as-data productization"
-path made runnable: `run_shot_tests` uses only the deterministic Tier-A CV checks, so
-it is zero-token, needs no API key, and runs on ANY mp4 — the model-agnostic claim,
-executable rather than asserted.
-
-The core `run_shot_tests` function imports no MCP dependency (so it is testable and
-reusable on its own); the protocol server is built lazily in `main()`.
-
-Run:  python -m server.mcp_server        (requires the extra: pip install -e ".[mcp]")
-
-Roadmap tools (not yet exposed): compile_shot (NL -> validated assertions, needs an
-LLM client) and get_conformance_report (read a project's state.json snapshot).
+The core functions must import no MCP dependency; the protocol server is built lazily.
 """
 
 from __future__ import annotations
@@ -32,11 +20,8 @@ def run_shot_tests(
 ) -> dict[str, Any]:
     """Run deterministic Tier-A conformance checks on a clip against an authored spec.
 
-    Provide `assertions` (raw ``{"type", "params"}`` dicts) and/or `pack_name` (a
-    ``packs/*.yaml`` of baseline checks); they merge with shot assertions overriding
-    same-type pack defaults. Invented or malformed assertions are rejected before
-    anything runs. Returns a conformance report with a pass/fail gate over the
-    non-advisory checks. Deterministic, zero-token, any mp4.
+    Takes raw ``{"type", "params"}`` assertions and/or a `pack_name`; returns a conformance
+    report gated on the non-advisory checks. Deterministic, zero-token, any mp4.
     """
     checked = parse_assertions(list(assertions or []))  # closed-vocab gate, before running
     if pack_name:
@@ -73,14 +58,8 @@ def patch_clip(
 ) -> dict[str, Any]:
     """Repair a clip in place: re-render it from its last good frame, then re-verify.
 
-    Where `run_shot_tests` reports, this acts. Tier-A locates the first blocking failure
-    in time, the frame just before that window becomes an anchor, and a frame-anchored
-    Wan model regenerates from there — so an agent can fix one clip without re-running
-    whatever pipeline produced it.
-
-    Unlike `run_shot_tests` this SPENDS quota (one 5s i2v/kf2v generation) and needs
-    QWEN_API_KEY. The patch is only reported as applied if it passes re-verification;
-    a patch that still fails returns the evidence and leaves the original untouched.
+    SPENDS quota (one 5s i2v/kf2v generation) and needs QWEN_API_KEY; a patch that still
+    fails is reported as patched=false and leaves the original untouched.
     """
     from pathlib import Path
     from tempfile import mkdtemp
@@ -133,8 +112,7 @@ def _build_server():
     """Construct the FastMCP server. Imported lazily so the core stays MCP-free."""
     from mcp.server.fastmcp import FastMCP
 
-    # Quiet by default: a stdio server logs to the client's stderr, so per-request INFO
-    # lines land in whatever terminal launched it. Warnings and errors still surface.
+    # Quiet by default: a stdio server logs to the client's stderr.
     server = FastMCP("dailies", log_level="WARNING")
 
     @server.tool()
@@ -159,10 +137,8 @@ def _build_server():
     ) -> dict[str, Any]:
         """Repair a clip by re-rendering it from its last good frame, then re-verifying.
 
-        Tier-A locates the first blocking failure in time and anchors the regeneration
-        just before it, so one clip is fixed without re-running the pipeline that made
-        it. SPENDS one 5s i2v/kf2v generation and needs QWEN_API_KEY — unlike
-        run_shot_tests, which is free. Reports patched=false if the result still fails."""
+        Unlike the free run_shot_tests, this SPENDS one 5s i2v/kf2v generation and needs
+        QWEN_API_KEY; patched=false if it still fails."""
         return patch_clip(video_path, assertions, pack_name, model, instruction)
 
     return server

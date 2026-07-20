@@ -1,25 +1,7 @@
 """Alibaba OSS access — upload published media, presign browser GET URLs.
 
-Two clients on purpose (V4 signing bakes the configured endpoint into the URL):
-  * ops client    — OSS_INTERNAL_ENDPOINT when set (free same-region traffic from
-                    the SAS box), else the public endpoint. Uploads + existence checks.
-  * presign client — always the public endpoint, so presigned URLs resolve from a
-                    judge's browser, not just inside Alibaba's network.
-
-Presigned GETs carry response-content-disposition=inline. Two things measured
-against this bucket (scripts/check_oss.py), both counter to the obvious guess:
-
-  * response-content-type is REJECTED — OSS answers 400 "Can not override
-    response header on content-type". It is also unnecessary: the correct type
-    is stored at upload time, so responses already carry content-type: video/mp4.
-  * response-content-disposition=inline is silently IGNORED on the default
-    bucket domain — post-Oct-2022 accounts always answer attachment. It is kept
-    because it costs nothing and does take effect behind a custom CNAME domain.
-    Browsers honour Content-Disposition for top-level navigation only, so
-    <video>/<img> subresource playback is unaffected (verified in a real browser).
-
-Same degradation contract as server/db.py: misconfiguration or network failure
-returns None/False and logs — never raises into the pipeline or a route.
+Two clients, because V4 signing bakes the endpoint into the URL: ops (internal endpoint when
+set) and presign (always public). Misconfiguration or network failure returns None, never raises.
 """
 
 from __future__ import annotations
@@ -96,8 +78,7 @@ def presign_get(oss_key: str, *, mime: str | None = None, filename: str | None =
     disposition = "inline" + (f'; filename="{filename}"' if filename else "")
     try:
         result = client.presign(
-            # No response_content_type here — OSS rejects the override outright
-            # (400 InvalidRequest); the stored object metadata already carries it.
+            # Never add response_content_type — OSS rejects the override with 400.
             oss_sdk.GetObjectRequest(
                 bucket=settings.OSS_BUCKET,
                 key=oss_key,

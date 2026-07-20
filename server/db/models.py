@@ -1,25 +1,7 @@
 """Catalog schema as SQLAlchemy models — the source Alembic autogenerates from.
 
-The relational mirror of ProjectState (server/store.py) for PUBLISHED runs. Live
-runs stay on in-memory + state.json; this catalog is the durable, queryable copy
-with media in OSS. These models exist for schema definition and migration
-autogeneration only — runtime queries go through the psycopg pool in
-server/db/__init__.py, and Pydantic (server/store.py, server/specs.py) remains
-the application's model layer.
-
-Design notes:
-- Enums are Text + named CheckConstraints, not PG enums: the Python str-enums
-  govern; a CHECK regenerates from this file, ALTER TYPE ceremony does not.
-- No est_usd/modeled_usd columns anywhere — computed @property on LedgerEntry
-  (server/metrics.py); prices live only there.
-- MediaObject.sha1 hashes FILE BYTES: cache filename stems are request-key
-  sha1s (cache_key(): model|prompt|seed|size|neg), not content hashes.
-- assertion_results is normalized (closed 10-type DSL: pass-rate-per-type is a
-  one-GROUP-BY query); spec-side assertion lists stay JSONB on shots.
-- projects.raw_state holds the verbatim state.json — the fidelity escrow that
-  keeps "catalog could become source of truth later" honest.
-- The project_wallets VIEW is not modeled here (autogenerate does not manage
-  views); it lives in the initial migration as op.execute SQL.
+Schema/migration definition only; runtime queries go through the psycopg pool in
+server/db/__init__.py. The project_wallets VIEW below is applied by the initial migration.
 """
 
 from sqlalchemy import (
@@ -51,9 +33,7 @@ def _in(values: tuple[str, ...], col: str) -> str:
 
 
 class MediaObject(Base):
-    """One row per distinct CONTENT hash. Paths live in media_paths — the
-    relationship is many-to-one (deterministic runs produce byte-identical
-    episodes across projects, so ~40 project paths share ~13 objects)."""
+    """One row per distinct CONTENT hash; paths live in media_paths (many-to-one)."""
 
     __tablename__ = "media_objects"
 
@@ -71,9 +51,7 @@ class MediaObject(Base):
 
 
 class MediaPath(Base):
-    """Normalized DATA_ROOT-relative path -> content hash. This is what the
-    media route resolves against when a local file is gone: many paths may
-    point at one object, which a single local_path column could not express."""
+    """Normalized DATA_ROOT-relative path -> content hash; what the media route resolves against."""
 
     __tablename__ = "media_paths"
 
@@ -223,10 +201,8 @@ class LedgerEntry(Base):
     )
 
 
-# Applied by the initial migration via op.execute (autogenerate does not manage
-# views). Mirrors Wallet.from_entries (server/metrics.py): a clip counts only
-# when video_seconds > 0, so cache replays stay free. Unit sums only — est_usd
-# is computed in Python from the price tables.
+# Must mirror Wallet.from_entries (server/metrics.py): a clip counts only when
+# video_seconds > 0. Applied by the initial migration via op.execute.
 PROJECT_WALLETS_VIEW = """
 CREATE VIEW project_wallets AS
 SELECT project_id,

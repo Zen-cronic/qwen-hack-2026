@@ -1,18 +1,6 @@
-"""Agent-authored pipeline plan — the agent wires the graph, the server keeps it valid.
+"""Agent-authored pipeline plan — the agent emits run PARAMETERS, the server expands the graph.
 
-The Qwen agent does NOT emit graph topology; it emits run PARAMETERS (premise, pack,
-shots, custom checks) by calling the build_pipeline_graph tool. The server deterministically
-expands those into the canonical node/edge layout, so a malformed graph is impossible by
-construction while the "the agent built the pipeline" story stays fully truthful.
-
-Two modes, one shape: real qwen-plus function-calling in the live runtime, a deterministic
-keyword stub in demo/fixtures (and whenever no API key is set) so the demo is hermetic and
-spends zero quota. Both return the same PipelinePlan plus a tool-call transcript that is the
-evidence a Qwen custom tool actually authored the run.
-
-The node/edge id scheme (script, stills, review, gen-{i}, check-{i}, assemble, episode) is
-canonical and mirrors web/src/graph.ts, so a plan-drawn canvas and a live-run canvas are the
-same nodes.
+The node/edge id scheme must stay in sync with web/src/graph.ts.
 """
 
 from __future__ import annotations
@@ -54,8 +42,7 @@ def expand_plan(
     custom_checks: list[str] | None = None,
     rationale: str = "",
 ) -> PipelinePlan:
-    """Expand run parameters into the canonical pipeline graph. Single source of truth for
-    the server-side topology; the ids match web/src/graph.ts exactly."""
+    """Expand run parameters into the canonical pipeline graph; ids must match web/src/graph.ts."""
     n = max(1, min(12, int(max_shots)))
     nodes = [
         PlanNode(id="script", kind="stage", label="Script"),
@@ -138,8 +125,7 @@ def _pick_pack(pack: str | None, packs: list[str]) -> str:
 
 
 def _plan_from_args(args: dict[str, Any], packs: list[str]) -> PipelinePlan:
-    """Validate and expand the tool arguments the model supplied. Defensive: the model can
-    omit or mistype anything, and none of it may reach the executor unchecked."""
+    """Validate and expand the tool arguments the model supplied — none may reach the executor unchecked."""
     premise = str(args.get("premise") or "").strip()
     pack = _pick_pack(args.get("pack"), packs)
     try:
@@ -153,8 +139,7 @@ def _plan_from_args(args: dict[str, Any], packs: list[str]) -> PipelinePlan:
 
 
 def _plan_stub(message: str, packs: list[str]) -> PipelinePlan:
-    """Deterministic planner for demo/fixtures and the no-key fallback. Parses the request
-    the way the agent would, with zero API calls — so the demo is hermetic and repeatable."""
+    """Deterministic planner for demo/fixtures and the no-key fallback. Zero API calls."""
     text = message.strip()
     low = text.lower()
     m = re.search(r"(\d+)\s*[- ]?shot", low)
@@ -192,8 +177,7 @@ def _stub_transcript(plan: PipelinePlan) -> list[dict[str, Any]]:
 
 
 def _plan_live(message: str, packs: list[str], *, model: str | None = None, max_rounds: int = 3):
-    """Real qwen-plus function-calling. The tool call carries the whole plan, so the first
-    call ends the loop; a model that answers without calling the tool falls back to the stub."""
+    """Real qwen-plus function-calling; a model that answers without calling the tool falls back to the stub."""
     from openai import OpenAI
 
     client = OpenAI(api_key=settings.QWEN_API_KEY, base_url=settings.QWEN_BASE_URL)
@@ -226,8 +210,7 @@ def _plan_live(message: str, packs: list[str], *, model: str | None = None, max_
 
 
 def plan_from_message(message: str, *, demo: bool, packs: list[str], model: str | None = None):
-    """Return (PipelinePlan, transcript). demo (or a missing key) uses the deterministic stub;
-    otherwise qwen-plus authors the plan by calling the build_pipeline_graph tool."""
+    """Return (PipelinePlan, transcript); demo or a missing key uses the deterministic stub."""
     if demo or not settings.QWEN_API_KEY:
         plan = _plan_stub(message, packs)
         return plan, _stub_transcript(plan)

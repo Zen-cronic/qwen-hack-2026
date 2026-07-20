@@ -1,18 +1,7 @@
 """The shot contract — Dailies' closed assertion DSL and validated types.
 
-This is the "CI for generated video" thesis in one module. A shot spec is a prompt
-plus a short program in a small domain-specific language: each *sentence* is an
-assertion (a `type` + typed `params`) — a machine-checkable claim about the rendered
-clip. The vocabulary is CLOSED — exactly 10 sentence types across three cost tiers. The
-compiler (and the LLM output parser) run everything through `parse_assertions`, which
-rejects any sentence outside the grammar (unknown type or malformed params) — the DSL's
-compile error. That closure is what lets downstream tiers assume every assertion is
-executable.
-
-Tiers, cheapest first:
-  tier0  — checked on a single t2i still BEFORE any video spend (1/25th cost)
-  tier_a — deterministic CV on the rendered clip, ZERO tokens (the never-cut spine)
-  tier_b — qwen-vl semantic verdicts (advisory; gated on the hour-zero smoke test)
+Tiers, cheapest first: tier0 (a t2i still, pre-video-spend), tier_a (deterministic CV,
+zero tokens), tier_b (qwen-vl semantic verdicts, advisory).
 """
 
 from __future__ import annotations
@@ -79,17 +68,12 @@ ASSERTION_META: dict[AssertionType, _Meta] = {
 
 CAMERA_DIRECTIONS = {"left", "right", "up", "down", "static", "any"}
 
-# Assertion counts should stay in sync with PLAN.md's "exactly 10 assertion types".
+# Must stay in sync with PLAN.md's "exactly 10 assertion types".
 assert len(ASSERTION_META) == 10, "closed vocabulary must be exactly 10 types"
 
 
 class Assertion(BaseModel):
-    """One machine-checkable claim about a rendered shot.
-
-    Unknown `type` values fail at the enum boundary; missing/extra params fail in
-    the model validator — together these give the "compiler rejects invented ones"
-    guarantee the whole pipeline relies on.
-    """
+    """One machine-checkable claim about a rendered shot; invented types and params are rejected here."""
 
     model_config = {"frozen": True}
 
@@ -130,11 +114,8 @@ class AssertionResult(BaseModel):
     detail: str = ""
     measured: dict[str, Any] = Field(default_factory=dict)
     evidence: list[str] = Field(default_factory=list)  # relative media paths (frames)
-    # The assertion's own params, carried onto the result. Without these a reader knows
-    # a `subject_present` check ran but not WHICH subject it was about, and "at most 1
-    # cut" is indistinguishable from "no cuts" — so any human phrasing of a result is
-    # impossible downstream. Cheap to carry, and the SPA needs it to name checks in
-    # plain language instead of echoing the machine type.
+    # The assertion's own params, carried onto the result — the SPA needs them to phrase
+    # a check in plain language.
     params: dict[str, Any] = Field(default_factory=dict)
 
     @classmethod
@@ -164,9 +145,7 @@ class ShotSpec(BaseModel):
 
 
 def parse_assertions(raw: list[dict[str, Any]]) -> list[Assertion]:
-    """Validate a list of raw assertion dicts (from a YAML pack or an LLM) into
-    Assertions. Raises ValueError on the first invalid entry — the enforcement
-    point for the closed vocabulary."""
+    """Validate raw assertion dicts into Assertions — the enforcement point for the closed vocabulary."""
     out: list[Assertion] = []
     for i, item in enumerate(raw):
         try:

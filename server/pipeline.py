@@ -1,16 +1,7 @@
 """The pipeline — a background-thread state machine over one ProjectState.
 
-Every stage is INJECTED (see Deps), so this orchestration is testable with fakes
-today and the real CV/VLM/repair stages (Subphases F–H) drop in unchanged. The
-one human checkpoint is a threading.Event between tier0 and any video spend.
-
-State flow (state.md):
-  queued -> scripting -> tier0 -> awaiting_review [Event] -> drafting -> verifying
-         -> repairing -> promoting -> assembling -> done | failed
-
-Spend discipline: cache-hit clips are logged with video_seconds=0 (free); only
-billed generations (seconds>0) count against the wallet. Promotion to the final
-model is automatic up to final_cap; beyond it, a passing draft is certified as-is.
+State flow: queued -> scripting -> tier0 -> awaiting_review [Event] -> drafting
+-> verifying -> repairing -> promoting -> assembling -> done | failed
 """
 
 from __future__ import annotations
@@ -78,9 +69,8 @@ class Config:
     t2i_model: str = "wan2.1-t2i-plus"
     draft_model: str = "wan2.1-t2v-turbo"
     final_model: str = "wan2.2-t2v-plus"
-    # Frame-anchored repair. i2v-flash takes a single anchor, which is what a motion
-    # repair wants — kf2v interpolates between two keyframes, so pinning the last one
-    # would re-impose the very end state the patch is trying to fix.
+    # Must be a single-anchor i2v model: kf2v interpolates to a last keyframe, re-imposing
+    # the end state the patch exists to fix.
     patch_model: str = "wan2.2-i2v-flash"
     tts_model: str = "qwen3-tts-flash"
     max_retakes: int = 1
@@ -90,13 +80,7 @@ class Config:
 
 
 def _spend_note(res) -> str:
-    """What the ledger records about one generation call.
-
-    A FAILED call must say why. Every wan2.2-t2v-plus promote was rejected with
-    InvalidParameter (wrong frame size) for the project's entire life and nobody noticed,
-    because a failed call and a no-op call both wrote an empty note while _promote quietly
-    fell back to the passing draft. The ledger is the audit trail; make it audit.
-    """
+    """What the ledger records about one generation call. A FAILED call must say why."""
     if getattr(res, "from_cache", False):
         return "cache"
     if not getattr(res, "ok", True):
@@ -106,8 +90,7 @@ def _spend_note(res) -> str:
 
 
 def _pop_usage(stage_fn) -> tuple[int, int]:
-    """A stage may expose token usage from its last call via pop_last_usage();
-    plain-function stages (e.g. Tier-A) simply report nothing."""
+    """Token usage from a stage's last call, via its optional pop_last_usage()."""
     pop = getattr(stage_fn, "pop_last_usage", None)
     if callable(pop):
         try:
@@ -118,13 +101,7 @@ def _pop_usage(stage_fn) -> tuple[int, int]:
 
 
 def build_style_descriptor(premise: str, specs: list[ShotSpec]) -> str:
-    """A shared look/identity clause woven into every shot's generation prompt.
-
-    Deterministic and free — no extra model call. It fixes the two things that drift
-    across independently generated shots: the visual grade, and the identity of any
-    recurring subject. Frame-anchored i2v (repair/promotion) carries continuity WITHIN a
-    shot; this descriptor carries the look ACROSS shots so the episode reads as one piece.
-    """
+    """A shared look/identity clause woven into every shot's prompt. Deterministic, no model call."""
     seen: list[str] = []
     for s in specs:
         subj = (getattr(s, "subject", None) or "").strip()
@@ -138,19 +115,13 @@ def build_style_descriptor(premise: str, specs: list[ShotSpec]) -> str:
 
 
 # Which second of the approved draft anchors the promoted final. Early, so the certified
-# clip BEGINS like the take the human approved and reads as a continuation of it.
+# clip begins like the take the human approved.
 PROMOTE_ANCHOR_S = 0.1
 
 
 def asserts_camera_motion(spec: ShotSpec) -> bool:
-    """Whether this shot's contract pins camera motion.
-
-    An anchor frame carries composition but NOT motion, so an i2v promotion has to
-    re-invent the move — and on real Wan output it INVERTED it: an approved rightward pan
-    (|v|=0.745, 'right') promoted to |v|=6.15 'left' and failed Tier-A. When motion is
-    contractual the approved take is already the most consistent final, so it ships as-is
-    rather than spending a clip on a mechanism that cannot preserve the property under test.
-    """
+    """Whether this shot's contract pins camera motion — an anchor frame cannot carry motion,
+    so such shots must ship the approved take rather than an i2v promotion."""
     return any(a.type is AssertionType.CAMERA_MOTION for a in spec.assertions)
 
 
@@ -171,14 +142,11 @@ class Pipeline:
             self._assemble()
         except Exception as exc:  # noqa: BLE001 — a background thread must not die silently
             self._set(lambda p: setattr_many(p, status=ProjectStatus.FAILED, error=str(exc)))
-        # AFTER the try/except on purpose: terminal state is already set and the
-        # SPA poll has its payload, so even a pathological publish bug can never
-        # flip a DONE project to FAILED. safe_publish itself swallows everything.
+        # Must stay AFTER the try/except so a publish bug can never flip a DONE run to FAILED.
         self._publish_catalog()
 
     def _publish_catalog(self) -> None:
-        """Mirror a finished run into the catalog (Postgres + OSS). No-op unless
-        CATALOG_ENABLED; only DONE runs publish (failed ones stay local-only)."""
+        """Mirror a finished run into the catalog. No-op unless CATALOG_ENABLED; only DONE runs publish."""
         from server.config import catalog_available, settings
 
         if not catalog_available():
@@ -224,29 +192,21 @@ class Pipeline:
         return str(d)
 
     def _compose_prompt(self, base: str) -> str:
-        """Weave the project's shared visual bible into a generation prompt. Applied at
-        the gen call ONLY — takes store the raw creative prompt, so this never
-        double-composes, and repair/promotion re-compose from that raw prompt."""
+        """Weave the shared visual bible into a prompt. Applied at the gen call ONLY —
+        takes store the raw prompt, so this never double-composes."""
         desc = self.store.get(self.pid).style_descriptor
         return f"{base} — {desc}" if desc else base
 
     def _anchor_for_retake(self, video_path: str, results: list[AssertionResult],
                            idx: int, take_no: int) -> str | None:
-        """The last good frame before the located failure — the i2v anchor for a retake.
-
-        Reuses Tier-A's failure localization (server.patch). Returns None when the failure
-        can't be placed in time, so the caller falls back to a fresh t2v roll rather than
-        anchoring on a frame that isn't meaningfully 'before' the defect."""
+        """The last good frame before the located failure — the i2v anchor for a retake,
+        or None so the caller falls back to a fresh t2v roll."""
         failure = localized_failure(results)
         if failure is None:
             return None
         at = anchor_second(failure)
-        # Anchor to PRESERVE, re-roll to CHANGE. If the defect starts at t=0 there is no
-        # good frame before it, and i2v works by holding the anchor's composition — so
-        # anchoring would pin the very thing the retake has to fix. Measured on real Wan
-        # output: a clip static throughout (fail_window [0.0, 5.33], |v|=0.005) retaken via
-        # i2v from frame 0 still measured |v|=0.112 against a 0.4 threshold, while a fresh
-        # t2v roll on the motion-forward repair prompt reaches |v|~1.47.
+        # Anchor to PRESERVE, re-roll to CHANGE: a defect starting at t=0 has no good frame
+        # before it, so anchoring would pin the very thing the retake has to fix.
         if at <= 0.0:
             return None
         out = Path(self._evidence_dir(idx, take_no)) / "retake_anchor.png"
@@ -258,8 +218,7 @@ class Pipeline:
         self._status(ProjectStatus.SCRIPTING)
         p = self.store.get(self.pid)
         pack = load_pack(p.pack, self.cfg.packs_dir)
-        # User-authored checks compile ONCE (before the script loop) and apply to every
-        # shot. A malformed rule raises here — rejected before any video spend.
+        # Must compile ONCE, before the script loop: a malformed rule raises pre-video-spend.
         extra_defaults = self._compile_custom_checks(p)
 
         last_err: Exception | None = None
@@ -281,22 +240,14 @@ class Pipeline:
 
         def set_shots(p: ProjectState) -> None:
             p.shots = [ShotState(spec=s) for s in specs]
-            # The shared look is fixed here, once, from the compiled shots — every
-            # downstream generation composes it in so the episode stays coherent.
+            # Look and casting are both fixed here, once, from the whole compiled shot list.
             p.style_descriptor = build_style_descriptor(p.premise, specs)
-            # Casting is fixed here too, for the same reason: one voice per character,
-            # decided once from the whole shot list rather than per shot.
             p.cast = build_cast(specs)
 
         self._set(set_shots)
 
     def _compile_custom_checks(self, p: ProjectState) -> list[Assertion]:
-        """Compile the project's plain-language custom checks into validated assertions.
-
-        No-op when there are none or no compiler is wired. The token cost is billed to
-        the scripting stage; a rule the compiler emits but the closed vocabulary rejects
-        fails HERE — extending the reject-before-spend guarantee to user input.
-        """
+        """Compile plain-language custom checks into validated assertions; rejects before any spend."""
         rules = [r.strip() for r in (p.custom_checks or []) if r.strip()]
         if not rules or self.deps.custom_rule_fn is None:
             return []
@@ -351,10 +302,8 @@ class Pipeline:
         passed = False
         for take_no in range(self.cfg.max_retakes + 1):
             self._shot_status(idx, ShotStatus.DRAFTING)
-            # A retake continues from the frame that still passed (i2v) rather than
-            # re-rolling the whole shot from noise — so the fix inherits the composition
-            # the draft already got right and stays visually continuous with it. The first
-            # take, or a runtime with no frame-anchored model, uses a fresh t2v draft.
+            # A retake continues from the frame that still passed (i2v); the first take, or
+            # a runtime with no frame-anchored model, uses a fresh t2v draft.
             if anchor and self.deps.patch_video_fn is not None:
                 res = self.deps.patch_video_fn(self._compose_prompt(prompt), self.cfg.patch_model, anchor)
                 tier, model, kind = "repair", self.cfg.patch_model, ResourceKind.VIDEO_PATCH
@@ -415,15 +364,10 @@ class Pipeline:
             self._set(lambda p: _certify(p, idx, p.shots[idx].latest_take.video_path))
             return
 
-        # Anchor the final on the take that just passed, so the certified clip is a
-        # continuation of what was approved rather than a fresh roll that drifts off it. A
-        # seed can't do this — it doesn't transfer across models; the frame does. Fall back
-        # to a t2v final when no frame-anchored model is wired (e.g. the fixtures runtime).
+        # Anchor the final on the take that just passed; fall back to a t2v final when no
+        # frame-anchored model is wired.
         spec = p.shots[idx].spec
-        # Motion is contractual here and an anchor frame cannot carry it (see
-        # asserts_camera_motion): ship the take that actually passed instead of spending a
-        # generation that can only re-invent the move — which is also the most consistent
-        # final we can give, since it IS the approved take.
+        # Motion is contractual and an anchor frame cannot carry it: ship the approved take.
         if self.deps.patch_video_fn is not None and asserts_camera_motion(spec):
             self._set(lambda p: _certify(p, idx, p.shots[idx].latest_take.video_path))
             return
@@ -439,8 +383,7 @@ class Pipeline:
             res = self.deps.gen_video_fn(self._compose_prompt(last.prompt), self.cfg.final_model)
             final_model = self.cfg.final_model
         billed = 0 if getattr(res, "from_cache", False) else getattr(res, "seconds", 0)
-        # Recorded as the FINAL however it was rendered — this IS the certified clip, and
-        # the role is what the frontier and wallet reason about, not the endpoint used.
+        # Recorded as the FINAL however it was rendered — the role, not the endpoint.
         self._spend(kind=ResourceKind.VIDEO_FINAL, model=final_model, stage="promoting",
                     shot_index=idx, video_seconds=billed,
                     cached_seconds=getattr(res, "cached_seconds", 0),
@@ -460,9 +403,7 @@ class Pipeline:
         if final_take.passed:
             self._set(lambda p: _certify(p, idx, res.local_path))
         else:
-            # The final regressed on the deterministic tier even though the draft cleared
-            # it. Certify the draft rather than ship an unverified final — the same fallback
-            # the budget and promotion-failure paths above already take.
+            # The final regressed on Tier-A: certify the draft rather than ship it.
             self._set(lambda p: _certify(p, idx, last.video_path))
 
     def _assemble(self) -> None:
@@ -481,12 +422,7 @@ class Pipeline:
         self._set(lambda p: setattr_many(p, status=ProjectStatus.DONE, episode_path=episode))
 
     def _narrate(self, shipped: list[ShotState]) -> list[str | None] | None:
-        """A narration track per shipped shot, or None if this runtime has no voice.
-
-        Never fatal: a shot whose line fails to synthesize gets silence, and the episode
-        still ships. Sound is a finish on the deliverable, not part of the contract —
-        failing a certified run over a voice call would invert what this system is for.
-        """
+        """A narration track per shipped shot, or None if this runtime has no voice. Never fatal."""
         if self.deps.narrate_fn is None:
             return None
         cast = self.store.get(self.pid).cast
@@ -496,9 +432,7 @@ class Pipeline:
             if not text:
                 out.append(None)
                 continue
-            # A character speaks in their own voice in every shot they appear in; anything
-            # unattributed is the narrator. The voice is part of the narration cache key,
-            # so re-casting a character re-synthesizes only that character's lines.
+            # The voice is part of the narration cache key.
             voice = voice_for(s.spec, cast)
             res = self.deps.narrate_fn(text, voice=voice)
             ok = bool(getattr(res, "ok", False))
