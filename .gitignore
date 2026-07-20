@@ -34,6 +34,10 @@ web/playwright-report/
 
 references/
 
+# Demo-video production — capture harness, Remotion composition, takes, renders.
+# Stays local by operator decision; nothing here ships with the submission.
+film/
+
 # playwright-mcp session artifacts (screenshots, flow recordings)
 .playwright-mcp/
 
