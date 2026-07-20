@@ -7,13 +7,15 @@ Modeled with the [C4 model](https://c4model.com): **Level 1 (System Context)** �
 uses Dailies and which external systems it talks to — and **Level 2 (Container)** — the
 deployable/runnable units inside Dailies and how a request flows through them. Levels 3–4
 (component/code) are omitted deliberately: they would duplicate the source under
-`server/`, which is the ground truth. Every box and edge below is traceable to a file you
-can open.
+`server/`, which is the ground truth. The diagrams therefore stay at container/stage
+altitude and name no source files; the file that backs each box is named in the prose
+underneath, so every box is still traceable to code you can open.
 
 **Diagram conventions.** Each diagram has a title (type + scope) and a legend. Colour is
 sparse and purposeful: neutral fills for containers and external systems, a light accent
 for actors, and **red reserved for the one path that matters most — reject-before-spend
-(a DSL compile error) and the Tier-A hard-fail that triggers auto-repair.**
+(an assertion outside the closed DSL) and the blocking conformance failure that triggers
+auto-repair.**
 
 ## Level 1 — System Context
 
@@ -64,104 +66,75 @@ flowchart TB
     operator["Marketing-ops operator / stakeholder<br/><i>Person</i>"]:::person
 
     subgraph sys["Dailies — Software System"]
-        spa["Web SPA<br/><i>React + Vite + TS, served by nginx</i><br/>Authoring form + conformance dashboard;<br/>polls GET /api/projects/:id every 2.5s"]:::container
-        api["Backend API<br/><i>FastAPI on uvicorn :8099</i><br/>REST endpoints; spawns the pipeline thread;<br/>the poll payload IS the conformance report"]:::container
+        spa["Web SPA<br/><i>Container: single-page app behind a web server</i><br/>Authoring form + live conformance dashboard"]:::container
+        api["Backend API<br/><i>Container: REST service</i><br/>Starts runs, serves the conformance report,<br/>never blocks on a model call"]:::container
 
-        subgraph pipe["Pipeline — background-thread state machine"]
+        subgraph pipe["Pipeline — background state machine"]
             direction TB
-            script["scripting<br/><i>qwen-plus</i>"]:::stage
-            compile["DSL compiler<br/><i>specs.py / compiler.py</i>"]:::stage
-            reject["reject before spend<br/>(DSL compile error)"]:::reject
-            tier0["Tier-0 still<br/><i>wan2.1-t2i-plus</i>"]:::stage
-            gate["human review gate<br/><i>threading.Event</i>"]:::stage
-            draft["draft<br/><i>wan2.1-t2v-turbo</i>"]:::stage
-            tierA["Tier-A CV<br/><i>OpenCV, ZERO tokens</i>"]:::stage
-            tierB["Tier-B VLM (advisory)<br/><i>qwen-vl-plus</i>"]:::stage
-            hardfail["blocking Tier-A FAIL"]:::reject
-            repair["bounded auto-repair<br/><i>qwen-plus</i>"]:::stage
-            promote["promote (frame-anchored)<br/><i>wan2.2-i2v-flash</i>"]:::stage
-            narrate["narration, one voice per character<br/><i>qwen3-tts-flash</i>"]:::stage
-            assemble["assembly + mux<br/><i>ffmpeg</i>"]:::stage
+            script["scripting"]:::stage
+            compile["compile the spec to a closed assertion DSL"]:::stage
+            reject["reject before spend<br/>(assertion outside the DSL)"]:::reject
+            gate["still preview + human review gate<br/>the only human in the loop,<br/>before any video is paid for"]:::stage
+            draft["draft render"]:::stage
+            checks["conformance checks<br/>deterministic CV (blocking, zero-token)<br/>+ advisory VLM verdict"]:::stage
+            hardfail["blocking FAIL"]:::reject
+            repair["bounded auto-repair"]:::stage
+            promote["promote the approved take<br/>(frame-anchored final)"]:::stage
+            assemble["assembly + narration mux"]:::stage
 
             script --> compile
-            compile -->|"invalid sentence"| reject
-            compile -->|"valid"| tier0
-            tier0 --> gate
+            compile -->|"unsupported sentence"| reject
+            compile -->|"valid contract"| gate
             gate -->|"operator approves"| draft
-            draft --> tierA
-            draft -.->|"advisory, parallel"| tierB
-            tierA -->|"blocking FAIL"| hardfail
+            draft --> checks
+            checks -->|"blocking FAIL"| hardfail
             hardfail -->|"retake, bounded"| repair
             repair --> draft
-            tierA -->|"pass"| promote
-            promote --> narrate
-            narrate --> assemble
+            checks -->|"pass"| promote
+            promote --> assemble
         end
 
-        subgraph patchsub["Targeted repair — post-run, one shot, no pipeline re-entry"]
-            direction TB
-            locate["locate failure<br/><i>tier_a.py, re-measured</i><br/>fail_window_s"]:::stage
-            anchor["cut anchor frame<br/><i>patch.py, last good frame</i>"]:::stage
-            regen["re-render from anchor<br/><i>wan2.2-i2v-flash / kf2v</i>"]:::stage
-            reverify["Tier-A re-verify"]:::stage
-            keep["patch rejected —<br/>original clip stays"]:::reject
-
-            locate --> anchor
-            anchor --> regen
-            regen --> reverify
-            reverify -->|"blocking FAIL"| keep
-        end
-
-        ledger["Metrics ledger<br/><i>metrics.py + report.py</i><br/>Append-only JSONL; derives the<br/>cost-quality frontier + report metrics"]:::container
-        store["Store + snapshots<br/><i>store.py, in-memory + JSON</i><br/>State under RLock; atomic state.json;<br/>content-addressed media cache"]:::container
-        subgraph reuse["Reuse surface — one run_shot_tests engine, exposed three ways"]
-            direction TB
-            fc["Skill 1 · function-calling tool<br/><i>qwen_tools.py</i><br/>RUN_SHOT_TESTS_TOOL (OpenAI-compat tools=)"]:::container
-            skill["Skill 2 · Qwen-Agent custom skill<br/><i>qwen_tools.py</i><br/>@register_tool BaseTool"]:::container
-            mcpsrv["Skill 3 · MCP server (producer)<br/><i>FastMCP stdio, mcp_server.py</i><br/>run_shot_tests (free) + patch_clip"]:::container
-            mcpcli["MCP client (consumer)<br/><i>Qwen-Agent, mcp_agent.py</i><br/>mcpServers block — closes the loop"]:::container
-        end
+        patch["Targeted repair<br/><i>post-run, one shot, outside the pipeline</i><br/>Re-render from the last good frame, re-check,<br/>keep the original clip if it still fails"]:::stage
+        ledger["Metrics ledger<br/><i>Container: append-only run log</i><br/>Every model call; derives the<br/>cost-quality frontier"]:::container
+        store["Store + snapshots<br/><i>Container: live-run state + media cache</i><br/>Atomic snapshots; identical requests replay for free"]:::container
+        reuse["Reuse surface<br/><i>Container: one conformance engine, three ways</i><br/>Function-calling tool · agent skill · MCP server,<br/>plus our own MCP client that closes the loop"]:::container
     end
 
-    qwen["Qwen Cloud<br/><i>External System</i><br/>qwen-plus · qwen-vl-plus · qwen3-tts-flash ·<br/>wan2.1-t2v-turbo / wan2.2-i2v-flash / wan2.1-t2i-plus"]:::external
+    qwen["Qwen Cloud<br/><i>External System</i><br/>qwen-plus (chat/repair) · qwen-vl-plus (VLM) ·<br/>qwen3-tts (speech) · Wan (text-to-image,<br/>text-to-video, image-to-video)"]:::external
     mcphost["MCP client host<br/><i>External System</i><br/>A Qwen agent / Claude"]:::external
-    disk["Storage volume<br/><i>local /data, bind-mounted</i><br/>state.json · ledger.jsonl · cache/sha1.mp4 or .png"]:::external
+    disk["Storage volume<br/><i>External: bind-mounted disk</i><br/>Snapshots, run log, cached media"]:::external
 
     operator --> spa
-    spa -->|"POST /api/projects, review, verdict;<br/>POST shots/:i/patch; GET poll 2.5s"| api
-    api -->|"patch one shot"| locate
-    reverify -->|"pass — becomes the shot final"| assemble
-    regen -->|"i2v/kf2v, separate quota pool"| qwen
-    api -->|"spawns thread"| script
-    api -->|"reads state + ledger to build report metrics"| store
+    spa -->|"submit a spec, approve the gate,<br/>poll the conformance report"| api
+    api -->|"starts the run"| script
+    api -->|"repair one shot after the run"| patch
+    api -->|"reads state + run log to build the report"| store
     api --> ledger
+    patch -->|"pass — becomes the shot final"| assemble
 
     script -->|"chat"| qwen
-    tier0 -->|"t2i"| qwen
-    draft -->|"t2v draft"| qwen
-    tierB -->|"VLM verdict"| qwen
+    gate -->|"still preview"| qwen
+    draft -->|"draft render"| qwen
+    checks -->|"VLM verdict"| qwen
     repair -->|"repair prompt"| qwen
-    promote -->|"t2v final"| qwen
-    narrate -->|"text-to-speech"| qwen
+    promote -->|"final render"| qwen
+    assemble -->|"narration"| qwen
+    patch -->|"re-render from anchor"| qwen
 
     pipe -->|"records every call"| ledger
     pipe -->|"mutates state, atomic snapshot"| store
     store --> disk
     ledger --> disk
 
-    fc -->|"reuses"| tierA
-    skill -->|"reuses"| tierA
-    mcpsrv -->|"reuses"| tierA
-    fc -->|"function-calling loop"| qwen
-    skill -->|"Qwen-Agent Assistant"| qwen
-    mcpcli -->|"mcpServers stdio — both ends ours"| mcpsrv
-    mcphost -->|"ListTools / CallTool (stdio)"| mcpsrv
+    reuse -->|"reuses the same engine"| checks
+    reuse -->|"agent + function-calling loop"| qwen
+    mcphost -->|"gate video like code"| reuse
 
     subgraph legend2["Legend / key"]
         direction LR
         k1["Person"]:::person
         k2["Container (in Dailies)"]:::container
-        k3["Pipeline stage"]:::stage
+        k3["Pipeline / repair stage"]:::stage
         k4["External system"]:::external
         k5["reject-before-spend / hard-fail"]:::reject
     end
@@ -191,6 +164,10 @@ Reading it as the request flows:
   a look. A shot whose contract asserts camera motion skips promotion and ships the approved
   take, because an anchor frame carries composition but not motion — measured, not assumed
   ([verification §3e](verification.md)).
+- **Targeted repair** (`server/patch.py`) is the post-run escape hatch: it re-measures the
+  failing window, cuts the last good frame as an anchor, re-renders one shot from there, and
+  re-verifies. A patch that still fails is discarded and the original clip stays — repair can
+  never make a run worse. It does not re-enter the pipeline.
 - **Metrics ledger** (`server/metrics.py`, `server/report.py`) records every Qwen/Wan call and
   derives the frontier / heatmap / repair-convergence numbers the dashboard charts.
 - **Store + snapshots** (`server/store.py`) is the live-run "database": in-memory state mutated
