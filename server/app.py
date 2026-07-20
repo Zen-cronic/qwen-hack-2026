@@ -14,12 +14,12 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from pydantic import BaseModel, Field
 
 from server.agent_plan import plan_from_message
 from server.compiler import available_packs, load_pack
-from server.config import settings
+from server.config import catalog_available, settings
 from server.metrics import LedgerWriter
 from server.patch import patch_shot
 from server.pipeline import Config, Deps, Pipeline
@@ -74,7 +74,13 @@ def create_app(runtime: Runtime) -> FastAPI:
         # runtime (opencv/numpy imports, store, deps) is fully wired. Lets `web`
         # gate on `app` being ready instead of merely started.
         mode = "demo" if settings.DAILIES_DEMO else "fixtures" if settings.DAILIES_FIXTURES else "real"
-        return {"status": "ok", "mode": mode}
+        payload = {"status": "ok", "mode": mode, "catalog": "off"}
+        if catalog_available():
+            # Bounded: a dead DB costs one 5s stall per 30s window (db.RETRY_COOLDOWN_S),
+            # well inside the healthcheck's retries budget; the probe itself stays 200.
+            from server import db
+            payload["catalog"] = "ok" if db.catalog_ready() else "unreachable"
+        return payload
 
     @app.post("/api/projects")
     def create_project(req: CreateReq):
@@ -180,14 +186,36 @@ def create_app(runtime: Runtime) -> FastAPI:
         # The old version stripped a "data/" prefix and rejoined onto DATA_ROOT,
         # which silently 404'd every thumbnail whenever DATA_DIR wasn't literally
         # "data" (e2e uses data/e2e).
+        #
+        # Local-first ladder: live runs serve bytes exactly as before; only when
+        # the local file is gone does the catalog answer with a 302 to a presigned
+        # OSS URL (signed inline, ~1h TTL — never stored). Traversal attempts fail
+        # the catalog's normalizer too, so they never reach the DB.
         fp = Path(path).resolve()
+        local_ok = False
         try:
             fp.relative_to(DATA_ROOT)  # reject path traversal
+            local_ok = fp.is_file()
         except ValueError:
-            raise HTTPException(404)
-        if not fp.is_file():
-            raise HTTPException(404)
-        return FileResponse(str(fp))
+            pass
+        if local_ok:
+            return FileResponse(str(fp))
+        if catalog_available():
+            from server import catalog
+            url = catalog.presigned_url_for_path(path)
+            if url:
+                # max-age well under the presign TTL: reuse trims redirect churn,
+                # expiry never outlives the signature.
+                return RedirectResponse(url, status_code=302,
+                                        headers={"Cache-Control": "private, max-age=600"})
+        raise HTTPException(404)
+
+    if catalog_available():
+        # Import inside the branch: with the flag off (or the optional deps
+        # absent) the app boots — and demo runs — without ever touching
+        # psycopg/OSS code paths.
+        from server.catalog_api import router as catalog_router
+        app.include_router(catalog_router)
 
     return app
 

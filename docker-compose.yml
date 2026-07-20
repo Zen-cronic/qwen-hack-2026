@@ -22,10 +22,24 @@ services:
       - JUDGE_MODE=${JUDGE_MODE:-1}
       # Set DAILIES_DEMO=1 for a fully zero-quota public demo (synthetic clips).
       - DAILIES_DEMO=${DAILIES_DEMO:-0}
+      # Catalog layer (optional): Postgres sidecar + OSS media. Off by default —
+      # with the flag unset the app never opens a DB connection or imports the OSS SDK.
+      - CATALOG_ENABLED=${CATALOG_ENABLED:-0}
+      - DATABASE_URL=${DATABASE_URL:-postgresql://dailies:${POSTGRES_PASSWORD:-dailies}@db:5432/dailies}
+      - OSS_ACCESS_KEY_ID=${OSS_ACCESS_KEY_ID:-}
+      - OSS_ACCESS_KEY_SECRET=${OSS_ACCESS_KEY_SECRET:-}
+      - OSS_BUCKET=${OSS_BUCKET:-}
+      - OSS_REGION=${OSS_REGION:-us-west-1}
+      - OSS_ENDPOINT=${OSS_ENDPOINT:-https://oss-us-west-1.aliyuncs.com}
+      - OSS_INTERNAL_ENDPOINT=${OSS_INTERNAL_ENDPOINT:-}
     volumes:
       - ./data:/app/data       # persist cache (rsync'd) + run state; survives restarts
     mem_limit: 3g
     restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_started   # started, NOT healthy: the app must boot fine with a
+                                     # dead DB (catalog degrades; demo path never depends on it)
     # Readiness gate: slim image has no curl, so probe with stdlib urllib. Marks
     # the container healthy only once uvicorn + the runtime (opencv/numpy) are up.
     healthcheck:
@@ -45,3 +59,26 @@ services:
       app:
         condition: service_healthy   # nginx starts only after the app is ready, not merely started
     restart: unless-stopped
+
+  db:
+    # Catalog sidecar. Never publicly exposed (no ports:) — the app reaches it on the
+    # compose network; seeding runs via `docker compose exec app python scripts/seed_catalog.py`.
+    image: postgres:18-alpine
+    environment:
+      - POSTGRES_DB=dailies
+      - POSTGRES_USER=dailies
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-dailies}
+    volumes:
+      # postgres:18 images moved the volume mount to /var/lib/postgresql (PGDATA is
+      # /var/lib/postgresql/18/docker). Mounting the old /var/lib/postgresql/data
+      # path leaves PGDATA on the container layer and silently loses data on recreate.
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dailies -d dailies"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  pgdata:   # named volume, not a ./data bind mount — keeps postgres-owned files out of the repo tree

@@ -171,6 +171,26 @@ class Pipeline:
             self._assemble()
         except Exception as exc:  # noqa: BLE001 — a background thread must not die silently
             self._set(lambda p: setattr_many(p, status=ProjectStatus.FAILED, error=str(exc)))
+        # AFTER the try/except on purpose: terminal state is already set and the
+        # SPA poll has its payload, so even a pathological publish bug can never
+        # flip a DONE project to FAILED. safe_publish itself swallows everything.
+        self._publish_catalog()
+
+    def _publish_catalog(self) -> None:
+        """Mirror a finished run into the catalog (Postgres + OSS). No-op unless
+        CATALOG_ENABLED; only DONE runs publish (failed ones stay local-only)."""
+        from server.config import catalog_available, settings
+
+        if not catalog_available():
+            return
+        p = self.store.get(self.pid)
+        if p is None or p.status is not ProjectStatus.DONE:
+            return
+        from server import catalog
+
+        source = ("demo" if settings.DAILIES_DEMO
+                  else "fixtures" if settings.DAILIES_FIXTURES else "live")
+        catalog.safe_publish(self.store, self.pid, source=source)
 
     # helpers
 

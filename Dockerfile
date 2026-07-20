@@ -17,6 +17,11 @@ WORKDIR /app
 COPY pyproject.toml LICENSE ./
 COPY server/ ./server/
 COPY packs/ ./packs/
+# Catalog layer: migrations run in-process at first pool open (server/db.py),
+# and seeding runs in-container (docker compose exec app python scripts/seed_catalog.py).
+COPY alembic.ini ./
+COPY alembic/ ./alembic/
+COPY scripts/ ./scripts/
 RUN pip install --no-cache-dir .
 # Paths are stored relative to the working dir (data/...); keep DATA_DIR relative
 # and mount the volume at /app/data so container behavior matches local dev exactly.
