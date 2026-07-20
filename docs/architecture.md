@@ -193,9 +193,16 @@ Reading it as the request flows:
   ([verification §3e](verification.md)).
 - **Metrics ledger** (`server/metrics.py`, `server/report.py`) records every Qwen/Wan call and
   derives the frontier / heatmap / repair-convergence numbers the dashboard charts.
-- **Store + snapshots** (`server/store.py`) is the "database": in-memory state mutated under an
-  RLock, written as an **atomic `state.json` snapshot** after each change, plus a
+- **Store + snapshots** (`server/store.py`) is the live-run "database": in-memory state mutated
+  under an RLock, written as an **atomic `state.json` snapshot** after each change, plus a
   **content-addressed media cache** so identical (model, prompt, seed) requests replay for free.
+- **Catalog (additive, flag-gated)** (`server/catalog.py`, `server/db/models.py`) is the
+  production data layer: when a run finishes, it publishes into a **Postgres sidecar**
+  (projects / shots / takes / assertion results / cast+voices / ledger — schema
+  Alembic-managed) with media uploaded to a **private Alibaba OSS bucket**, object keys in
+  columns, and `GET /api/media/...` answering with a presigned 302 when the local file is
+  gone. `CATALOG_ENABLED=0` (default) means none of it exists at runtime — live runs never
+  depend on it.
 - **Reuse surface** (`server/qwen_tools.py`, `server/mcp_server.py`, `server/mcp_agent.py`)
   exposes the same deterministic `run_shot_tests` engine to a Qwen model **three ways**: a native
   **function-calling tool**, a **Qwen-Agent custom skill** (`@register_tool`), and an **MCP server**
@@ -212,17 +219,24 @@ title: "Deployment — Alibaba Cloud SAS (single docker compose file)"
 flowchart LR
     internet["Internet / judges"]:::person
     qwen["Qwen Cloud"]:::external
-    subgraph sas["Alibaba Cloud SAS instance · Canada · Python 3.12"]
+    oss["Alibaba OSS<br/><i>private bucket · us-west-1</i><br/>published media, content-addressed<br/>(media/&lt;sha1&gt;.mp4/.png/.wav)"]:::external
+    subgraph sas["Alibaba Cloud SAS instance · US (Silicon Valley, us-west-1) · Python 3.12"]
         subgraph compose["docker compose (one multi-stage Dockerfile)"]
             web["web<br/><i>nginx:alpine</i><br/>serves web/dist, proxies /api → :80 (public)"]:::container
             app["app<br/><i>python:3.12-slim + ffmpeg</i><br/>uvicorn --factory → :8099 (internal)<br/>JUDGE_MODE=1 (fresh-clip cap; cached replays free)"]:::container
+            db["db<br/><i>postgres:18-alpine</i><br/>catalog of published runs<br/>(flag-gated, no public port)"]:::container
             vol["volume ./data:/data<br/><i>cache + state persist across restarts</i>"]:::external
+            pgvol["volume pgdata<br/><i>catalog rows persist across restarts</i>"]:::external
         end
     end
     internet -->|":80"| web
     web -->|"/api proxy"| app
     app --> vol
     app -->|"OpenAI-compat + native REST"| qwen
+    app -->|"psycopg pool<br/>(CATALOG_ENABLED)"| db
+    db --> pgvol
+    app -->|"uploads via internal endpoint<br/>(free same-region traffic)"| oss
+    internet -.->|"302 from /api/media →<br/>presigned GET (inline, ~1h)"| oss
 
     classDef person fill:#f5f0ff,stroke:#8250df,color:#1c1c22
     classDef container fill:#f6f8fa,stroke:#8b98a9,color:#24292f
