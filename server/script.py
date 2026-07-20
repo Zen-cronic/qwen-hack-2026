@@ -26,6 +26,10 @@ QC-checks short AI video shots. Break the premise into a short sequence of singl
 audio and hard-truncated at the shot's ~5 seconds, so a longer line is cut off mid-word. \
 Write the story, not the frame: it should carry meaning the picture cannot, and read as \
 one continuous voice-over when the shots play back to back. Never name the shot number.
+- speaker: optional; the character who SAYS that line, named EXACTLY as in subject so the \
+same character is recognised across shots. Set it only when the line is that character's \
+own words, and write those words in first person. Omit it for narrator voice-over, which \
+should be third person. Do NOT name a voice or an actor — casting is not yours to choose.
 - assertions: machine-checkable claims about the RENDERED clip, chosen ONLY from the \
 closed vocabulary below. Add one only when the prompt justifies it (a panning shot -> \
 camera_motion; a named character -> subject_present/identity_consistent; a finished \
@@ -37,7 +41,8 @@ Closed assertion vocabulary — use these types and params EXACTLY; never invent
 Do NOT restate duration/brightness/flicker/scene_cuts — those defaults are applied \
 automatically. Output STRICT JSON only:
 {{"shots": [{{"prompt": "...", "negative_prompt": "...", "subject": "...", \
-"narration": "...", "assertions": [{{"type": "...", "params": {{...}}}}]}}]}}"""
+"narration": "...", "speaker": "...", \
+"assertions": [{{"type": "...", "params": {{...}}}}]}}]}}"""
 
 
 def _vocabulary_doc() -> str:

@@ -81,6 +81,7 @@ def compile_shots(
                 negative_prompt=rs.get("negative_prompt"),
                 subject=rs.get("subject"),
                 narration=rs.get("narration"),
+                speaker=rs.get("speaker"),
                 assertions=merge_assertions(base_defaults, dynamic),
             )
         )

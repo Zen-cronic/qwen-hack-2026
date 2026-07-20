@@ -152,6 +152,7 @@ class ShotSpec(BaseModel):
     duration_s: int = 5  # fixed for wan2.1/2.2
     subject: str | None = None  # optional identity anchor for tier_b
     narration: str | None = None  # optional spoken line; falls back to the shot description
+    speaker: str | None = None    # who says it; None = narrator. Maps to a voice, never IS one
     assertions: list[Assertion] = Field(default_factory=list)
 
     @field_validator("prompt")

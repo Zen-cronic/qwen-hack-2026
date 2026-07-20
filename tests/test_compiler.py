@@ -110,3 +110,12 @@ def test_compile_shots_carries_narration_through():
 def test_compile_shots_without_narration_leaves_it_unset():
     pack = load_pack("short_drama")
     assert compile_shots([{"prompt": "a lighthouse at dusk"}], pack)[0].narration is None
+
+
+def test_compile_shots_carries_speaker_through():
+    pack = load_pack("short_drama")
+    specs = compile_shots(
+        [{"prompt": "a lighthouse at dusk", "narration": "I have turned this light.",
+          "speaker": "the keeper"}], pack
+    )
+    assert specs[0].speaker == "the keeper"
