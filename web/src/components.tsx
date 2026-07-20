@@ -475,6 +475,36 @@ function episodeSrc(project: Project): string {
   return `${base}?rev=${(h >>> 0).toString(36)}`;
 }
 
+/** Who speaks, and in whose voice.
+ *
+ *  Read straight off `project.cast`, which the server fixed at scripting — so this is the
+ *  mapping the narration actually used, not one reconstructed here from the shot list.
+ *  A single-narrator episode has no cast to show and renders nothing.
+ */
+function CastRow({ cast }: { cast: Record<string, string> }) {
+  const members = Object.entries(cast ?? {});
+  if (!members.length) return null;
+  return (
+    <Stack direction="row" spacing={1} data-testid="cast"
+      sx={{ mt: 1.5, alignItems: "center", flexWrap: "wrap", rowGap: 1 }}>
+      <Typography variant="overline" sx={{ color: "text.secondary", letterSpacing: "0.08em" }}>
+        Cast
+      </Typography>
+      {members.map(([who, voice]) => (
+        <Chip key={who} size="small" data-testid="cast-chip" label={
+          <Fragment>
+            {who}
+            <Box component="span" sx={{ fontFamily: mono, color: tokens.muted, ml: 0.75 }}>
+              {voice}
+            </Box>
+          </Fragment>
+        } sx={{ bgcolor: alpha(tokens.accent, 0.1), border: 1,
+                borderColor: alpha(tokens.accent, 0.28), fontSize: 11 }} />
+      ))}
+    </Stack>
+  );
+}
+
 export function FinalCut({ project }: { project: Project }) {
   const [copied, setCopied] = useState(false);
   if (!project.episode_path) return null;
@@ -494,6 +524,7 @@ export function FinalCut({ project }: { project: Project }) {
       </Stack>
       <Box component="video" controls src={src}
         sx={{ width: "100%", borderRadius: "10px", bgcolor: "#000", display: "block" }} />
+      <CastRow cast={project.cast} />
       <Stack direction="row" spacing={1.5} sx={{ mt: 1.25, alignItems: "center", flexWrap: "wrap" }}>
         <Typography variant="body2" color="text.secondary" sx={{ flex: 1, minWidth: 260 }}>
           {project.metrics.summary.certified}/{project.metrics.summary.shots_total} shots certified ·

@@ -244,7 +244,9 @@ export function deriveEdges(project: Project): Edge[] {
 export function planStubProject(plan: PipelinePlan): Project {
   return {
     id: "", premise: plan.premise, pack: plan.pack, max_shots: plan.max_shots,
-    custom_checks: plan.custom_checks, status: "planned", shots: [],
+    // Casting happens at scripting, which a plan has not reached — so a planned run has
+    // no cast yet, and the Cast row correctly shows nothing.
+    custom_checks: plan.custom_checks, cast: {}, status: "planned", shots: [],
     wallet: {
       draft_clips: 0, final_clips: 0, patch_clips: 0, images: 0,
       tokens_in: 0, tokens_out: 0, video_seconds: 0, est_usd: 0,

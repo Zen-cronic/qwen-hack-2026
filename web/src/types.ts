@@ -76,6 +76,7 @@ export interface Project {
   pack: string;
   max_shots: number;
   custom_checks: string[];
+  cast: Record<string, string>;  // speaker -> TTS voice, fixed at scripting
   status: string;
   shots: ShotState[];
   wallet: Wallet;
