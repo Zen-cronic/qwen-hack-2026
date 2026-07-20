@@ -222,7 +222,8 @@ flowchart LR
 
 A push to `main` triggers the deploy workflow (GitHub Actions → SSH → rebuild + health-gate;
 setup and failure signatures in [deploy.md](deploy.md)). Proof-of-deployment has two limbs: the
-sanctioned Qwen Cloud base URL visible in code (`.env.example`, `server/wan.py`,
-`server/app.py`) — done — and the Alibaba Cloud Workbench screenshot of running resources,
+sanctioned Qwen Cloud base URL visible in code (`server/config.py`, `server/wan.py`,
+`.env.example`, `docker-compose.yml`) — done — and the Alibaba Cloud Workbench screenshot of
+running resources,
 captured on the box at deploy time per the runbook's eligibility section. Backend compute runs
 on the SAS box, not just API calls from elsewhere.

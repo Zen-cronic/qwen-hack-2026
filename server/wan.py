@@ -1,5 +1,7 @@
 """Wan video + t2i client over the async DashScope task API, with a content-addressed replay cache.
 
+Talks to Alibaba Cloud Model Studio at https://dashscope-intl.aliyuncs.com (DASHSCOPE_BASE_URL).
+
 Two invariants: HTTP 200 on create does NOT mean valid (branch on the POLLED status), and
 result URLs are signed and expire, so download immediately.
 """
