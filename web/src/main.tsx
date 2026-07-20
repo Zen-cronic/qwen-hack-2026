@@ -1,5 +1,4 @@
-// Self-hosted typefaces: Vite fingerprints the woff2 files into dist/assets, so the
-// served page makes zero external requests (the deploy box may be network-restricted).
+// Self-hosted typefaces so the served page makes zero external requests.
 import "@fontsource-variable/instrument-sans";
 import "@fontsource/ibm-plex-mono/400.css";
 import "@fontsource/ibm-plex-mono/600.css";

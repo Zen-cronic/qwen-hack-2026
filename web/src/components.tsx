@@ -42,18 +42,14 @@ export function WalletMeter({ w, judge }: { w: Wallet; judge?: { judge_mode: boo
   );
 }
 
-// One-click starting points: a cold visitor (or judge) should reach a running
-// pipeline without composing a premise first.
+// One-click starting points so a cold visitor reaches a running pipeline.
 const SAMPLE_PREMISES = [
   "a corgi runs a bread heist through a crowded farmers' market",
   "a street cat assembles a crew for a fish-market heist",
   "a night-shift robot barista perfects latte art for its last customer",
 ];
 
-// The signature element: the closed assertion vocabulary as faint ambient texture
-// behind the hero. Honest (it is the real grammar from server/specs.py) and only
-// possible for a product that has a grammar. Decorative: hidden from the a11y tree,
-// never intercepts clicks, static.
+// Decorative hero texture: the real assertion grammar from server/specs.py.
 const AMBIENT_VOCAB: { t: string; sx: object }[] = [
   { t: "Runs 4–6 seconds", sx: { top: "7%", left: "2%", transform: "rotate(-7deg)" } },
   { t: "Neither too dark nor blown out", sx: { top: "24%", left: "5%", transform: "rotate(4deg)" } },
@@ -93,8 +89,7 @@ export function NewProject({ packs, busy, onCreate }: {
   const [pack, setPack] = useState("short_drama");
   const [maxShots, setMaxShots] = useState(3);
   const [customChecks, setCustomChecks] = useState("");
-  // Default-open: the checks field is part of the pitch (author your own checks),
-  // not an afterthought behind a disclosure.
+  // Default-open: authoring your own checks is part of the pitch.
   const [checksOpen, setChecksOpen] = useState(true);
   const submit = () =>
     onCreate(premise, pack, maxShots, customChecks.split("\n").map((s) => s.trim()).filter(Boolean));
@@ -177,8 +172,7 @@ export function NewProject({ packs, busy, onCreate }: {
   );
 }
 
-// The ten internal stages, grouped into the five phases a user actually follows.
-// The pill stays coarse; the caption underneath stays precise (raw stage + detail).
+// The ten internal stages grouped into the five phases a user follows.
 const PHASES: { label: string; stages: string[] }[] = [
   { label: "Script", stages: ["queued", "scripting"] },
   { label: "Stills", stages: ["tier0"] },
@@ -259,8 +253,7 @@ export function Pipeline({ status }: { status: string }) {
 }
 
 export function ReviewBar({ onApprove, shots }: { onApprove: () => void; shots?: ShotState[] }) {
-  // Tier-0 evidence summary: what the pre-render screen actually measured, so the
-  // approve decision is informed rather than a blind unlock.
+  // Tier-0 evidence summary, so approving is informed rather than a blind unlock.
   const t0 = (shots ?? []).flatMap((s) => s.tier0_results);
   const t0pass = t0.filter((r) => r.status === "pass").length;
   const summary = t0.length
@@ -291,8 +284,7 @@ export function ReviewBar({ onApprove, shots }: { onApprove: () => void; shots?:
   );
 }
 
-/** Where in the clip a check failed, when Tier-A could localize it. `measured` is an
- *  open bag from the server, so the shape is verified before it's trusted. */
+/** Where in the clip a check failed. `measured` is an open bag, so verify the shape. */
 function failWindow(r: AssertionResult): [number, number] | null {
   const raw = r.measured?.fail_window_s;
   if (!Array.isArray(raw) || raw.length !== 2) return null;
@@ -308,9 +300,7 @@ function Check({ r, onVerdict }: { r: AssertionResult; onVerdict?: (v: string) =
       <Box sx={{ width: 9, height: 9, borderRadius: "50%", mt: "4px", flex: "none", bgcolor: statusColor(r.status) }} />
       <Box sx={{ minWidth: 0 }}>
         <Box>
-          {/* The machine name is the reproducibility receipt, but it is not display copy —
-              it rides on `title` for anyone who goes looking, and the visible badge says
-              the thing a person actually needs: was this measured, or judged? */}
+          {/* Machine name rides on `title`; the visible badge says measured vs judged. */}
           <Typography component="span" title={r.type} sx={{ fontSize: 12.5, fontWeight: 600 }}>{checkLabel(r)}</Typography>
           <Box component="span" sx={{ fontSize: 9, color: "text.secondary", border: 1, borderColor: "divider", borderRadius: "4px", px: 0.5, ml: 0.75 }}>
             {r.advisory ? "advisory" : "measured"}
@@ -343,8 +333,7 @@ const badgeSx = (badge: string) => {
   return { bgcolor: alpha(c, 0.16), color: c, border: 1, borderColor: alpha(c, 0.4), fontSize: 11 };
 };
 
-// Mirrors ANCHOR_LEAD_S in server/patch.py: the button names the second the server
-// will actually anchor at, so the label is a promise rather than an approximation.
+// Must match ANCHOR_LEAD_S in server/patch.py — the label promises the anchor second.
 const ANCHOR_LEAD_S = 0.2;
 
 export function ShotCard({ shot, onVerdict, onPatch }: {
@@ -361,8 +350,7 @@ export function ShotCard({ shot, onVerdict, onPatch }: {
   const thumb = take?.results.find((r) => r.evidence.length)?.evidence[0] ?? shot.still_path;
   const badge = shot.certified ? "certified" : shot.status === "failed" ? "failed" : "working";
 
-  // Patching always acts on the LATEST take, so the offer is keyed to that one — not
-  // to whichever take the user happens to be inspecting.
+  // Patching always acts on the LATEST take, not the one being inspected.
   const latest = takes.length ? takes[takes.length - 1] : undefined;
   const target = latest?.results.find((r) => !r.advisory && r.status === "fail" && failWindow(r));
   const anchorS = target ? Math.max(0, failWindow(target)![0] - ANCHOR_LEAD_S) : 0;
@@ -461,11 +449,8 @@ export function ConformanceBoard({ project, onVerdict, onPatch }: {
   );
 }
 
-// The episode file keeps a stable path (episode.mp4), but its BYTES change whenever a
-// shot is patched and the cut is re-concatenated. Without a changing URL the <video>
-// element replays the browser-cached old cut — the patched clip, and its restored
-// narration, would never appear. Key the URL on the certified takes so it changes
-// exactly when the episode does.
+// episode.mp4 keeps a stable path but its bytes change on every patch, so the URL must
+// be keyed on the certified takes or <video> replays the browser-cached old cut.
 function episodeSrc(project: Project): string {
   const base = mediaUrl(project.episode_path);
   if (!base) return "";
@@ -475,12 +460,7 @@ function episodeSrc(project: Project): string {
   return `${base}?rev=${(h >>> 0).toString(36)}`;
 }
 
-/** Who speaks, and in whose voice.
- *
- *  Read straight off `project.cast`, which the server fixed at scripting — so this is the
- *  mapping the narration actually used, not one reconstructed here from the shot list.
- *  A single-narrator episode has no cast to show and renders nothing.
- */
+/** Who speaks, in whose voice — read off `project.cast`, fixed by the server at scripting. */
 function CastRow({ cast }: { cast: Record<string, string> }) {
   const members = Object.entries(cast ?? {});
   if (!members.length) return null;

@@ -1,25 +1,15 @@
 import { test, expect } from "@playwright/test";
 import type { AssertionResult, Project, ShotState } from "../src/types";
 
-/** The graph's per-node re-render button, on a shot that actually failed.
- *
- *  Both the demo and fixture runs end fully certified — the repair loop closes every
- *  blocking failure — so this control never appears in either suite and shipped
- *  unlooked-at. The payload is typed as `Project`, so the compiler holds it to the same
- *  shape `GET /api/projects/{pid}` returns; only the transport is stubbed, while the
- *  derive path (graph.ts) and the button (nodes.tsx) are the real ones.
- *
- *  It is written here rather than captured from a live run on purpose: a dumped payload
- *  carries local filesystem paths and run ids, which do not belong in the repo.
- */
+/** The graph's per-node re-render button, on a shot that actually failed — a case the demo
+ *  and fixture runs never reach. Typed as `Project` so it stays in step with the API shape. */
 const failing = (window: [number, number]): AssertionResult => ({
   type: "camera_motion", tier: "tier_a", advisory: false, status: "fail",
   detail: "camera static, |v|=0.005 (want right)",
   measured: { fail_window_s: window }, evidence: [], params: { direction: "right" },
 });
 
-// The pack defaults every shot carries, so the check nodes render the chip set a real run
-// shows rather than a bare node.
+// The pack defaults every shot carries, so check nodes render a realistic chip set.
 const passing = (type: string): AssertionResult => ({
   type, tier: "tier_a", advisory: false, status: "pass", detail: "measured",
   measured: {}, evidence: [], params: {},
@@ -39,8 +29,7 @@ const shot = (index: number, certified: boolean, extra: AssertionResult[]): Shot
   certified, final_path: certified ? `shot${index}.mp4` : null,
 });
 
-// Shot 1 is static for its whole duration, so Tier-A localises the failure to [0, 4.88] —
-// the shape the planted kill-shot actually produces.
+// Shot 1 is static throughout, so Tier-A localises the failure to [0, 4.88].
 const project: Project = {
   id: "failshot", premise: "a lonely lighthouse keeper", pack: "short_drama", max_shots: 3,
   custom_checks: [], cast: {}, status: "done",
@@ -64,14 +53,12 @@ test("a failed shot offers a re-render on its check node", async ({ page }) => {
 
   await page.getByTestId("graph").waitFor({ state: "visible" });
 
-  // Exactly one shot failed, so exactly one node offers the re-render: the control is
-  // gated on a blocking Tier-A failure, not merely on "this shot is not certified".
+  // The control is gated on a blocking Tier-A failure, not on "this shot is not certified".
   const patch = page.getByTestId("node-patch");
   await expect(patch).toHaveCount(1);
   await expect(patch).toBeVisible();
 
-  // This window opens at t=0, so there is no frame to anchor to and the server will
-  // re-roll the whole clip. The label must not name a second it will not honour.
+  // A window opening at t=0 has no frame to anchor to, so the label must not name a second.
   await expect(patch).toHaveText("⟲ re-render this shot");
 
   if (process.env.SCREENSHOTS) {
@@ -91,7 +78,6 @@ test("a mid-clip failure names the second it will anchor at", async ({ page }) =
   await page.goto("/?p=failshot");
 
   await page.getByTestId("graph").waitFor({ state: "visible" });
-  // 1.5 - ANCHOR_LEAD_S, the same arithmetic server/patch.py does — the label is a
-  // promise about where the re-render starts, not an approximation.
+  // 1.5 - ANCHOR_LEAD_S, the same arithmetic server/patch.py does.
   await expect(page.getByTestId("node-patch")).toHaveText("⟲ re-render from 1.3s");
 });

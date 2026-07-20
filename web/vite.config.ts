@@ -1,8 +1,7 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
-// Dev server proxies /api to the FastAPI backend; build emits static dist/ for
-// nginx (prod) or the FastAPI StaticFiles mount (single-origin local run).
+// Dev server proxies /api to the FastAPI backend; build emits static dist/.
 export default defineConfig({
   plugins: [react()],
   server: {

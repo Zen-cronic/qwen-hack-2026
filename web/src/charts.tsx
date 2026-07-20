@@ -15,9 +15,7 @@ const tip = {
   labelStyle: { color: tokens.muted },
 };
 
-// The closed vocabulary is fixed (server/specs.py), so the tier of a type is a
-// stable frontend constant — lets the dashboard split verification volume by tier
-// without shipping tier on every heatmap row.
+// Must stay in sync with the closed vocabulary in server/specs.py.
 const TIER_A_TYPES = new Set([
   "duration_between", "brightness_range", "flicker_below", "scene_cuts", "camera_motion", "palette_deltae",
 ]);
@@ -47,15 +45,13 @@ function Legend({ items }: { items: { c: string; label: string }[] }) {
 }
 
 export function ChartsPanel({ m }: { m: Metrics }) {
-  // `label` is what the axis shows; `type` stays on the datum so the tooltip can still
-  // name the machine check — the axis is for scanning, the tooltip is for citing.
+  // `label` is for the axis; `type` stays on the datum so the tooltip can cite the check.
   const heat = Object.entries(m.heatmap).map(([type, c]) => ({
     type, label: shortLabel(type), pass: c.pass, fail: c.fail, inconclusive: c.inconclusive,
   }));
   const frontier = m.frontier.map((f) => ({ ...f, quality: Math.round(f.quality * 100) }));
 
-  // Every take as one point. (shot, take) is unique, so nothing overplots: reading a
-  // shot's row left to right is the repair loop's trajectory for that shot.
+  // Every take as one point; (shot, take) is unique, so nothing overplots.
   const conv = m.convergence ?? [];
   const maxTake = conv.reduce((n, t) => Math.max(n, t.take), 0);
   const shotCount = conv.reduce((n, t) => Math.max(n, t.shot + 1), 0);
@@ -68,10 +64,7 @@ export function ChartsPanel({ m }: { m: Metrics }) {
   const tierA = cells.reduce((n, [t, c]) => n + (TIER_A_TYPES.has(t) ? c.total : 0), 0);
   const tierB = cells.reduce((n, [t, c]) => n + (TIER_B_TYPES.has(t) ? c.total : 0), 0);
 
-  // Progressive disclosure: before any take exists (pre-approval, early drafting)
-  // there is nothing to chart, and a wall of empty panels reads as a broken product.
-  // The panels mount as data lands; the per-panel empty states still cover the
-  // mid-run window where one chart fills before another.
+  // Nothing to chart before the first take — a wall of empty panels reads as broken.
   if (heat.length === 0 && frontier.length === 0 && conv.length === 0) return null;
 
   return (
@@ -111,11 +104,8 @@ export function ChartsPanel({ m }: { m: Metrics }) {
               <ResponsiveContainer width="100%" height={240}>
                 <ScatterChart margin={{ left: 0, bottom: 12 }}>
                   <CartesianGrid stroke={tokens.border} />
-                  {/* X is PRODUCTION cost (billed + cache-replayed seconds), not this run's
-                      bill: on a warm re-verify every shot bills 0, and a frontier where all
-                      x=0 says nothing in exactly the mode judges re-run. The caption below
-                      states the replay honestly. Axis padding is load-bearing: certified
-                      shots sit at quality=100 and would render as half-clipped slivers. */}
+                  {/* X is PRODUCTION cost, not this run's bill — a warm re-verify bills 0.
+                      Axis padding is load-bearing: quality=100 points would clip. */}
                   <XAxis type="number" dataKey="production_seconds" name="production cost"
                     padding={{ left: 22, right: 22 }} tick={{ fill: tokens.muted, fontSize: 11 }}
                     label={{ value: "production cost (video s)", fill: tokens.muted, fontSize: 11, position: "insideBottom", offset: -6 }} />

@@ -1,10 +1,5 @@
-/** The headline surface: a request in plain language, and a Qwen agent wires the pipeline.
- *
- * The agent calls the build_pipeline_graph tool; the server expands the parameters into the
- * canonical graph and returns it with the tool-call transcript. We render that plan on the
- * same PipelineGraph the live run uses (a stub Project), with a staggered reveal, then hand
- * the parameters to the existing create flow to actually run it.
- */
+/** Plain-language request in; a Qwen agent wires the pipeline and we render its plan on
+ *  the same PipelineGraph a live run uses. */
 import { useState } from "react";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
@@ -22,21 +17,15 @@ import { mono, tokens } from "./theme";
 import { packLabel } from "./vocabulary";
 import type { PipelinePlan, PlanTranscriptEntry } from "./types";
 
-// The first one is prefilled, so it is the request most visitors actually run — which makes
-// its custom check a choice about what the charts show. It asks for a title card (advisory)
-// rather than a pan, because a pan applies to EVERY shot: all three then fail take 0, nothing
-// promotes to a final, and the cost-quality frontier collapses to a single dot. The kill-shot
-// does not need the help — shot 1's camera_motion is in the storyboard (server/demo.py), so it
-// fires either way, and leaving the pan out of the custom check is what keeps the frontier
-// readable. Same reasoning as web/e2e/demo-flow.spec.ts.
+// The prefilled first request asks for a title card, not a pan: a pan fails every shot's
+// take 0 and collapses the frontier to one dot. Same reasoning as e2e/demo-flow.spec.ts.
 const SAMPLE_REQUESTS = [
   "a corgi pulls off a heist at the farmers' market, 3 shots — must end on a title card",
   "a 3-shot noir chase that must end on a title card",
   "a 2-shot brand promo — stay on our palette, camera pans right",
 ];
 
-// Pretty-print the tool arguments for the evidence panel — the receipt that a Qwen
-// custom tool, not hand-wiring, produced this pipeline.
+// Pretty-print the tool arguments for the evidence panel.
 function toolCall(t: PlanTranscriptEntry): string {
   if (!t?.name) return "";
   let args = t.arguments ?? "{}";

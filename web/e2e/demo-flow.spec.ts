@@ -1,18 +1,12 @@
 import { expect, test } from "@playwright/test";
 
 /** The whole user journey on the demo runtime: premise in, certified episode out.
- *
- * Set SCREENSHOTS=1 to also refresh the two README screenshots from this run
- * (review gate + finished dashboard) — kept behind a flag so CI runs stay clean.
- */
+ *  SCREENSHOTS=1 also refreshes the two README screenshots from this run. */
 test("premise → review gate → certified episode, with live charts", async ({ page, request }) => {
   await page.goto("/");
 
-  // New-run panel: prompt-first entry, sample premise prefilled. The custom check
-  // is deliberately an ADVISORY one (title card): it exercises the plain-language →
-  // vocabulary path without forcing a retake on every shot — "pan right" here would
-  // make all three shots fail take 0 and flatten the frontier to one equal-cost dot,
-  // hiding the planted kill-shot's 15s-vs-10s cost story the charts exist to tell.
+  // The custom check must stay ADVISORY (title card): "pan right" would fail every shot's
+  // take 0 and flatten the frontier to one equal-cost dot.
   await expect(page.getByTestId("premise")).toBeVisible();
   await expect(page.getByTestId("premise")).not.toHaveValue("");
   await page.getByTestId("custom-checks").fill("a title card must be visible");
@@ -26,9 +20,8 @@ test("premise → review gate → certified episode, with live charts", async ({
   await expect(page.getByTestId("reviewbar")).toBeVisible({ timeout: 60_000 });
   await expect(page.getByTestId("tier0-summary")).toContainText("Tier-0");
 
-  // The still thumbnails must actually LOAD, not just render an <img> tag: the
-  // media route once 404'd every still under a non-default DATA_DIR and the only
-  // visible symptom was broken-image icons a DOM assertion can't see.
+  // Thumbnails must actually LOAD, not just render an <img>: a broken media route only
+  // shows up as broken-image icons, which a DOM assertion can't see.
   const firstThumb = page.getByTestId("shot").first().locator("img");
   await expect(firstThumb).toBeVisible();
   await expect
@@ -37,8 +30,7 @@ test("premise → review gate → certified episode, with live charts", async ({
   if (process.env.SCREENSHOTS) await page.screenshot({ path: "../dailies-review.png", fullPage: true });
   await page.getByTestId("approve").click();
 
-  // Demo spine: draft → Tier-A catches the planted static-camera kill-shot →
-  // repair issues a retake → the retake pans right and passes → assemble.
+  // Demo spine: draft → Tier-A catches the planted kill-shot → retake passes → assemble.
   await expect(page.getByTestId("finalcut")).toBeVisible({ timeout: 120_000 });
   await expect(page.getByTestId("shot")).toHaveCount(3);
   await expect(page.getByTestId("shot-badge").filter({ hasText: "certified" }).first()).toBeVisible();
@@ -50,8 +42,7 @@ test("premise → review gate → certified episode, with live charts", async ({
   await expect(charts.getByText("No takes yet.")).toHaveCount(0);
   expect(await charts.locator(".recharts-scatter-symbol").count()).toBeGreaterThan(0);
 
-  // API-level regression for panel deduction #16: on a cold run the frontier must
-  // carry real cost signal, not collapse to a single cost=0 dot.
+  // Regression: on a cold run the frontier must carry real cost signal, not collapse to 0.
   const id = new URL(page.url()).searchParams.get("p");
   expect(id).toBeTruthy();
   const proj = await (await request.get(`/api/projects/${id}`)).json();
@@ -63,9 +54,8 @@ test("premise → review gate → certified episode, with live charts", async ({
   expect(proj.shots[1].certified).toBeTruthy();
 
   if (process.env.SCREENSHOTS) {
-    // Let the episode player paint a real frame — a black rectangle with a spinner
-    // is not a deliverable screenshot of a "certified episode". Headless Chromium
-    // doesn't render a frame until a seek completes, even at readyState >= 2.
+    // Headless Chromium won't paint a video frame until a seek completes, even at
+    // readyState >= 2 — without this the screenshot is a black rectangle.
     await page.waitForFunction(() => {
       const v = document.querySelector("video");
       return v !== null && v.readyState >= 2;
@@ -87,10 +77,8 @@ test("premise → review gate → certified episode, with live charts", async ({
   await expect(page.getByTestId("finalcut")).toBeVisible({ timeout: 15_000 });
 });
 
-/** Warm re-verify — the judge-mode path. Same premise twice: the second run is served
- * entirely from the content-addressed cache, bills zero video-seconds, and the frontier
- * must still read (production cost per shot, replay note visible) instead of collapsing
- * every shot to a single dot at cost=0 — the original panel deduction #16. */
+/** Warm re-verify: the second run replays the cache, bills zero video-seconds, and the
+ *  frontier must still read instead of collapsing every shot to one dot at cost=0. */
 test("a fully cached re-run keeps the frontier readable and the bill at zero", async ({ page, request }) => {
   const run = async () => {
     await page.goto("/");

@@ -1,22 +1,10 @@
 import { test } from "@playwright/test";
 
-/** Regenerate the two README screenshots from the REAL-video fixtures runtime, so
- *  dailies-review.png / dailies-done.png show actual Wan footage + qwen-tts narration
- *  instead of synthetic slates.
- *
- *  Warm the cache first (one-time real spend):
- *      ~/.pyenv/versions/.qwen-hack/bin/python scripts/warm_fixtures.py
- *  Then:  npm --prefix web run shots:fixtures
- *
- *  Deliberately separate from the hermetic demo suite (e2e/demo-flow.spec.ts): this run has
- *  NO cold-cost assertions, because a warm fixtures cache replays every clip for free — the
- *  exact opposite of what the frontier-cost regression test needs. It only drives the flow
- *  far enough to capture the two frames.
- */
+/** Regenerates the README screenshots from the real-video fixtures runtime. Warm the cache
+ *  first (scripts/warm_fixtures.py), then: npm --prefix web run shots:fixtures */
 test("real-footage screenshots: review gate + certified episode", async ({ page }) => {
   await page.goto("/");
-  // Fixtures ignores the premise (pinned shots) and compiles no custom checks; the default
-  // pack (short_drama) is what its assertions target, so a bare create is all it needs.
+  // Fixtures pins its shots and targets the default pack, so a bare create is all it needs.
   await page.getByTestId("create").click();
 
   // Review gate — real Tier-0 qwen-vl on the real still.

@@ -1,18 +1,8 @@
 /** Plain-language names for the closed assertion vocabulary and the pipeline stages.
- *
- * The machine names ARE the product — a closed DSL is the thing rivals don't have, and
- * the hero shows it off deliberately. But `subject_present` on a result row tells a
- * showrunner nothing, and worse, it hides the part they care about: WHICH subject. So
- * the rule here is translate, never replace — every surface shows the sentence a person
- * reads and keeps the machine token beside it, in mono, as the receipt.
- *
- * Phrasing follows the interface's voice: plain verbs, sentence case, describing what
- * must be true of the footage rather than how the check is implemented.
- */
+ *  Translate, never replace: every surface keeps the machine token beside the sentence. */
 import type { AssertionResult } from "./types";
 
-/** Subjects arrive from the script agent either phrased ("the corgi") or
- *  slugged ("ginger_street_cat"). Normalize both to something readable mid-sentence. */
+/** Subjects arrive phrased ("the corgi") or slugged ("ginger_street_cat") — normalize both. */
 export function humanizeSubject(raw: unknown): string {
   const s = typeof raw === "string" ? raw.trim() : "";
   if (!s) return "the subject";
@@ -25,10 +15,8 @@ const num = (v: number) => String(Number.isInteger(v) ? v : Number(v.toFixed(1))
 
 const isNum = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
 
-/** Param-free phrasing, for results recorded before `params` rode along on the wire (or
- *  by any producer that omits them). Still a sentence a person can read — an earlier
- *  version interpolated missing values and rendered "Runs ?–? seconds", which is worse
- *  than the machine name it replaced. Degrade to vaguer, never to broken. */
+/** Param-free phrasing for producers that omit `params` — degrade to vaguer, never broken
+ *  (never interpolate missing values, which renders "Runs ?–? seconds"). */
 const GENERIC: Record<string, string> = {
   duration_between: "Runs the expected length",
   scene_cuts: "No more cuts than allowed",
@@ -54,9 +42,8 @@ export const SHORT_LABEL: Record<string, string> = {
 
 export const shortLabel = (type: string) => SHORT_LABEL[type] ?? type.replace(/_/g, " ");
 
-/** The full sentence for a result row: what this check requires of the footage.
- *  Params are folded in, because "at most 1 cut" and "no cuts at all" are different
- *  promises and the type name alone cannot tell them apart. */
+/** The full sentence for a result row, with params folded in — "at most 1 cut" and
+ *  "no cuts at all" are different promises the type name alone can't distinguish. */
 export function checkLabel(r: Pick<AssertionResult, "type" | "params">): string {
   const p = (r.params ?? {}) as Record<string, unknown>;
   const generic = GENERIC[r.type] ?? sentence(r.type.replace(/_/g, " "));
@@ -99,8 +86,7 @@ export function checkLabel(r: Pick<AssertionResult, "type" | "params">): string 
   }
 }
 
-/** Rule packs. The YAML filename is the id; a person picking one wants to know what
- *  kind of show it protects, not what the file is called. */
+/** Rule packs — keys are the YAML filenames that serve as pack ids. */
 export const PACK_LABEL: Record<string, string> = {
   short_drama: "Short drama — continuity",
   brand_rules: "Brand safety",
@@ -108,8 +94,7 @@ export const PACK_LABEL: Record<string, string> = {
 
 export const packLabel = (name: string) => PACK_LABEL[name] ?? name.replace(/[_-]+/g, " ");
 
-/** Pipeline stages. The internal status is a state-machine token — the operator wants
- *  to know what is happening to their episode right now, in their own words. */
+/** Pipeline stages — keys are the server's state-machine status tokens. */
 export const STAGE_LABEL: Record<string, string> = {
   queued: "Queued",
   scripting: "Writing the shot list",

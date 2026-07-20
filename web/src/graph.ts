@@ -1,14 +1,5 @@
-/** Derive a React Flow graph from a Project snapshot — the pipeline as a node graph.
- *
- * This is a pure function of the polled state: the same `ProjectState` the board and
- * stepper already read, reshaped into nodes + edges. It invents no new status — every
- * node's state is read off the shots/takes/results the server produced, so the canvas
- * stays a faithful view of the real run and updates on the ordinary 2.5s poll.
- *
- * The id scheme (script, stills, review, gen-{i}, check-{i}, assemble, episode) is
- * canonical and shared with the server-side plan expander, so a plan-drawn canvas and a
- * live-run canvas are the same nodes — live status merges straight in.
- */
+/** Derive a React Flow graph from a Project snapshot — pure, from the polled state.
+ *  Node ids (script/stills/review/gen-{i}/check-{i}/assemble/episode) must match the server's plan expander. */
 import { type Edge, type Node, Position } from "@xyflow/react";
 import { shortLabel } from "./vocabulary";
 import type { AssertionResult, PipelinePlan, Project, ShotState } from "./types";
@@ -18,8 +9,7 @@ export type NodeStatus =
 
 export type NodeKind = "stage" | "review" | "shot" | "check" | "episode";
 
-// React Flow requires node data to be an index-signed record; the typed fields below
-// are what the custom node components read.
+// React Flow requires node data to be an index-signed record.
 export interface DNodeData {
   kind: NodeKind;
   label: string;
@@ -31,9 +21,7 @@ export interface DNodeData {
   shotIndex?: number;
   episodePath?: string | null;
   enterDelay?: number;                // ms; set only for the staggered plan reveal
-  // Patch affordance — derived here (pure), wired to a handler at the PipelineGraph
-  // boundary. Set on a check node whose shot's latest take has a localizable blocking
-  // failure, so the graph offers a re-render exactly where the board does.
+  // Patch affordance — derived here, wired to a handler at the PipelineGraph boundary.
   patchable?: boolean;
   anchorS?: number;                   // the second the re-render will anchor at
   failLabel?: string;                 // the blocking check that isn't true yet
@@ -43,8 +31,7 @@ export interface DNodeData {
 
 export type DNode = Node<DNodeData>;
 
-// The linear order of the pipeline's project-level statuses, used only to ask
-// "are we past stage X yet?" for the spine nodes. `failed` is off the line (rank -1).
+// Project-level status order, for "are we past stage X yet?". `failed` is off it (-1).
 const STATUS_ORDER = [
   "queued", "scripting", "tier0", "awaiting_review",
   "drafting", "verifying", "repairing", "promoting", "assembling", "done",
@@ -54,9 +41,7 @@ const rank = (s: string) => STATUS_ORDER.indexOf(s);
 const latestTake = (shot: ShotState) =>
   shot.takes.length ? shot.takes[shot.takes.length - 1] : undefined;
 
-// Mirrors server/patch.py's ANCHOR_LEAD_S and ShotCard's patch gate: the graph offers a
-// re-render on exactly the shots the board does, anchored at the same second, so the two
-// surfaces never disagree about whether a shot is patchable.
+// Must match ANCHOR_LEAD_S in server/patch.py and in components.tsx (ShotCard's gate).
 const ANCHOR_LEAD_S = 0.2;
 
 function failWindow(r: AssertionResult): [number, number] | null {
@@ -66,17 +51,14 @@ function failWindow(r: AssertionResult): [number, number] | null {
   return typeof lo === "number" && typeof hi === "number" ? [lo, hi] : null;
 }
 
-// The blocking Tier-A failure on a shot's LATEST take that a patch would target — a
-// non-advisory fail Tier-A could localize in time. Advisory flags never block, so they
-// never justify spending a re-render (the same rule the server enforces).
+// The blocking failure a patch targets: non-advisory, failed, localizable, latest take.
 function patchTarget(shot: ShotState): AssertionResult | undefined {
   return latestTake(shot)?.results.find(
     (r) => !r.advisory && r.status === "fail" && failWindow(r),
   );
 }
 
-// A clip was produced for this shot — mirrors ShotCard's thumb rule (first evidence
-// frame of the latest take, else the pre-render still).
+// Mirrors ShotCard's thumb rule: first evidence frame of the latest take, else the still.
 function shotThumb(shot: ShotState): string | null {
   const t = latestTake(shot);
   return t?.results.find((r) => r.evidence.length)?.evidence[0] ?? shot.still_path;
@@ -102,9 +84,7 @@ function checkState(shot: ShotState): { status: NodeStatus; checks: DNodeData["c
   return { status, checks };
 }
 
-// Layout: a left-to-right spine (script > stills > review > assemble > episode) with a
-// per-shot fan-out (gen > check) between review and assemble. Static coordinates — the
-// topology is fixed, so there's no need for a layout engine.
+// Static layout: a left-to-right spine with a per-shot fan-out between review and assemble.
 const COL = 210;
 const ROW = 148;
 const col = (i: number) => i * COL;
@@ -169,8 +149,7 @@ export function deriveNodes(project: Project): DNode[] {
       data: {
         kind: "shot", label: `Shot ${i}`, status: g, shotIndex: i,
         model: t?.model, thumb: shot ? shotThumb(shot) : null,
-        // "final", not "premium": promotion is a frame-anchored i2v continuation now, and
-        // the node header already names the model right above this line.
+        // "final", not "premium": promotion is a frame-anchored i2v continuation.
         caption: t?.tier === "final" ? "final take" : t ? "draft take" : "generate",
       },
     });
@@ -216,8 +195,7 @@ export function deriveNodes(project: Project): DNode[] {
 export function deriveEdges(project: Project): Edge[] {
   const n = project.shots.length || project.max_shots || 3;
   const byId = new Map(deriveNodes(project).map((nd) => [nd.id, nd.data.status]));
-  // An edge flows (animated + accent) when its source has completed and its target is
-  // the active frontier — the eye follows work moving down the pipeline.
+  // An edge flows when its source has completed and its target is the active frontier.
   const flows = (src: string, dst: string) => {
     const s = byId.get(src);
     const d = byId.get(dst);
@@ -240,14 +218,12 @@ export function deriveEdges(project: Project): Edge[] {
   return edges;
 }
 
-// A Project-shaped stub so an agent-authored plan renders through the exact same derive
-// path as a live run. status "planned" is off the pipeline's status line, so every node
-// reads idle — the graph shows its full shape before anything has run.
+// A Project-shaped stub so a plan renders through the same derive path as a live run.
+// status "planned" is off the status line, so every node reads idle.
 export function planStubProject(plan: PipelinePlan): Project {
   return {
     id: "", premise: plan.premise, pack: plan.pack, max_shots: plan.max_shots,
-    // Casting happens at scripting, which a plan has not reached — so a planned run has
-    // no cast yet, and the Cast row correctly shows nothing.
+    // Casting happens at scripting, which a plan has not reached — so no cast yet.
     custom_checks: plan.custom_checks, cast: {}, status: "planned", shots: [],
     wallet: {
       draft_clips: 0, final_clips: 0, patch_clips: 0, images: 0,

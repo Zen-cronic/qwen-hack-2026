@@ -1,10 +1,7 @@
 import { defineConfig } from "@playwright/test";
 
-// Screenshot-only config: drives the REAL-video fixtures runtime to regenerate the README
-// images from actual Wan footage + qwen-tts narration. Unlike the demo suite it does NOT
-// wipe DATA_DIR — it replays the warm cache (scripts/warm_fixtures.py) instead of spending.
-// Requires a warm cache and a live QWEN_API_KEY (fixtures runs real qwen-vl checks).
-// The hermetic demo suite (playwright.config.ts) is untouched and stays the default e2e.
+// Screenshot-only config for the real-video fixtures runtime. Must NOT wipe DATA_DIR — it
+// replays the warm cache (scripts/warm_fixtures.py); also needs a live QWEN_API_KEY.
 export default defineConfig({
   testDir: "./e2e-fixtures",
   timeout: 900_000,

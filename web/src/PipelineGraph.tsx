@@ -1,10 +1,5 @@
-/** The pipeline as a live node graph — the hero surface of a run.
- *
- * Read-only: nodes and edges are derived from the polled Project each render, so the
- * canvas animates as the real pipeline advances. The controlled useNodesState/useEdgesState
- * pattern lets React Flow keep measuring node sizes (needed for edge routing) while we
- * replace the derived data on every 2.5s poll.
- */
+/** The pipeline as a live, read-only node graph, re-derived from the polled Project.
+ *  useNodesState/useEdgesState is required so React Flow keeps measuring node sizes. */
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import Box from "@mui/material/Box";
 import Stack from "@mui/material/Stack";
@@ -31,17 +26,14 @@ export function PipelineGraph({ project, stagger = false, onPatch }: {
   stagger?: boolean;
   onPatch?: (shotIndex: number) => Promise<void>;
 }) {
-  // A stable wrapper so injecting the handler into node data never churns the memo on a
-  // parent re-render; the ref always points at App's latest onPatch. hasPatch (a boolean)
-  // is the only presence signal the memo depends on.
+  // A stable wrapper so injecting the handler never churns the memo on a parent re-render.
   const onPatchRef = useRef(onPatch);
   useEffect(() => { onPatchRef.current = onPatch; });
   const hasPatch = !!onPatch;
   const patchFn = useCallback((i: number) => onPatchRef.current?.(i) ?? Promise.resolve(), []);
 
-  // stagger tags each node with a per-index entry delay for the agent-authored reveal;
-  // a live run passes no stagger, so nodes just update in place on each poll. onPatch is
-  // injected only into patchable check nodes, so only they carry the re-render affordance.
+  // stagger tags each node with an entry delay for the plan reveal; onPatch is injected
+  // only into patchable check nodes, so only they carry the re-render affordance.
   const derivedNodes = useMemo(() => {
     const ns = deriveNodes(project);
     const wired = hasPatch
@@ -53,14 +45,11 @@ export function PipelineGraph({ project, stagger = false, onPatch }: {
   const [nodes, setNodes, onNodesChange] = useNodesState(derivedNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(deriveEdges(project));
 
-  // Re-derive on each new snapshot. Positions are fixed, so this refreshes status/thumbs
-  // in place without moving the graph.
+  // Re-derive on each snapshot; positions are fixed, so the graph doesn't move.
   useEffect(() => { setNodes(derivedNodes); }, [derivedNodes, setNodes]);
   useEffect(() => { setEdges(deriveEdges(project)); }, [project, setEdges]);
 
-  // The graph is a navigable index of the run: clicking a shot/check node jumps to its
-  // detail card in the board below; the episode node jumps to the certified cut. The
-  // full patch/verdict controls stay in the board, where the fail window and anchor live.
+  // Clicking a node jumps to its detail card in the board below.
   const onNodeClick = useCallback((_: unknown, node: RFNode) => {
     const d = node.data as DNodeData;
     const sel = typeof d.shotIndex === "number" ? `#shot-card-${d.shotIndex}`

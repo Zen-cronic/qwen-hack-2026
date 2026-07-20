@@ -1,9 +1,7 @@
 import { createTheme } from "@mui/material/styles";
 
-// The Dailies "cutting-room" design system, ported from the original CSS custom
-// properties into an MUI v9 theme. `tokens` is the single source of truth for the
-// palette; the ones MUI's standard palette can't hold (panel2, tier colors) are
-// exported for use in sx and in Recharts, which needs literal hex, not CSS vars.
+// Single source of truth for the palette; exported because sx and Recharts need
+// literal hex, not CSS vars.
 export const tokens = {
   bg: "#0e1116",
   panel: "#161b22",
@@ -20,14 +18,11 @@ export const tokens = {
   final: "#f0a500",
 } as const;
 
-// Measurements read as a test report — the one deliberate risk. Metric values,
-// assertion details and take labels use this; prose stays sans. Both families are
-// bundled (see main.tsx); the rest of each stack is the offline fallback.
+// Mono for measurements, sans for prose. Both families are bundled — see main.tsx.
 export const mono = '"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace';
 const sans = '"Instrument Sans Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
 
-// One place that maps an assertion/badge status to its hex, used by dots, chips
-// and Recharts cells so a status is the same color everywhere.
+// The one status-to-hex map — dots, chips and Recharts cells all go through it.
 export const statusColor = (s: string): string =>
   s === "pass" || s === "certified"
     ? tokens.pass

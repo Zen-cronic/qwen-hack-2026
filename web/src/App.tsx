@@ -44,9 +44,7 @@ export default function App() {
     timer.current = window.setInterval(() => poll(id), 2500);  // state.md: SPA polls every 2.5s
   }, [poll]);
 
-  // Deep link (?p=<id>): reopen an existing run. Project state is a durable snapshot on
-  // disk, so a finished run is worth linking to — it survives a reload, can be handed to
-  // someone as a finished conformance report, and re-verifies from cache for free.
+  // Deep link (?p=<id>): reopen an existing run from its durable on-disk snapshot.
   useEffect(() => {
     const id = new URLSearchParams(window.location.search).get("p");
     if (!id) return;
@@ -68,8 +66,7 @@ export default function App() {
   const onPatch = async (shotIndex: number) => {
     if (!projectId) return;
     setErr(null);
-    // A patch is a real generation, so surface why it was refused or why it still
-    // fails — silently re-polling would read as "the button did nothing".
+    // Surface the refusal reason — silently re-polling reads as "the button did nothing".
     try {
       const r = await patchShot(projectId, shotIndex);
       if (!r.ok) setErr(`Shot ${shotIndex}: ${r.reason}`);

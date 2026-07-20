@@ -1,9 +1,4 @@
-/** Custom React Flow node components for the pipeline graph.
- *
- * Each node is a flat bordered card in the cutting-room palette; its accent color and
- * pulse are driven by the derived NodeStatus so the canvas reads the same way the board
- * and stepper do. Presentational only — all state comes from graph.ts.
- */
+/** Custom React Flow node components — presentational; all state comes from graph.ts. */
 import { type MouseEvent, type ReactNode, useState } from "react";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
@@ -30,8 +25,7 @@ const STATUS_GLYPH: Record<string, string> = {
   done: "✓", pass: "✓", fail: "✕", failed: "✕", inconclusive: "!",
 };
 
-// The invisible connection points edges attach to — the graph is read-only, so they
-// carry no affordance of their own.
+// Invisible connection points edges attach to — the graph is read-only.
 const HANDLE_STYLE = { width: 1, height: 1, minWidth: 1, border: "none", background: "transparent", opacity: 0 } as const;
 
 function Handles() {
@@ -154,15 +148,12 @@ export function ShotNode({ data }: NodeProps) {
   );
 }
 
-// The one action on the read-only canvas: re-render a shot whose latest take still fails a
-// blocking check, from the same second the board's patch button names. stopPropagation
-// keeps the node-click (scroll-to-card) from also firing; nodrag/nopan keep React Flow
-// from treating the press as a canvas pan. Patching acts on the shot, so state is local.
+// Re-render a shot whose latest take fails a blocking check. stopPropagation is required
+// so the node click doesn't also fire; nodrag/nopan stop React Flow panning on press.
 function PatchButton({ data }: { data: DNodeData }) {
   const [patching, setPatching] = useState(false);
-  // Mirrors server/patch.py: a failure window opening at t=0 spans the whole clip, so
-  // there is no good frame to continue from and the server re-rolls instead of anchoring.
-  // Naming a second here would promise a move the server has measured not to make.
+  // Mirrors server/patch.py: a window opening at t=0 has no frame to anchor to (the server
+  // re-rolls instead), so the label must not name a second.
   const anchorS = data.anchorS ?? 0;
   const anchored = anchorS > 0;
   const what = anchored ? `from ${anchorS.toFixed(1)}s` : "this shot";
