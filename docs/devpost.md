@@ -190,4 +190,63 @@ To run it locally with no API key at all:
 Then open http://localhost:8099/. Demo mode runs the real pipeline, the real OpenCV
 checks and real ffmpeg assembly over synthetic clips — zero video quota, no network.
 Requires ffmpeg. `pytest -q` runs the full suite with no key and no network.
+
+--- TEST THE CONFORMANCE ENGINE ON YOUR OWN VIDEO (no API key needed) ---
+
+This is the claim worth checking yourself: the deterministic tier is pure OpenCV, so it
+needs no key, no network, and no quota, and it runs on ANY mp4 — including one we have
+never seen. Point it at a clip of yours:
+
+  python -c "
+  import json
+  from server.mcp_server import run_shot_tests
+  print(json.dumps(run_shot_tests('YOUR_CLIP.mp4', assertions=[
+      {'type': 'camera_motion', 'params': {'direction': 'right'}},
+      {'type': 'duration_between', 'params': {'min_s': 3, 'max_s': 8}},
+  ]), indent=2))"
+
+You get a real verdict with the measurement behind it, e.g.
+
+  "status": "fail",
+  "detail": "camera up (want right), |v|=2.94",
+  "measured": { "camera_dx": -0.878, "camera_dy": -2.805,
+                "fail_window_s": [0.0, 4.93], "worst_frame_s": 2.53 }
+
+Note the fail window and the indicted frame: the check reports WHERE it failed, which is
+what makes the automatic repair possible. Add `"pack_name": "brand_rules"` to merge a
+baseline pack over your assertions. An invented assertion type is rejected before
+anything runs — that rejection is the "CI" in "CI for generated video".
+
+--- TEST THE MCP SERVER ---
+
+The same engine is an MCP server, so any MCP-capable agent can gate video the way it
+already gates code. Zero-token, no key:
+
+  pip install -e ".[mcp]"
+  python -m server.mcp_server        # stdio; ListTools returns run_shot_tests + patch_clip
+
+Register it with any MCP client (Claude Desktop, an agent framework, or the Qwen-Agent
+client we ship). `run_shot_tests` is free and deterministic; `patch_clip` repairs a clip
+and does spend one generation, so it needs a key.
+
+We ship the consumer side too, so the loop closes with both ends ours — this drives a
+Qwen agent through MCP against our own server (needs `.[agent]` and a live key; chat
+tokens only, no video spend):
+
+  python scripts/mcp_agent_demo.py
+  python scripts/qwen_tool_demo.py   # the same engine as a native Qwen function-calling tool
+
+--- TESTING THE AGENT PLANNER ---
+
+In the web app, typing a request and pressing "Design pipeline" calls
+POST /api/agent/plan, and the tool-call transcript is shown on screen as evidence.
+
+One honest note: the hosted URL may run in a zero-quota mode so that it survives the
+judging window unattended, and in that mode the planner is deterministic rather than a
+live model call. To exercise the real qwen-plus function call, run locally with a key and
+no DAILIES_DEMO / DAILIES_FIXTURES flag set:
+
+  QWEN_API_KEY=sk-... uvicorn server.app:create_production_app --factory --port 8099
+
+Check which mode any instance is in with:  curl http://<host>/api/health
 ```
