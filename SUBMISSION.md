@@ -11,14 +11,19 @@
   Submit [server/config.py](server/config.py) — the sanctioned URL is a literal there
   (`QWEN_BASE_URL`, `DASHSCOPE_BASE_URL`). It also appears in `.env.example`,
   `docker-compose.yml`, and `server/wan.py`'s module docstring.
-- [ ] **Proof of Alibaba Cloud deployment** — "No proof = not eligible". The rules and the FAQ
-  word this differently, so satisfy both: (a) screenshot of running resources from the Alibaba
-  Cloud Workbench — **still to capture**, per [deploy.md](docs/deploy.md) "Eligibility"; and
-  (b) "a link to a code file in their code repo that demonstrates use of Alibaba Cloud services
-  and APIs" — use [server/wan.py](server/wan.py), which names the DashScope host and drives its
-  async task API (submit with `X-DashScope-Async`, poll `/tasks/{id}`, fetch the signed result).
-  Corroborating: [server/oss.py](server/oss.py) (OSS SDK) and
-  [.github/workflows/deploy-prod.yml](.github/workflows/deploy-prod.yml) (deploys onto the SAS box).
+- [x] **Proof of Alibaba Cloud deployment** — "No proof = not eligible". The rules and the FAQ
+  word this differently, so satisfy both:
+  - (a) **Screenshot of running resources** — [docs/alibaba-workbench-sas.png](docs/alibaba-workbench-sas.png):
+    the Simple Application Server instance `Qwen-hack-2026`, **Running**, US (Silicon Valley),
+    Docker image, 2 vCPU / 4 GiB. And [docs/alibaba-oss-bucket.png](docs/alibaba-oss-bucket.png):
+    the private OSS bucket in the same region holding the published media. The instance's IP
+    addresses are redacted — the live URL is supplied in the Devpost testing-access field, and
+    this repo keeps that address out of tracked content.
+  - (b) **A code file demonstrating use of Alibaba Cloud services and APIs** —
+    [server/wan.py](server/wan.py), which names the DashScope host and drives its async task API
+    (submit with `X-DashScope-Async`, poll `/tasks/{id}`, fetch the signed result).
+    Corroborating: [server/oss.py](server/oss.py) (OSS SDK) and
+    [.github/workflows/deploy-prod.yml](.github/workflows/deploy-prod.yml) (deploys onto the SAS box).
 - [x] **Architecture diagram** — "how Qwen Cloud connects to your backend, database, and frontend".
   [docs/architecture.md](docs/architecture.md). If the form takes one image, use the **deployment
   topology** diagram — it names the SAS instance, the Postgres sidecar and OSS explicitly.
@@ -32,6 +37,24 @@
   Confirm the runtime first: `curl http://<host>/api/health` should not report `mode: "real"` for
   an unattended URL — see [deploy.md](docs/deploy.md) on the fresh-final cap.
 - [ ] (Optional, stacks with track prize) **Blog/social post URL** — "showing your journey building with QwenCloud"; judged on "thoroughness and potential impact"; $500 cash + $500 credits × 10 winners
+
+## Where each deliverable lives
+
+Audited against the repo rather than from memory, so a judge can go straight to the artifact.
+
+| Deliverable | Artifact |
+|---|---|
+| Open-source license | [LICENSE](LICENSE) — MIT, auto-detected by GitHub and shown in the About sidebar |
+| Qwen Cloud base URL in code | [server/config.py](server/config.py) — `QWEN_BASE_URL`, `DASHSCOPE_BASE_URL` as literals |
+| Alibaba Cloud services in code | [server/wan.py](server/wan.py) (DashScope task API), [server/oss.py](server/oss.py) (OSS SDK), [server/db/models.py](server/db/models.py) (catalog) |
+| Deployment proof | [docs/alibaba-workbench-sas.png](docs/alibaba-workbench-sas.png), [docs/alibaba-oss-bucket.png](docs/alibaba-oss-bucket.png), [.github/workflows/deploy-prod.yml](.github/workflows/deploy-prod.yml) |
+| Architecture diagram | [docs/architecture.md](docs/architecture.md) — context, container, and deployment topology |
+| Feature description | [README.md](README.md), long-form impact case in [docs/impact.md](docs/impact.md) |
+| Qwen API surface, mapped to the rubric | [docs/qwen-usage.md](docs/qwen-usage.md) |
+| Reproducible measurements | [docs/verification.md](docs/verification.md), [docs/profiling.md](docs/profiling.md) |
+
+Still supplied through the Devpost form rather than this repo: the demo-video URL, and the live
+testing URL (the box address is intentionally not tracked here).
 
 ## Problem Value & Impact
 
