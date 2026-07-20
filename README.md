@@ -187,6 +187,29 @@ content. Deterministic runs produce byte-identical episodes, so ~40 project path
 13 objects — which is why the path→hash mapping lives in its own `media_paths` table rather than
 as a column on the object, where it would keep only the last path and 404 every other one.
 
+### Why only Qwen Cloud
+
+Dailies is not a Qwen wrapper with a cloud logo on it: every layer of the product — planning,
+generation, judgment, repair, speech, storage, compute — lands on a surface this one platform
+already ships. Here is what each surface buys, and what a builder would have to bolt on without it.
+
+| # | Qwen surface | Without it |
+|---|---|---|
+| 1 | `qwen-plus` (writes the shot list, compiles plain-language rules into the closed assertion DSL, rewrites a failing prompt for a retake) | a general-purpose LLM vendor, plus a hand-written English-to-rule parser |
+| 2 | Native function calling — OpenAI-compatible `tools=`, `tool_choice="auto"` (`build_pipeline_graph` authors the run; `run_shot_tests` calls the conformance engine) | an agent framework plus intent-parsing glue, and a schema validator to keep the model from emitting topology |
+| 3 | Structured output — `response_format={"type": "json_object"}` (script and repair emit machine-readable JSON) | a prose-scraping parser and a retry loop around every code-consumed generation |
+| 4 | `wan2.1-t2i-plus` (the pre-render still — one image, ~1/25th of a video second's cost) | a separate image-generation vendor, or full video spend on every shot because there is nothing cheap enough to reject with |
+| 5 | `qwen-vl-plus` (Tier-0 verdict on the still, Tier-B advisory verdicts on 7 strided frames) | a second vision-model vendor on its own key, billing, and per-shot token accounting |
+| 6 | `wan2.1-t2v-turbo` (the draft tier every shot starts on) | a video-generation vendor with one price point, so no cost ladder to fail cheaply on |
+| 7 | `wan2.2-i2v-flash` (frame-anchored retake and promotion, anchor sent inline as a base64 `data:` URI) | another vendor's image-to-video model — and this is the row where a text-to-video substitute will not do: without a single-anchor model the retake is a fresh roll, so repair-as-continuation stops being possible rather than merely getting dearer |
+| 8 | `qwen3-tts-flash` (one narration line per shot, cast from a probed voice roster) | a separate speech-synthesis vendor, with its own voice licensing and its own cache |
+| 9 | Native DashScope async task API (submit with `X-DashScope-Async`, poll `/tasks/{id}`, fetch the signed result) | hand-rolled job orchestration — queue, worker, webhook receiver, timeout and terminal-status handling |
+| 10 | Alibaba Cloud OSS + the SAS instance (private bucket, internal-endpoint uploads, presigned browser GETs; the whole app running in the same region) | an object-storage vendor plus a separate application host, and paid cross-cloud egress on every generated clip |
+
+Rows 4, 6 and 7 are the same argument at three price points: the product is a cost ladder, and a
+ladder needs rungs from one vendor or the cache keys, quota pools, and frame-size negotiation stop
+lining up. Row 7 is the one with no fallback at all.
+
 ### The closed assertion vocabulary
 
 An assertion is a `type` from a **closed** set plus typed `params`. The compiler
