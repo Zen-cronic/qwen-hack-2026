@@ -55,13 +55,21 @@ def test_max_shots_truncates():
     assert len(fixture_shots(3)) == 3
 
 
-def test_fixture_runtime_wires_real_narration(tmp_path):
+def test_fixture_runtime_wires_real_narration(tmp_path, monkeypatch):
     """Wan clips are silent, so the episode's sound is a real qwen-tts slate per shot. A
     refactor that drops narrate_fn would ship a silent demo — pin that it stays wired.
-    Construction is offline (no model call until synthesize runs)."""
+    Construction is offline (no model call until synthesize runs).
+
+    The stand-in key is what makes this runnable in CI. A wiring test needs no credential,
+    but the fixtures runtime builds a WanClient eagerly and its ctor rejects an empty key —
+    so on a box with no .env this failed on construction, and passed on any developer
+    machine that had one. Same guard as test_vocabulary_coverage.py, for the same reason.
+    """
+    from server.config import settings
     from server.fixtures import build_fixture_runtime
     from server.tts import TTSClient
 
+    monkeypatch.setattr(settings, "QWEN_API_KEY", "sk-test-wiring-only")
     rt = build_fixture_runtime(data_dir=str(tmp_path))
     assert rt.deps.narrate_fn is not None
     assert getattr(rt.deps.narrate_fn, "__self__", None).__class__ is TTSClient
