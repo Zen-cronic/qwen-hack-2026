@@ -31,7 +31,7 @@ DAILIES_DEMO=1 SPA_DIST=web/dist uvicorn server.app:create_production_app --fact
 
 ## Act 1 — The workbench (browser, ~90s)
 
-1. **Author the spec, now with a custom rule.** In "New run", keep the lighthouse premise, then in
+1. **Author the spec, now with a custom rule.** In "New run", keep the corgi premise, then in
    the new **Custom checks** textarea type: `a title card must be visible`. Click **Compile & generate**.
    *Narrate:* a non-video stakeholder just authored a machine-checkable rule in plain language — it
    compiles to the closed vocabulary and is rejected before any spend if it's malformed.
@@ -47,7 +47,9 @@ DAILIES_DEMO=1 SPA_DIST=web/dist uvicorn server.app:create_production_app --fact
 4. **The conformance board — what's new.** Click a shot's **draft take**. Alongside the deterministic
    Tier-A checks, the custom **`title_card_present`** advisory appears with **mark pass / mark fail**
    buttons. *Narrate:* every human override here is a labeled machine-vs-human datum — the calibration
-   corpus that makes the gate trustworthy (see [impact.md](impact.md)).
+   corpus that makes the gate trustworthy (see [impact.md](impact.md)). Shot 1 also carries
+   `subject_present` and `identity_consistent` on **the corgi** — subject checks chosen because the
+   frame is full of shoppers, so there is a wrong answer available for them to get right.
 5. **The dashboard + certified episode.** Show the cost-quality frontier, pass-rate heatmap, and
    repair-convergence charts reading the live ledger, then the assembled certified episode.
 

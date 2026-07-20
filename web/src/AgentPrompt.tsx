@@ -22,10 +22,13 @@ import { mono, tokens } from "./theme";
 import { packLabel } from "./vocabulary";
 import type { PipelinePlan, PlanTranscriptEntry } from "./types";
 
+// The first one is prefilled, so it is the request most visitors actually run. It asks for
+// the rightward pan that the demo storyboard's shot 1 then fails to deliver (server/demo.py),
+// which is how a cold click lands on the kill-shot instead of a clean green run.
 const SAMPLE_REQUESTS = [
+  "a corgi pulls off a heist at the farmers' market, 3 shots — camera pans right to follow",
   "a 3-shot noir chase that must end on a title card",
   "a 2-shot brand promo — stay on our palette, camera pans right",
-  "a lighthouse keeper finds a message in a bottle, 4 shots",
 ];
 
 // Pretty-print the tool arguments for the evidence panel — the receipt that a Qwen

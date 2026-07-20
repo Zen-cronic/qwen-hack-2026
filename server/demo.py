@@ -32,21 +32,30 @@ from server.wan import WanResult
 _FOURCC = cv2.VideoWriter_fourcc(*"mp4v")
 
 # Fixed storyboard; shot 1 is the planted kill-shot (asserts a right pan).
+#
+# A corgi in a crowded market, deliberately, because the subject checks have to be hard to
+# be worth watching. Coastal-dusk cinematics are the house style of every video-gen demo,
+# and they hand `subject_present` a frame with exactly one thing in it. A short dog at knee
+# height in a moving crowd is the case where the check can be WRONG: shoppers are subject
+# distractors, and a breed with drifting ears and markings is a real test of
+# `identity_consistent`. The low subject also motivates the pan the shot then fails to
+# deliver — the camera has to travel to keep a corgi in frame.
 _DEMO_SHOTS = [
-    {"prompt": "establishing wide shot of a lonely lighthouse at dusk, waves below, still locked-off camera",
-     "narration": "At the edge of the world, one light still keeps watch.",
+    {"prompt": "establishing wide shot of a Saturday farmers' market at golden hour, shoppers browsing the stalls, still locked-off camera",
+     "narration": "Nine in the morning at the market. Two hundred customers, and one of them is not a customer.",
      "assertions": []},
-    {"prompt": "the keeper climbs the spiral staircase, camera slowly pans right to follow him",
-     "subject": "the lighthouse keeper",
-     "narration": "Every night I climb. The stairs know my weight by now.",
-     "speaker": "the lighthouse keeper",
+    {"prompt": "low angle at knee height, a corgi trots briskly past the stalls carrying a stolen bread roll, shoppers' legs and the market crowd behind, camera slowly pans right to follow",
+     "subject": "the corgi",
+     "narration": "Nobody ever looks down. That has always been the entire plan.",
+     "speaker": "the corgi",
      "assertions": [{"type": "camera_motion", "params": {"direction": "right"}},
                     # Tier-0: asked of the still, before this shot costs a single video second.
-                    {"type": "subject_present", "params": {"subject": "the lighthouse keeper"}},
-                    {"type": "identity_consistent", "params": {"subject": "the lighthouse keeper"}}]},
-    {"prompt": "close-up of the great lamp igniting, warm light flooding the glass room",
-     "narration": "The lamp catches. For one more night, the dark gives way.",
-     "assertions": [{"type": "action_completed", "params": {"action": "the lamp ignites and glows"}}]},
+                    {"type": "subject_present", "params": {"subject": "the corgi"}},
+                    {"type": "identity_consistent", "params": {"subject": "the corgi"}}]},
+    {"prompt": "close-up of the corgi dropping the bread roll at the baker's feet, warm morning light, the baker's hands reaching down to take it",
+     "narration": "The roll always comes back. That is the arrangement.",
+     "assertions": [{"type": "action_completed",
+                     "params": {"action": "the corgi drops the bread roll at the baker's feet"}}]},
 ]
 
 
@@ -79,7 +88,7 @@ def _texture(h: int, w_total: int) -> np.ndarray:
       (a fixed overlay would dilute the mean flow toward static).
     """
     rng = np.random.default_rng(7)
-    stops = [(0.0, (250, 247, 245)), (0.45, (255, 95, 11)), (1.0, (22, 17, 14))]  # BGR #f5f7fa -> #0b5fff -> #0e1116, sky over sea
+    stops = [(0.0, (250, 247, 245)), (0.45, (255, 95, 11)), (1.0, (22, 17, 14))]  # BGR #f5f7fa -> #0b5fff -> #0e1116, bright top to dark base
     ys = np.linspace(0.0, 1.0, h)
     col = np.zeros((h, 3), np.float32)
     for c in range(3):

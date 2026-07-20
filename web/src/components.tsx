@@ -45,7 +45,7 @@ export function WalletMeter({ w, judge }: { w: Wallet; judge?: { judge_mode: boo
 // One-click starting points: a cold visitor (or judge) should reach a running
 // pipeline without composing a premise first.
 const SAMPLE_PREMISES = [
-  "a lonely lighthouse keeper who discovers a message in a bottle",
+  "a corgi runs a bread heist through a crowded farmers' market",
   "a street cat assembles a crew for a fish-market heist",
   "a night-shift robot barista perfects latte art for its last customer",
 ];
@@ -61,7 +61,7 @@ const AMBIENT_VOCAB: { t: string; sx: object }[] = [
   { t: "One continuous take", sx: { top: "57%", left: "6%", transform: "rotate(6deg)" } },
   { t: "Camera pans right", sx: { top: "72%", left: "2%", transform: "rotate(-6deg)" } },
   { t: "Stays on the brand palette", sx: { bottom: "5%", left: "8%", transform: "rotate(3deg)" } },
-  { t: "The keeper is in frame", sx: { top: "9%", right: "3%", transform: "rotate(5deg)" } },
+  { t: "The corgi is in frame", sx: { top: "9%", right: "3%", transform: "rotate(5deg)" } },
   { t: "Same subject throughout", sx: { top: "26%", right: "7%", transform: "rotate(-5deg)" } },
   { t: "The action completes", sx: { top: "43%", right: "2%", transform: "rotate(4deg)" } },
   { t: "A title card is visible", sx: { top: "59%", right: "6%", transform: "rotate(-3deg)" } },

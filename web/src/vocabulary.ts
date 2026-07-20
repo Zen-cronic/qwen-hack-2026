@@ -11,7 +11,7 @@
  */
 import type { AssertionResult } from "./types";
 
-/** Subjects arrive from the script agent either phrased ("the lighthouse keeper") or
+/** Subjects arrive from the script agent either phrased ("the corgi") or
  *  slugged ("ginger_street_cat"). Normalize both to something readable mid-sentence. */
 export function humanizeSubject(raw: unknown): string {
   const s = typeof raw === "string" ? raw.trim() : "";
