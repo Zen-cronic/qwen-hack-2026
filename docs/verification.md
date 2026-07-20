@@ -306,12 +306,12 @@ relies on, measured rather than asserted.
 None of these were visible to a green test suite. All four shared one shape: a fallback that
 made failure look like success.
 
-| Bug | Why 79 passing tests missed it |
+| Bug | Why a green test suite missed it |
 |---|---|
 | `wan2.2-t2v-plus` rejects `1280*720` — **every premium promote ever made had failed** with `InvalidParameter` in ~16 s | `_promote` treats a failed promote as "keep the passing draft", so a rejected final and a healthy skip produced identical state. The cost-tiered cascade — the wedge — had never run its premium tier. |
 | The budget governor asked the cache about `1280*720` for **every** model | Size is part of the cache key, so it looked up the wrong key for finals and called every cached final "fresh". Under `JUDGE_MODE` (`fresh_final_cap=0`) that would have refused free replays of finals *during judging*. |
 | The ledger wrote an empty `note` for both a no-op call and a hard failure | Which is precisely how the first two hid. The audit trail didn't audit. `_spend_note` now records the failure code. |
-| `state.json` was write-only | Snapshots were atomically written and never read back. A push to main redeploys the box, so every release silently discarded every run a viewer had made — while the deployment diagram (`docs/architecture.md:183`) promised "cache + state persist across restarts". The cache did; state didn't. |
+| `state.json` was write-only | Snapshots were atomically written and never read back. A push to main redeploys the box, so every release silently discarded every run a viewer had made — while the deployment diagram in [architecture.md](architecture.md) promised "cache + state persist across restarts". The cache did; state didn't. |
 
 Fixed in `2917b09`; each fix has a regression test (`tests/test_wan.py`, `tests/test_fixtures.py`),
 verified by reverting the fix and confirming the test fails.
@@ -421,7 +421,7 @@ inverting the reason Tier-0 runs first. Downscaling cuts the payload to 27% of f
 
 A Tier-0 verdict is **evidence at the human review gate, not an automatic block.** Nothing
 gates on `tier0_results`: the pipeline stores them and the UI renders them at the one human
-checkpoint (`web/src/components.tsx:174`), where the human decides whether to release video
+checkpoint (`ReviewBar` in `web/src/components.tsx`), where the human decides whether to release video
 budget. `advisory=False` marks `subject_present` blocking-class — it *would* block if it
 appeared in a take's results — but its Tier-0 job is to inform the gate, and it never reaches
 a take today.
