@@ -11,7 +11,10 @@ export default defineConfig({
   use: { baseURL: "http://127.0.0.1:8137", viewport: { width: 1280, height: 900 } },
   webServer: {
     command:
-      "bash -c 'cd .. && rm -rf data/e2e && DAILIES_DEMO=1 DATA_DIR=data/e2e SPA_DIST=web/dist .venv/bin/uvicorn server.app:create_production_app --factory --host 127.0.0.1 --port 8137'",
+      // CATALOG_ENABLED=0 is explicit, not incidental: the suite exercises the demo
+      // flow, so it must not depend on a Postgres sidecar or on whatever the
+      // developer's .env happens to say.
+      "bash -c 'cd .. && rm -rf data/e2e && DAILIES_DEMO=1 CATALOG_ENABLED=0 DATA_DIR=data/e2e SPA_DIST=web/dist .venv/bin/uvicorn server.app:create_production_app --factory --host 127.0.0.1 --port 8137'",
     url: "http://127.0.0.1:8137/api/packs",
     reuseExistingServer: false,
     timeout: 60_000,
